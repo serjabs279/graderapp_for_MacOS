@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib';
 import { Project, Student } from '../types';
 import { computeProjectStudentGrade } from '../utils';
 
@@ -14,10 +14,21 @@ const COLOR_SUCCESS_BG = rgb(240 / 255, 253 / 255, 244 / 255); // Emerald 50
 const COLOR_DANGER = rgb(153 / 255, 27 / 255, 27 / 255);      // Red 800
 const COLOR_DANGER_BG = rgb(254 / 255, 242 / 255, 242 / 255);  // Red 50
 
+export interface ReportSummaryData {
+  totalEnrolled: number;
+  passedCount: number;
+  failedCount: number;
+  avgGrade: string | number;
+  passRate: string | number;
+  highestGrade: string | number;
+  lowestGrade: string | number;
+  generatedDate?: string;
+}
+
 /**
  * Truncates text to fit within a given maximum width in points.
  */
-function fitText(text: string, font: any, fontSize: number, maxWidth: number): string {
+function fitText(text: string, font: PDFFont, fontSize: number, maxWidth: number): string {
   if (!text) return '';
   let str = text;
   if (font.widthOfTextAtSize(str, fontSize) <= maxWidth) return str;
@@ -67,13 +78,351 @@ function logTraceMetrics(
 }
 
 /**
+ * Checks if sufficient vertical space remains on the current page for the Report Footer.
+ * If not enough space remains, creates a new page and returns the new page + reset cursor Y.
+ */
+function ensureSpaceForReportFooter(
+  page: PDFPage,
+  cursorY: number,
+  requiredHeight: number,
+  margin: number,
+  createNewPage: () => { newPage: PDFPage; newY: number }
+): { page: PDFPage; cursorY: number } {
+  if (cursorY - requiredHeight < margin) {
+    const { newPage, newY } = createNewPage();
+    return { page: newPage, cursorY: newY };
+  }
+  return { page, cursorY };
+}
+
+/**
+ * Renders the single Report Footer at the end of the report (after all student rows).
+ * Consists of:
+ * 1. Class Performance Summary Box
+ * 2. Official Verification Signatures Block
+ */
+function drawReportFooter(
+  pdfDoc: PDFDocument,
+  page: PDFPage,
+  cursorY: number,
+  summaryData: ReportSummaryData,
+  config: {
+    pageWidth: number;
+    margin: number;
+    usableWidth: number;
+    font: PDFFont;
+    fontBold: PDFFont;
+  }
+): number {
+  let y = cursorY - 15; // Top padding after table
+  const { margin, usableWidth, font, fontBold, pageWidth } = config;
+
+  // 1. Class Performance Summary Card (Height: 50pt)
+  const summaryBoxHeight = 50;
+  page.drawRectangle({
+    x: margin,
+    y: y - summaryBoxHeight,
+    width: usableWidth,
+    height: summaryBoxHeight,
+    color: COLOR_HEADER_BG,
+    borderColor: COLOR_BORDER,
+    borderWidth: 0.75,
+  });
+
+  page.drawText('CLASS PERFORMANCE SUMMARY', {
+    x: margin + 8,
+    y: y - 12,
+    size: 8,
+    font: fontBold,
+    color: COLOR_PRIMARY,
+  });
+
+  const sCol = usableWidth / 5;
+  page.drawText(`Total Enrolled: ${summaryData.totalEnrolled}`, { x: margin + 8, y: y - 28, size: 8, font, color: COLOR_TEXT });
+  page.drawText(`Passed: ${summaryData.passedCount}`, { x: margin + sCol + 8, y: y - 28, size: 8, font: fontBold, color: COLOR_SUCCESS });
+  page.drawText(`Needs Intervention: ${summaryData.failedCount}`, { x: margin + sCol * 2 + 8, y: y - 28, size: 8, font: fontBold, color: COLOR_DANGER });
+  page.drawText(`Class Average: ${summaryData.avgGrade}`, { x: margin + sCol * 3 + 8, y: y - 28, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(`Passing Rate: ${summaryData.passRate}%`, { x: margin + sCol * 4 + 8, y: y - 28, size: 8, font: fontBold, color: COLOR_PRIMARY });
+
+  page.drawText(`Highest Grade: ${summaryData.highestGrade}`, { x: margin + 8, y: y - 42, size: 7.5, font, color: COLOR_TEXT_MUTED });
+  page.drawText(`Lowest Grade: ${summaryData.lowestGrade}`, { x: margin + sCol + 8, y: y - 42, size: 7.5, font, color: COLOR_TEXT_MUTED });
+  page.drawText(`Generated Date: ${summaryData.generatedDate || new Date().toLocaleDateString()}`, { x: margin + sCol * 3 + 8, y: y - 42, size: 7.5, font, color: COLOR_TEXT_MUTED });
+
+  y -= (summaryBoxHeight + 30);
+
+  // 2. Official Verification Signatures Block (Height: 35pt)
+  const sigX1 = margin + 40;
+  const sigX2 = pageWidth - margin - 220;
+
+  page.drawLine({ start: { x: sigX1, y }, end: { x: sigX1 + 180, y }, thickness: 0.75, color: COLOR_PRIMARY });
+  page.drawText('Subject Teacher Signature', { x: sigX1 + 30, y: y - 12, size: 8, font, color: COLOR_TEXT_MUTED });
+
+  page.drawLine({ start: { x: sigX2, y }, end: { x: sigX2 + 180, y }, thickness: 0.75, color: COLOR_PRIMARY });
+  page.drawText('School Head / Principal Signature', { x: sigX2 + 20, y: y - 12, size: 8, font, color: COLOR_TEXT_MUTED });
+
+  return y - 25;
+}
+
+/**
+ * Draws the Class Record Report Header (Official DepEd title and metadata box).
+ */
+function drawClassRecordHeader(
+  page: PDFPage,
+  cursorY: number,
+  project: Project,
+  config: { margin: number; usableWidth: number; font: PDFFont; fontBold: PDFFont }
+): number {
+  let y = cursorY;
+  const { margin, usableWidth, font, fontBold } = config;
+
+  page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
+    x: margin,
+    y,
+    size: 8,
+    font: fontBold,
+    color: COLOR_TEXT_MUTED,
+  });
+  y -= 14;
+
+  page.drawText('OFFICIAL CLASS RECORD / ACADEMIC REPORT', {
+    x: margin,
+    y,
+    size: 16,
+    font: fontBold,
+    color: COLOR_PRIMARY,
+  });
+  y -= 18;
+
+  const metaBoxHeight = 36;
+  page.drawRectangle({
+    x: margin,
+    y: y - metaBoxHeight,
+    width: usableWidth,
+    height: metaBoxHeight,
+    color: COLOR_HEADER_BG,
+    borderColor: COLOR_BORDER,
+    borderWidth: 0.75,
+  });
+
+  const colWidth = usableWidth / 4;
+  const metaY1 = y - 12;
+  const metaY2 = y - 28;
+
+  page.drawText(`School: ${project.schoolName || 'N/A'}`, { x: margin + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(`School Year: ${project.schoolYear}`, { x: margin + colWidth + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(`Grade & Section: ${project.gradeLevel} - ${project.section}`, { x: margin + colWidth * 2 + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(`Quarter: ${project.quarter}`, { x: margin + colWidth * 3 + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
+
+  page.drawText(`Subject: ${project.subject}`, { x: margin + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(`Teacher: ${project.teacherName || 'N/A'}`, { x: margin + colWidth + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(`DepEd Policy: ${project.depedPolicy === '2015' ? 'DO 8 s. 2015' : 'MATATAG (2027)'}`, { x: margin + colWidth * 2 + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(`Passing Mark: ${project.passingGrade}%`, { x: margin + colWidth * 3 + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
+
+  return y - (metaBoxHeight + 16);
+}
+
+/**
+ * Computes class summary metrics from active student list.
+ */
+function computeClassSummaryMetrics(project: Project, activeStudents: Student[]): ReportSummaryData {
+  let passedCount = 0;
+  let failedCount = 0;
+  let totalGradeSum = 0;
+  let highestGrade = 0;
+  let lowestGrade = 100;
+
+  activeStudents.forEach((st) => {
+    const stStats = computeProjectStudentGrade(project, st.id);
+    totalGradeSum += stStats.finalGrade;
+    if (stStats.finalGrade > highestGrade) highestGrade = stStats.finalGrade;
+    if (stStats.finalGrade < lowestGrade) lowestGrade = stStats.finalGrade;
+    if (stStats.isPassing) passedCount++;
+    else failedCount++;
+  });
+
+  const totalEnrolled = activeStudents.length;
+  const avgGrade = totalEnrolled > 0 ? (totalGradeSum / totalEnrolled).toFixed(1) : '0';
+  const passRate = totalEnrolled > 0 ? ((passedCount / totalEnrolled) * 100).toFixed(1) : '0';
+
+  return {
+    totalEnrolled,
+    passedCount,
+    failedCount,
+    avgGrade,
+    passRate,
+    highestGrade: totalEnrolled > 0 ? highestGrade : '—',
+    lowestGrade: totalEnrolled > 0 ? lowestGrade : '—',
+    generatedDate: new Date().toLocaleDateString(),
+  };
+}
+
+/**
+ * Renders all student rows in table groups (Male, Female, Other) handling pagination.
+ */
+function drawClassRecordTable(
+  pdfDoc: PDFDocument,
+  initialPage: PDFPage,
+  initialY: number,
+  project: Project,
+  activeStudents: Student[],
+  cols: Array<{ name: string; width: number }>,
+  config: {
+    pageWidth: number;
+    pageHeight: number;
+    margin: number;
+    usableWidth: number;
+    font: PDFFont;
+    fontBold: PDFFont;
+    createNewPage: () => { newPage: PDFPage; newY: number };
+  }
+): { page: PDFPage; cursorY: number } {
+  let page = initialPage;
+  let y = initialY;
+
+  const { margin, usableWidth, font, fontBold, createNewPage } = config;
+
+  const drawTableHeader = (p: PDFPage, currentY: number) => {
+    p.drawRectangle({
+      x: margin,
+      y: currentY - 18,
+      width: usableWidth,
+      height: 18,
+      color: COLOR_PRIMARY,
+    });
+
+    let xOffset = margin;
+    cols.forEach((col) => {
+      p.drawText(col.name, {
+        x: xOffset + 4,
+        y: currentY - 12,
+        size: 7.5,
+        font: fontBold,
+        color: rgb(1, 1, 1),
+      });
+      xOffset += col.width;
+    });
+
+    return currentY - 18;
+  };
+
+  y = drawTableHeader(page, y);
+
+  const isM = (s: Student) => {
+    const sx = (s.sex || '').trim().toLowerCase();
+    return sx === 'male' || sx === 'm' || sx.startsWith('m');
+  };
+  const isF = (s: Student) => {
+    const sx = (s.sex || '').trim().toLowerCase();
+    return sx === 'female' || sx === 'f' || sx.startsWith('f');
+  };
+
+  const maleStudents = activeStudents.filter(isM).sort((a, b) => a.name.localeCompare(b.name));
+  const femaleStudents = activeStudents.filter(isF).sort((a, b) => a.name.localeCompare(b.name));
+  const otherStudents = activeStudents.filter((s) => !isM(s) && !isF(s)).sort((a, b) => a.name.localeCompare(b.name));
+
+  const renderStudentGroup = (groupLabel: string, studentList: Student[]) => {
+    if (studentList.length === 0) return;
+
+    if (y - 18 < margin + 40) {
+      const res = createNewPage();
+      page = res.newPage;
+      y = drawTableHeader(page, res.newY);
+    }
+
+    // Group Header Bar
+    page.drawRectangle({
+      x: margin,
+      y: y - 14,
+      width: usableWidth,
+      height: 14,
+      color: COLOR_HEADER_BG,
+      borderColor: COLOR_BORDER,
+      borderWidth: 0.5,
+    });
+
+    page.drawText(`${groupLabel} (${studentList.length})`, {
+      x: margin + 6,
+      y: y - 10,
+      size: 7.5,
+      font: fontBold,
+      color: COLOR_PRIMARY,
+    });
+
+    y -= 14;
+
+    studentList.forEach((student, idx) => {
+      if (y - 16 < margin + 30) {
+        const res = createNewPage();
+        page = res.newPage;
+        y = drawTableHeader(page, res.newY);
+      }
+
+      const stats = computeProjectStudentGrade(project, student.id);
+      const isAlt = idx % 2 === 1;
+
+      // Row background
+      page.drawRectangle({
+        x: margin,
+        y: y - 15,
+        width: usableWidth,
+        height: 15,
+        color: stats.isPassing ? (isAlt ? COLOR_ALT_ROW : rgb(1, 1, 1)) : COLOR_DANGER_BG,
+        borderColor: COLOR_BORDER,
+        borderWidth: 0.5,
+      });
+
+      let xOffset = margin;
+
+      const cellData = [
+        { text: `${idx + 1}`, width: cols[0].width, bold: false },
+        { text: student.lrn || '—', width: cols[1].width, bold: false },
+        { text: fitText(student.name, fontBold, 7.5, cols[2].width - 8), width: cols[2].width, bold: true },
+        { text: student.sex ? student.sex.charAt(0) : '—', width: cols[3].width, bold: false },
+        { text: `${stats.wwPercentage.toFixed(1)}% (${stats.weightedWW.toFixed(1)})`, width: cols[4].width, bold: false },
+        { text: `${stats.ptPercentage.toFixed(1)}% (${stats.weightedPT.toFixed(1)})`, width: cols[5].width, bold: false },
+        { text: `${stats.qePercentage.toFixed(1)}% (${stats.weightedQA.toFixed(1)})`, width: cols[6].width, bold: false },
+        { text: `${stats.initialGrade.toFixed(1)}`, width: cols[7].width, bold: false },
+        { text: `${stats.finalGrade}`, width: cols[8].width, bold: true },
+        {
+          text: stats.remarks,
+          width: cols[9].width,
+          bold: true,
+          color: stats.isPassing ? COLOR_SUCCESS : COLOR_DANGER,
+        },
+      ];
+
+      cellData.forEach((cell) => {
+        page.drawText(cell.text, {
+          x: xOffset + 4,
+          y: y - 11,
+          size: 7.5,
+          font: cell.bold ? fontBold : font,
+          color: cell.color || COLOR_TEXT,
+        });
+        xOffset += cell.width;
+      });
+
+      y -= 15;
+    });
+  };
+
+  renderStudentGroup('MALE STUDENTS', maleStudents);
+  renderStudentGroup('FEMALE STUDENTS', femaleStudents);
+  renderStudentGroup('OTHER STUDENTS', otherStudents);
+
+  return { page, cursorY: y };
+}
+
+/**
  * Generates a clean, crisp vector PDF for DepEd Class Record / SF9 Academic Report from project data.
+ * Architecture Flow:
+ * Header -> Student Table -> ensureSpaceForReportFooter -> drawReportFooter (once at end) -> save
  */
 export async function exportClassRecordPDF(project: Project, customFilename?: string): Promise<boolean> {
   try {
     const rawStudents = project?.students || [];
     const activeStudents = rawStudents.filter((s) => s.status === 'Active' || !s.status);
-    
+
     // Debug Trace Logging
     logTraceMetrics(
       'exportClassRecordPDF',
@@ -97,12 +446,10 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
     let page = pdfDoc.addPage([pageWidth, pageHeight]);
     let y = pageHeight - margin;
 
-    // Helper for adding pages
     const createNewPage = () => {
       const newPage = pdfDoc.addPage([pageWidth, pageHeight]);
       let newY = pageHeight - margin;
 
-      // Small Header on subsequent pages
       newPage.drawText(`DepEd Class Record — ${project.subject} (${project.gradeLevel} - ${project.section})`, {
         x: margin,
         y: newY - 10,
@@ -121,54 +468,10 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
       return { newPage, newY: newY - 30 };
     };
 
-    // Draw Official Header
-    page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
-      x: margin,
-      y,
-      size: 8,
-      font: fontBold,
-      color: COLOR_TEXT_MUTED,
-    });
-    y -= 14;
+    // 1. Draw Header
+    y = drawClassRecordHeader(page, y, project, { margin, usableWidth, font, fontBold });
 
-    page.drawText('OFFICIAL CLASS RECORD / ACADEMIC REPORT', {
-      x: margin,
-      y,
-      size: 16,
-      font: fontBold,
-      color: COLOR_PRIMARY,
-    });
-    y -= 18;
-
-    // Metadata Grid Box
-    const metaBoxHeight = 36;
-    page.drawRectangle({
-      x: margin,
-      y: y - metaBoxHeight,
-      width: usableWidth,
-      height: metaBoxHeight,
-      color: COLOR_HEADER_BG,
-      borderColor: COLOR_BORDER,
-      borderWidth: 0.75,
-    });
-
-    const colWidth = usableWidth / 4;
-    const metaY1 = y - 12;
-    const metaY2 = y - 28;
-
-    page.drawText(`School: ${project.schoolName || 'N/A'}`, { x: margin + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
-    page.drawText(`School Year: ${project.schoolYear}`, { x: margin + colWidth + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
-    page.drawText(`Grade & Section: ${project.gradeLevel} - ${project.section}`, { x: margin + colWidth * 2 + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
-    page.drawText(`Quarter: ${project.quarter}`, { x: margin + colWidth * 3 + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
-
-    page.drawText(`Subject: ${project.subject}`, { x: margin + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
-    page.drawText(`Teacher: ${project.teacherName || 'N/A'}`, { x: margin + colWidth + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
-    page.drawText(`DepEd Policy: ${project.depedPolicy === '2015' ? 'DO 8 s. 2015' : 'MATATAG (2027)'}`, { x: margin + colWidth * 2 + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
-    page.drawText(`Passing Mark: ${project.passingGrade}%`, { x: margin + colWidth * 3 + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
-
-    y -= (metaBoxHeight + 16);
-
-    // Table Column Definitions
+    // 2. Draw Table
     const cols = [
       { name: '#', width: 22 },
       { name: 'LRN', width: 75 },
@@ -182,208 +485,30 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
       { name: 'Remarks', width: usableWidth - (22 + 75 + 160 + 35 + 85 + 85 + 70 + 50 + 55) },
     ];
 
-    const drawTableHeader = (p: typeof page, currentY: number) => {
-      p.drawRectangle({
-        x: margin,
-        y: currentY - 18,
-        width: usableWidth,
-        height: 18,
-        color: COLOR_PRIMARY,
-      });
+    const tableResult = drawClassRecordTable(
+      pdfDoc,
+      page,
+      y,
+      project,
+      activeStudents,
+      cols,
+      { pageWidth, pageHeight, margin, usableWidth, font, fontBold, createNewPage }
+    );
+    page = tableResult.page;
+    y = tableResult.cursorY;
 
-      let xOffset = margin;
-      cols.forEach((col) => {
-        p.drawText(col.name, {
-          x: xOffset + 4,
-          y: currentY - 12,
-          size: 7.5,
-          font: fontBold,
-          color: rgb(1, 1, 1),
-        });
-        xOffset += col.width;
-      });
+    // 3. Compute Summary Metrics
+    const summaryData = computeClassSummaryMetrics(project, activeStudents);
 
-      return currentY - 18;
-    };
+    // 4. Ensure space for Report Footer & draw ONCE immediately after final student record
+    const REQUIRED_FOOTER_HEIGHT = 120; // Summary box + signatures
+    const spaceCheck = ensureSpaceForReportFooter(page, y, REQUIRED_FOOTER_HEIGHT, margin, createNewPage);
+    page = spaceCheck.page;
+    y = spaceCheck.cursorY;
 
-    y = drawTableHeader(page, y);
+    drawReportFooter(pdfDoc, page, y, summaryData, { pageWidth, margin, usableWidth, font, fontBold });
 
-    // Separate Students into Male and Female groups
-    const isM = (s: Student) => {
-      const sx = (s.sex || '').trim().toLowerCase();
-      return sx === 'male' || sx === 'm' || sx.startsWith('m');
-    };
-    const isF = (s: Student) => {
-      const sx = (s.sex || '').trim().toLowerCase();
-      return sx === 'female' || sx === 'f' || sx.startsWith('f');
-    };
-
-    const maleStudents = activeStudents.filter(isM).sort((a, b) => a.name.localeCompare(b.name));
-    const femaleStudents = activeStudents.filter(isF).sort((a, b) => a.name.localeCompare(b.name));
-    const otherStudents = activeStudents.filter((s) => !isM(s) && !isF(s)).sort((a, b) => a.name.localeCompare(b.name));
-
-    const renderStudentGroup = (groupLabel: string, studentList: Student[]) => {
-      if (studentList.length === 0) return;
-
-      if (y - 18 < margin + 40) {
-        const res = createNewPage();
-        page = res.newPage;
-        y = drawTableHeader(page, res.newY);
-      }
-
-      // Group Header Bar
-      page.drawRectangle({
-        x: margin,
-        y: y - 14,
-        width: usableWidth,
-        height: 14,
-        color: COLOR_HEADER_BG,
-        borderColor: COLOR_BORDER,
-        borderWidth: 0.5,
-      });
-
-      page.drawText(`${groupLabel} (${studentList.length})`, {
-        x: margin + 6,
-        y: y - 10,
-        size: 7.5,
-        font: fontBold,
-        color: COLOR_PRIMARY,
-      });
-
-      y -= 14;
-
-      studentList.forEach((student, idx) => {
-        if (y - 16 < margin + 30) {
-          const res = createNewPage();
-          page = res.newPage;
-          y = drawTableHeader(page, res.newY);
-        }
-
-        const stats = computeProjectStudentGrade(project, student.id);
-        const isAlt = idx % 2 === 1;
-
-        // Row background
-        page.drawRectangle({
-          x: margin,
-          y: y - 15,
-          width: usableWidth,
-          height: 15,
-          color: stats.isPassing ? (isAlt ? COLOR_ALT_ROW : rgb(1, 1, 1)) : COLOR_DANGER_BG,
-          borderColor: COLOR_BORDER,
-          borderWidth: 0.5,
-        });
-
-        let xOffset = margin;
-
-        const cellData = [
-          { text: `${idx + 1}`, width: cols[0].width, bold: false },
-          { text: student.lrn || '—', width: cols[1].width, bold: false },
-          { text: fitText(student.name, fontBold, 7.5, cols[2].width - 8), width: cols[2].width, bold: true },
-          { text: student.sex ? student.sex.charAt(0) : '—', width: cols[3].width, bold: false },
-          { text: `${stats.wwPercentage.toFixed(1)}% (${stats.weightedWW.toFixed(1)})`, width: cols[4].width, bold: false },
-          { text: `${stats.ptPercentage.toFixed(1)}% (${stats.weightedPT.toFixed(1)})`, width: cols[5].width, bold: false },
-          { text: `${stats.qePercentage.toFixed(1)}% (${stats.weightedQA.toFixed(1)})`, width: cols[6].width, bold: false },
-          { text: `${stats.initialGrade.toFixed(1)}`, width: cols[7].width, bold: false },
-          { text: `${stats.finalGrade}`, width: cols[8].width, bold: true },
-          {
-            text: stats.remarks,
-            width: cols[9].width,
-            bold: true,
-            color: stats.isPassing ? COLOR_SUCCESS : COLOR_DANGER,
-          },
-        ];
-
-        cellData.forEach((cell) => {
-          page.drawText(cell.text, {
-            x: xOffset + 4,
-            y: y - 11,
-            size: 7.5,
-            font: cell.bold ? fontBold : font,
-            color: cell.color || COLOR_TEXT,
-          });
-          xOffset += cell.width;
-        });
-
-        y -= 15;
-      });
-    };
-
-    renderStudentGroup('MALE STUDENTS', maleStudents);
-    renderStudentGroup('FEMALE STUDENTS', femaleStudents);
-    renderStudentGroup('OTHER STUDENTS', otherStudents);
-
-    // Summary Statistics Footer Section
-    if (y - 70 < margin) {
-      const res = createNewPage();
-      page = res.newPage;
-      y = res.newY;
-    }
-
-    y -= 15;
-
-    let passedCount = 0;
-    let failedCount = 0;
-    let totalGradeSum = 0;
-    let highestGrade = 0;
-    let lowestGrade = 100;
-
-    activeStudents.forEach((st) => {
-      const stStats = computeProjectStudentGrade(project, st.id);
-      totalGradeSum += stStats.finalGrade;
-      if (stStats.finalGrade > highestGrade) highestGrade = stStats.finalGrade;
-      if (stStats.finalGrade < lowestGrade) lowestGrade = stStats.finalGrade;
-      if (stStats.isPassing) passedCount++;
-      else failedCount++;
-    });
-
-    const totalEnrolled = activeStudents.length;
-    const avgGrade = totalEnrolled > 0 ? (totalGradeSum / totalEnrolled).toFixed(1) : '0';
-    const passRate = totalEnrolled > 0 ? ((passedCount / totalEnrolled) * 100).toFixed(1) : '0';
-
-    const summaryBoxHeight = 50;
-    page.drawRectangle({
-      x: margin,
-      y: y - summaryBoxHeight,
-      width: usableWidth,
-      height: summaryBoxHeight,
-      color: COLOR_HEADER_BG,
-      borderColor: COLOR_BORDER,
-      borderWidth: 0.75,
-    });
-
-    page.drawText('SUMMARY PERFORMANCE METRICS', {
-      x: margin + 8,
-      y: y - 12,
-      size: 8,
-      font: fontBold,
-      color: COLOR_PRIMARY,
-    });
-
-    const sCol = usableWidth / 5;
-    page.drawText(`Total Enrolled: ${totalEnrolled}`, { x: margin + 8, y: y - 28, size: 8, font, color: COLOR_TEXT });
-    page.drawText(`Passed: ${passedCount}`, { x: margin + sCol + 8, y: y - 28, size: 8, font: fontBold, color: COLOR_SUCCESS });
-    page.drawText(`Needs Intervention: ${failedCount}`, { x: margin + sCol * 2 + 8, y: y - 28, size: 8, font: fontBold, color: COLOR_DANGER });
-    page.drawText(`Class Average: ${avgGrade}`, { x: margin + sCol * 3 + 8, y: y - 28, size: 8, font: fontBold, color: COLOR_TEXT });
-    page.drawText(`Passing Rate: ${passRate}%`, { x: margin + sCol * 4 + 8, y: y - 28, size: 8, font: fontBold, color: COLOR_PRIMARY });
-
-    page.drawText(`Highest Grade: ${totalEnrolled > 0 ? highestGrade : '—'}`, { x: margin + 8, y: y - 42, size: 7.5, font, color: COLOR_TEXT_MUTED });
-    page.drawText(`Lowest Grade: ${totalEnrolled > 0 ? lowestGrade : '—'}`, { x: margin + sCol + 8, y: y - 42, size: 7.5, font, color: COLOR_TEXT_MUTED });
-    page.drawText(`Generated Date: ${new Date().toLocaleDateString()}`, { x: margin + sCol * 3 + 8, y: y - 42, size: 7.5, font, color: COLOR_TEXT_MUTED });
-
-    y -= (summaryBoxHeight + 25);
-
-    // Signatures Line
-    if (y - 30 > margin) {
-      const sigX1 = margin + 40;
-      const sigX2 = pageWidth - margin - 220;
-
-      page.drawLine({ start: { x: sigX1, y: y }, end: { x: sigX1 + 180, y: y }, thickness: 0.75, color: COLOR_PRIMARY });
-      page.drawText('Subject Teacher Signature', { x: sigX1 + 30, y: y - 12, size: 8, font, color: COLOR_TEXT_MUTED });
-
-      page.drawLine({ start: { x: sigX2, y: y }, end: { x: sigX2 + 180, y: y }, thickness: 0.75, color: COLOR_PRIMARY });
-      page.drawText('School Head / Principal Signature', { x: sigX2 + 20, y: y - 12, size: 8, font, color: COLOR_TEXT_MUTED });
-    }
-
+    // 5. Save & Download
     const pdfBytes = await pdfDoc.save();
     const defaultFilename = `DepEd_Class_Record_${project.gradeLevel}_${project.section}_${project.subject}.pdf`.replace(/\s+/g, '_');
     downloadPdfBuffer(pdfBytes, customFilename || defaultFilename);
@@ -398,13 +523,257 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
 }
 
 /**
+ * Draws Consolidated Header
+ */
+function drawConsolidatedHeader(
+  page: PDFPage,
+  cursorY: number,
+  groupData: any,
+  compiledStudents: any[],
+  config: { margin: number; usableWidth: number; font: PDFFont; fontBold: PDFFont }
+): number {
+  let y = cursorY;
+  const { margin, usableWidth, font, fontBold } = config;
+
+  page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
+    x: margin,
+    y,
+    size: 8,
+    font: fontBold,
+    color: COLOR_TEXT_MUTED,
+  });
+  y -= 14;
+
+  page.drawText('SUMMARY OF CONSOLIDATED QUARTERLY GRADES', {
+    x: margin,
+    y,
+    size: 14,
+    font: fontBold,
+    color: COLOR_PRIMARY,
+  });
+  y -= 18;
+
+  const metaBoxHeight = 32;
+  page.drawRectangle({
+    x: margin,
+    y: y - metaBoxHeight,
+    width: usableWidth,
+    height: metaBoxHeight,
+    color: COLOR_HEADER_BG,
+    borderColor: COLOR_BORDER,
+    borderWidth: 0.75,
+  });
+
+  const colWidth = usableWidth / 3;
+  page.drawText(`Grade & Section: ${groupData?.gradeLevel || '—'} ${groupData?.section || ''}`, { x: margin + 8, y: y - 12, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(`Subject: ${groupData?.subject || '—'}`, { x: margin + colWidth + 8, y: y - 12, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(`School Year: ${groupData?.schoolYear || '—'}`, { x: margin + colWidth * 2 + 8, y: y - 12, size: 8, font: fontBold, color: COLOR_TEXT });
+
+  page.drawText(`Adviser / Teacher: ${groupData?.teacherName || '—'}`, { x: margin + 8, y: y - 24, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(`Total Records: ${compiledStudents.length}`, { x: margin + colWidth + 8, y: y - 24, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(`Date Exported: ${new Date().toLocaleDateString()}`, { x: margin + colWidth * 2 + 8, y: y - 24, size: 8, font, color: COLOR_TEXT_MUTED });
+
+  return y - (metaBoxHeight + 16);
+}
+
+/**
+ * Computes consolidated summary metrics
+ */
+function computeConsolidatedSummaryMetrics(compiledStudents: any[]): ReportSummaryData {
+  let passedCount = 0;
+  let failedCount = 0;
+  let totalGradeSum = 0;
+  let gradeCount = 0;
+  let highestGrade = 0;
+  let lowestGrade = 100;
+
+  compiledStudents.forEach((st) => {
+    if (st.finalGrade !== undefined && st.finalGrade !== null) {
+      totalGradeSum += st.finalGrade;
+      gradeCount++;
+      if (st.finalGrade > highestGrade) highestGrade = st.finalGrade;
+      if (st.finalGrade < lowestGrade) lowestGrade = st.finalGrade;
+    }
+    const isPassed = st.isPassing ?? (st.finalGrade ? st.finalGrade >= 75 : true);
+    if (isPassed) passedCount++;
+    else failedCount++;
+  });
+
+  const totalEnrolled = compiledStudents.length;
+  const avgGrade = gradeCount > 0 ? (totalGradeSum / gradeCount).toFixed(1) : '0';
+  const passRate = totalEnrolled > 0 ? ((passedCount / totalEnrolled) * 100).toFixed(1) : '0';
+
+  return {
+    totalEnrolled,
+    passedCount,
+    failedCount,
+    avgGrade,
+    passRate,
+    highestGrade: gradeCount > 0 ? highestGrade : '—',
+    lowestGrade: gradeCount > 0 ? lowestGrade : '—',
+    generatedDate: new Date().toLocaleDateString(),
+  };
+}
+
+/**
+ * Renders Consolidated Student Table
+ */
+function drawConsolidatedTable(
+  pdfDoc: PDFDocument,
+  initialPage: PDFPage,
+  initialY: number,
+  compiledStudents: any[],
+  cols: Array<{ name: string; width: number }>,
+  config: {
+    margin: number;
+    usableWidth: number;
+    font: PDFFont;
+    fontBold: PDFFont;
+    createNewPage: () => { newPage: PDFPage; newY: number };
+  }
+): { page: PDFPage; cursorY: number } {
+  let page = initialPage;
+  let y = initialY;
+  const { margin, usableWidth, font, fontBold, createNewPage } = config;
+
+  const drawTableHeader = (p: PDFPage, currentY: number) => {
+    p.drawRectangle({
+      x: margin,
+      y: currentY - 18,
+      width: usableWidth,
+      height: 18,
+      color: COLOR_PRIMARY,
+    });
+
+    let xOffset = margin;
+    cols.forEach((col) => {
+      p.drawText(col.name, {
+        x: xOffset + 4,
+        y: currentY - 12,
+        size: 8,
+        font: fontBold,
+        color: rgb(1, 1, 1),
+      });
+      xOffset += col.width;
+    });
+
+    return currentY - 18;
+  };
+
+  y = drawTableHeader(page, y);
+
+  const isM = (s: any) => {
+    const sx = (s.sex || '').trim().toLowerCase();
+    return sx === 'male' || sx === 'm' || sx.startsWith('m');
+  };
+  const isF = (s: any) => {
+    const sx = (s.sex || '').trim().toLowerCase();
+    return sx === 'female' || sx === 'f' || sx.startsWith('f');
+  };
+
+  const maleStudents = compiledStudents.filter(isM).sort((a, b) => a.name.localeCompare(b.name));
+  const femaleStudents = compiledStudents.filter(isF).sort((a, b) => a.name.localeCompare(b.name));
+  const otherStudents = compiledStudents.filter((s) => !isM(s) && !isF(s)).sort((a, b) => a.name.localeCompare(b.name));
+
+  const renderConsolidatedGroup = (groupLabel: string, list: any[]) => {
+    if (list.length === 0) return;
+
+    if (y - 18 < margin + 40) {
+      const res = createNewPage();
+      page = res.newPage;
+      y = drawTableHeader(page, res.newY);
+    }
+
+    page.drawRectangle({
+      x: margin,
+      y: y - 14,
+      width: usableWidth,
+      height: 14,
+      color: COLOR_HEADER_BG,
+      borderColor: COLOR_BORDER,
+      borderWidth: 0.5,
+    });
+
+    page.drawText(`${groupLabel} (${list.length})`, {
+      x: margin + 6,
+      y: y - 10,
+      size: 8,
+      font: fontBold,
+      color: COLOR_PRIMARY,
+    });
+
+    y -= 14;
+
+    list.forEach((st: any, idx: number) => {
+      if (y - 16 < margin + 30) {
+        const res = createNewPage();
+        page = res.newPage;
+        y = drawTableHeader(page, res.newY);
+      }
+
+      const isAlt = idx % 2 === 1;
+      const isPassed = st.isPassing ?? (st.finalGrade ? st.finalGrade >= 75 : true);
+
+      page.drawRectangle({
+        x: margin,
+        y: y - 15,
+        width: usableWidth,
+        height: 15,
+        color: isPassed ? (isAlt ? COLOR_ALT_ROW : rgb(1, 1, 1)) : COLOR_DANGER_BG,
+        borderColor: COLOR_BORDER,
+        borderWidth: 0.5,
+      });
+
+      let xOffset = margin;
+
+      const cellValues = [
+        { text: `${idx + 1}`, width: cols[0].width, bold: false },
+        { text: st.lrn || '—', width: cols[1].width, bold: false },
+        { text: fitText(st.name || '', fontBold, 8, cols[2].width - 8), width: cols[2].width, bold: true },
+        { text: st.q1 !== undefined && st.q1 !== null ? `${st.q1}` : '—', width: cols[3].width, bold: false },
+        { text: st.q2 !== undefined && st.q2 !== null ? `${st.q2}` : '—', width: cols[4].width, bold: false },
+        { text: st.q3 !== undefined && st.q3 !== null ? `${st.q3}` : '—', width: cols[5].width, bold: false },
+        { text: st.q4 !== undefined && st.q4 !== null ? `${st.q4}` : '—', width: cols[6].width, bold: false },
+        { text: st.finalGrade !== undefined && st.finalGrade !== null ? `${st.finalGrade}` : '—', width: cols[7].width, bold: true },
+        {
+          text: st.remarks || (isPassed ? 'Passed' : 'Needs Intervention'),
+          width: cols[8].width,
+          bold: true,
+          color: isPassed ? COLOR_SUCCESS : COLOR_DANGER,
+        },
+      ];
+
+      cellValues.forEach((cell) => {
+        page.drawText(cell.text, {
+          x: xOffset + 4,
+          y: y - 11,
+          size: 8,
+          font: cell.bold ? fontBold : font,
+          color: cell.color || COLOR_TEXT,
+        });
+        xOffset += cell.width;
+      });
+
+      y -= 15;
+    });
+  };
+
+  renderConsolidatedGroup('MALE STUDENTS', maleStudents);
+  renderConsolidatedGroup('FEMALE STUDENTS', femaleStudents);
+  renderConsolidatedGroup('OTHER STUDENTS', otherStudents);
+
+  return { page, cursorY: y };
+}
+
+/**
  * Generates a clean, crisp vector PDF for Consolidated Quarterly Grades from group data.
+ * Architecture Flow:
+ * Header -> Student Table -> ensureSpaceForReportFooter -> drawReportFooter (once at end) -> save
  */
 export async function exportConsolidatedGradesPDF(groupData: any, customFilename?: string): Promise<boolean> {
   try {
     let compiledStudents: any[] = [];
 
-    // Extract or compile students array
     if (groupData?.students && Array.isArray(groupData.students) && groupData.students.length > 0) {
       compiledStudents = groupData.students;
     } else if (groupData?.projects && Array.isArray(groupData.projects)) {
@@ -464,7 +833,6 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
       });
     }
 
-    // Debug Trace Logging
     logTraceMetrics(
       'exportConsolidatedGradesPDF',
       compiledStudents.length,
@@ -509,49 +877,10 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
       return { newPage, newY: newY - 30 };
     };
 
-    // Header
-    page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
-      x: margin,
-      y,
-      size: 8,
-      font: fontBold,
-      color: COLOR_TEXT_MUTED,
-    });
-    y -= 14;
+    // 1. Header
+    y = drawConsolidatedHeader(page, y, groupData, compiledStudents, { margin, usableWidth, font, fontBold });
 
-    page.drawText('SUMMARY OF CONSOLIDATED QUARTERLY GRADES', {
-      x: margin,
-      y,
-      size: 14,
-      font: fontBold,
-      color: COLOR_PRIMARY,
-    });
-    y -= 18;
-
-    // Info Box
-    const metaBoxHeight = 32;
-    page.drawRectangle({
-      x: margin,
-      y: y - metaBoxHeight,
-      width: usableWidth,
-      height: metaBoxHeight,
-      color: COLOR_HEADER_BG,
-      borderColor: COLOR_BORDER,
-      borderWidth: 0.75,
-    });
-
-    const colWidth = usableWidth / 3;
-    page.drawText(`Grade & Section: ${groupData?.gradeLevel || '—'} ${groupData?.section || ''}`, { x: margin + 8, y: y - 12, size: 8, font: fontBold, color: COLOR_TEXT });
-    page.drawText(`Subject: ${groupData?.subject || '—'}`, { x: margin + colWidth + 8, y: y - 12, size: 8, font: fontBold, color: COLOR_TEXT });
-    page.drawText(`School Year: ${groupData?.schoolYear || '—'}`, { x: margin + colWidth * 2 + 8, y: y - 12, size: 8, font: fontBold, color: COLOR_TEXT });
-
-    page.drawText(`Adviser / Teacher: ${groupData?.teacherName || '—'}`, { x: margin + 8, y: y - 24, size: 8, font, color: COLOR_TEXT_MUTED });
-    page.drawText(`Total Records: ${compiledStudents.length}`, { x: margin + colWidth + 8, y: y - 24, size: 8, font, color: COLOR_TEXT_MUTED });
-    page.drawText(`Date Exported: ${new Date().toLocaleDateString()}`, { x: margin + colWidth * 2 + 8, y: y - 24, size: 8, font, color: COLOR_TEXT_MUTED });
-
-    y -= (metaBoxHeight + 16);
-
-    // Table Columns
+    // 2. Table
     const cols = [
       { name: '#', width: 22 },
       { name: 'LRN', width: 75 },
@@ -564,132 +893,29 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
       { name: 'Remarks', width: usableWidth - (22 + 75 + 170 + 38 * 4 + 45) },
     ];
 
-    const drawTableHeader = (p: typeof page, currentY: number) => {
-      p.drawRectangle({
-        x: margin,
-        y: currentY - 18,
-        width: usableWidth,
-        height: 18,
-        color: COLOR_PRIMARY,
-      });
+    const tableResult = drawConsolidatedTable(
+      pdfDoc,
+      page,
+      y,
+      compiledStudents,
+      cols,
+      { margin, usableWidth, font, fontBold, createNewPage }
+    );
+    page = tableResult.page;
+    y = tableResult.cursorY;
 
-      let xOffset = margin;
-      cols.forEach((col) => {
-        p.drawText(col.name, {
-          x: xOffset + 4,
-          y: currentY - 12,
-          size: 8,
-          font: fontBold,
-          color: rgb(1, 1, 1),
-        });
-        xOffset += col.width;
-      });
+    // 3. Compute Summary Metrics
+    const summaryData = computeConsolidatedSummaryMetrics(compiledStudents);
 
-      return currentY - 18;
-    };
+    // 4. Ensure Space & Draw Report Footer ONCE
+    const REQUIRED_FOOTER_HEIGHT = 120;
+    const spaceCheck = ensureSpaceForReportFooter(page, y, REQUIRED_FOOTER_HEIGHT, margin, createNewPage);
+    page = spaceCheck.page;
+    y = spaceCheck.cursorY;
 
-    y = drawTableHeader(page, y);
+    drawReportFooter(pdfDoc, page, y, summaryData, { pageWidth, margin, usableWidth, font, fontBold });
 
-    const isM = (s: any) => {
-      const sx = (s.sex || '').trim().toLowerCase();
-      return sx === 'male' || sx === 'm' || sx.startsWith('m');
-    };
-    const isF = (s: any) => {
-      const sx = (s.sex || '').trim().toLowerCase();
-      return sx === 'female' || sx === 'f' || sx.startsWith('f');
-    };
-
-    const maleStudents = compiledStudents.filter(isM).sort((a, b) => a.name.localeCompare(b.name));
-    const femaleStudents = compiledStudents.filter(isF).sort((a, b) => a.name.localeCompare(b.name));
-    const otherStudents = compiledStudents.filter((s) => !isM(s) && !isF(s)).sort((a, b) => a.name.localeCompare(b.name));
-
-    const renderConsolidatedGroup = (groupLabel: string, list: any[]) => {
-      if (list.length === 0) return;
-
-      if (y - 18 < margin + 40) {
-        const res = createNewPage();
-        page = res.newPage;
-        y = drawTableHeader(page, res.newY);
-      }
-
-      page.drawRectangle({
-        x: margin,
-        y: y - 14,
-        width: usableWidth,
-        height: 14,
-        color: COLOR_HEADER_BG,
-        borderColor: COLOR_BORDER,
-        borderWidth: 0.5,
-      });
-
-      page.drawText(`${groupLabel} (${list.length})`, {
-        x: margin + 6,
-        y: y - 10,
-        size: 8,
-        font: fontBold,
-        color: COLOR_PRIMARY,
-      });
-
-      y -= 14;
-
-      list.forEach((st: any, idx: number) => {
-        if (y - 16 < margin + 30) {
-          const res = createNewPage();
-          page = res.newPage;
-          y = drawTableHeader(page, res.newY);
-        }
-
-        const isAlt = idx % 2 === 1;
-        const isPassed = st.isPassing ?? (st.finalGrade ? st.finalGrade >= 75 : true);
-
-        page.drawRectangle({
-          x: margin,
-          y: y - 15,
-          width: usableWidth,
-          height: 15,
-          color: isPassed ? (isAlt ? COLOR_ALT_ROW : rgb(1, 1, 1)) : COLOR_DANGER_BG,
-          borderColor: COLOR_BORDER,
-          borderWidth: 0.5,
-        });
-
-        let xOffset = margin;
-
-        const cellValues = [
-          { text: `${idx + 1}`, width: cols[0].width, bold: false },
-          { text: st.lrn || '—', width: cols[1].width, bold: false },
-          { text: fitText(st.name || '', fontBold, 8, cols[2].width - 8), width: cols[2].width, bold: true },
-          { text: st.q1 !== undefined && st.q1 !== null ? `${st.q1}` : '—', width: cols[3].width, bold: false },
-          { text: st.q2 !== undefined && st.q2 !== null ? `${st.q2}` : '—', width: cols[4].width, bold: false },
-          { text: st.q3 !== undefined && st.q3 !== null ? `${st.q3}` : '—', width: cols[5].width, bold: false },
-          { text: st.q4 !== undefined && st.q4 !== null ? `${st.q4}` : '—', width: cols[6].width, bold: false },
-          { text: st.finalGrade !== undefined && st.finalGrade !== null ? `${st.finalGrade}` : '—', width: cols[7].width, bold: true },
-          {
-            text: st.remarks || (isPassed ? 'Passed' : 'Needs Intervention'),
-            width: cols[8].width,
-            bold: true,
-            color: isPassed ? COLOR_SUCCESS : COLOR_DANGER,
-          },
-        ];
-
-        cellValues.forEach((cell) => {
-          page.drawText(cell.text, {
-            x: xOffset + 4,
-            y: y - 11,
-            size: 8,
-            font: cell.bold ? fontBold : font,
-            color: cell.color || COLOR_TEXT,
-          });
-          xOffset += cell.width;
-        });
-
-        y -= 15;
-      });
-    };
-
-    renderConsolidatedGroup('MALE STUDENTS', maleStudents);
-    renderConsolidatedGroup('FEMALE STUDENTS', femaleStudents);
-    renderConsolidatedGroup('OTHER STUDENTS', otherStudents);
-
+    // 5. Save & Download
     const pdfBytes = await pdfDoc.save();
     const defaultFilename = `Consolidated_Grades_${groupData?.gradeLevel || 'Class'}_${groupData?.section || 'Section'}.pdf`.replace(/\s+/g, '_');
     downloadPdfBuffer(pdfBytes, customFilename || defaultFilename);
