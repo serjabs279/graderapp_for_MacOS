@@ -1,0 +1,6 @@
+{
+  "name": "SRPHS Academic Grading System",
+  "description": "An offline-first academic grading system for SRPHS based on the latest DepEd assessment policies (DO 8, s. 2015).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

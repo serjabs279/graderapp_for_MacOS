@@ -1,0 +1,285 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Jadeite Green Primary Color Tokens */
+  --color-jade-50: #ecfdf5;
+  --color-jade-100: #d1fae5;
+  --color-jade-200: #a7f3d0;
+  --color-jade-300: #6ee7b7;
+  --color-jade-400: #34d399;
+  --color-jade-500: #10b981;
+  --color-jade-600: #059669;
+  --color-jade-700: #047857;
+  --color-jade-800: #065f46;
+  --color-jade-900: #064e3b;
+  --color-jade-950: #022c22;
+
+  /* Remap indigo classes to Jadeite Green palette for system-wide primary color transformation */
+  --color-indigo-50: #ecfdf5;
+  --color-indigo-100: #d1fae5;
+  --color-indigo-150: #a7f3d0;
+  --color-indigo-200: #a7f3d0;
+  --color-indigo-300: #6ee7b7;
+  --color-indigo-400: #34d399;
+  --color-indigo-500: #10b981;
+  --color-indigo-550: #059669;
+  --color-indigo-600: #059669;
+  --color-indigo-650: #047857;
+  --color-indigo-700: #047857;
+  --color-indigo-750: #065f46;
+  --color-indigo-800: #065f46;
+  --color-indigo-850: #064e3b;
+  --color-indigo-900: #064e3b;
+  --color-indigo-950: #022c22;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  color: #0f172a;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+.dark body {
+  background-color: #0b0f19;
+  color: #f1f5f9;
+}
+
+/* Custom scrollbars for professional dashboard styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Custom transitions and styling */
+.transition-all-custom {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --------------------------------------------------------
+   PRINT ENGINE STYLES (Screen View & Real Paper Overrides)
+   -------------------------------------------------------- */
+
+/* Screen preview overrides when print preview is activated */
+body.print-mode-active,
+body.print-mode-active #root,
+body.print-mode-active #root > div,
+body.print-mode-active main#main-content {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  display: block !important;
+}
+
+body.print-mode-active #app-sidebar {
+  display: none !important;
+}
+
+body.print-mode-active main#main-content {
+  padding: 1rem !important;
+  margin: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Force Light Background and Contrast on Print Elements */
+body.print-mode-active .print-layout-root {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+body.print-mode-active,
+body.print-mode-active .dark,
+body.print-mode-active [class*="dark:"] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Print-specific Media Query (Activated when executing Cmd+P / Ctrl+P) */
+@page {
+  size: portrait;
+  margin: 12mm 12mm 12mm 12mm; /* Standard 12mm paper margins on ALL printed pages */
+}
+
+@media print {
+  /* Disable animations, transforms, and border-radii that trigger composited layer clipping in Chrome/Edge */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-scheme: light !important;
+  }
+
+  /* Reset layout containers so paged media fragmentation works properly across page 1, page 2, etc. */
+  html,
+  body,
+  #root,
+  #root > div,
+  main,
+  main#main-content,
+  main#main-content > div,
+  div,
+  section,
+  article,
+  .space-y-6,
+  .space-y-8,
+  .max-w-7xl,
+  .max-w-4xl,
+  .min-h-screen,
+  .h-screen,
+  .overflow-hidden,
+  .overflow-y-auto,
+  .overflow-x-auto {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    position: static !important;
+    float: none !important;
+  }
+
+  /* Explicitly hide non-printable UI elements */
+  #app-sidebar,
+  .print\:hidden,
+  .no-print,
+  button,
+  input,
+  select,
+  nav,
+  header,
+  footer,
+  .backdrop-blur-xs,
+  [class*="backdrop-blur"] {
+    display: none !important;
+  }
+
+  /* Reset position of modals or overlays if present during printing */
+  .fixed,
+  .absolute {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  /* Printable container styling */
+  #print-sheet-area,
+  #printable-report-card {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+  }
+
+  /* Ensure all nested divs inside print sheet remain visible and unclipped */
+  #print-sheet-area div,
+  #printable-report-card div {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    display: block !important;
+    position: static !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Style standard paper tables & repeat header on page break */
+  table {
+    display: table !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+    margin-top: 0.5rem !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important; /* Repeats table column headers on Page 2, Page 3, etc. */
+  }
+
+  tbody {
+    display: table-row-group !important;
+  }
+
+  tr {
+    display: table-row !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Section headers in table should avoid breaking away from following rows */
+  tr[class*="bg-slate"] {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  th,
+  td {
+    display: table-cell !important;
+    border: 1px solid #1e293b !important; /* Crisp dark lines for printing */
+    color: #000000 !important;
+    background-color: transparent !important;
+    padding: 4px 8px !important;
+    font-size: 9.5pt !important;
+  }
+}
