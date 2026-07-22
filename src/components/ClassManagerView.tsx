@@ -897,7 +897,7 @@ export default function ClassManagerView() {
                       {wwAssessments.length > 0 && (
                         <th className="py-2.5 px-2 text-center bg-indigo-50/30 dark:bg-indigo-950/15 text-indigo-750 dark:text-indigo-400 font-black border-r border-slate-200 dark:border-slate-800" colSpan={wwAssessments.length + 3}>
                           <div className="flex items-center justify-center gap-2">
-                            <span>Written Works ({Math.round(activeProject.subject === 'Science' || activeProject.subject === 'Math' ? 40 : activeProject.subject === 'MAPEH' || activeProject.subject === 'TLE' ? 20 : 30)}%)</span>
+                            <span>Written Works </span>
                             <button
                               onClick={() => openAddAssessmentModal('WW')}
                               className="px-1.5 py-0.5 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/60 dark:hover:bg-indigo-800 text-indigo-800 dark:text-indigo-200 text-[8px] font-black rounded cursor-pointer transition-colors"
@@ -911,7 +911,7 @@ export default function ClassManagerView() {
                       {ptAssessments.length > 0 && (
                         <th className="py-2.5 px-2 text-center bg-teal-50/35 dark:bg-teal-950/15 text-teal-800 dark:text-teal-400 font-black border-r border-slate-200 dark:border-slate-800" colSpan={ptAssessments.length + 3}>
                           <div className="flex items-center justify-center gap-2">
-                            <span>Performance Tasks ({Math.round(activeProject.subject === 'Science' || activeProject.subject === 'Math' ? 40 : activeProject.subject === 'MAPEH' || activeProject.subject === 'TLE' ? 60 : 50)}%)</span>
+                            <span>Performance Tasks </span>
                             <button
                               onClick={() => openAddAssessmentModal('PT')}
                               className="px-1.5 py-0.5 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/60 dark:hover:bg-teal-800 text-teal-800 dark:text-teal-200 text-[8px] font-black rounded cursor-pointer transition-colors"
@@ -925,7 +925,7 @@ export default function ClassManagerView() {
                       {qeAssessments.length > 0 && (
                         <th className="py-2.5 px-2 text-center bg-emerald-50/35 dark:bg-emerald-950/15 text-emerald-750 dark:text-emerald-400 font-black border-r border-slate-200 dark:border-slate-800" colSpan={qeAssessments.length + 2}>
                           <div className="flex items-center justify-center gap-2">
-                            <span>Quarterly Exam (20%)</span>
+                            <span>Quarterly Exam</span>
                             <button
                               onClick={() => openAddAssessmentModal('QE')}
                               className="px-1.5 py-0.5 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/60 dark:hover:bg-emerald-800 text-emerald-800 dark:text-emerald-200 text-[8px] font-black rounded cursor-pointer transition-colors"
@@ -2088,7 +2088,7 @@ export default function ClassManagerView() {
                       <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">WW</span>
                     </div>
                     <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                      Quizzes & Exams ({Math.round(activeProject.subject === 'Science' || activeProject.subject === 'Math' ? 40 : activeProject.subject === 'MAPEH' || activeProject.subject === 'TLE' ? 20 : 30)}%)
+                      Quizzes & Exams 
                     </div>
                   </button>
 
@@ -2106,7 +2106,7 @@ export default function ClassManagerView() {
                       <span className="text-[9px] font-mono font-extrabold bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 px-1.5 py-0.5 rounded">PT</span>
                     </div>
                     <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                      Projects & Hands-on ({Math.round(activeProject.subject === 'Science' || activeProject.subject === 'Math' ? 40 : activeProject.subject === 'MAPEH' || activeProject.subject === 'TLE' ? 60 : 50)}%)
+                      Projects & Hands-on 
                     </div>
                   </button>
 
