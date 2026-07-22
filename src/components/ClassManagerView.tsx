@@ -37,6 +37,7 @@ export default function ClassManagerView() {
   const { 
     projects, 
     activeProjectId, 
+    globalSettings,
     openProject, 
     duplicateProject, 
     archiveProject, 
@@ -550,7 +551,7 @@ export default function ClassManagerView() {
     csvContent += "Student Name,LRN,Sex,WW_Pct,PT_Pct,QE_Pct,Initial_Grade,Final_Grade,Remarks\n";
 
     activeStudents.forEach(s => {
-      const g = computeProjectStudentGrade(activeProject, s.id);
+      const g = computeProjectStudentGrade(activeProject, s.id, globalSettings.subjects);
       csvContent += `"${s.name}",${s.lrn},${s.sex},${g.wwPercentage}%,${g.ptPercentage}%,${g.qePercentage}%,${g.initialGrade},${g.finalGrade},${g.remarks}\n`;
     });
 
@@ -749,7 +750,7 @@ export default function ClassManagerView() {
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-slate-100/40 dark:bg-slate-950/30 p-3.5 rounded-2xl border border-slate-150 dark:border-slate-850/85">
             <div className="flex flex-wrap items-center gap-3 text-xs">
               <div className="flex items-center gap-1.5 bg-indigo-50/50 dark:bg-indigo-950/25 text-indigo-700 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-100/40 dark:border-indigo-900/10 font-sans text-[10px] font-bold">
-                WEIGHTS: {getSubjectWeightsLabel(activeProject.subject)}
+                WEIGHTS: {getSubjectWeightsLabel(activeProject.subject, globalSettings.subjects, activeProject.workspace, activeProject.assessmentProfileId)}
               </div>
               <div className="flex items-center gap-1.5 bg-emerald-50/50 dark:bg-emerald-950/25 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-100/40 dark:border-emerald-900/10 font-sans text-[10px] font-bold">
                 PASSING: {activeProject.passingGrade}
@@ -998,7 +999,7 @@ export default function ClassManagerView() {
 
                   <tbody className="divide-y divide-slate-150 dark:divide-slate-850/60">
                     {activeStudents.map((st, sIdx) => {
-                      const computed = computeProjectStudentGrade(activeProject, st.id);
+                      const computed = computeProjectStudentGrade(activeProject, st.id, globalSettings.subjects);
                       const scores = activeProject.scores[st.id] || {};
 
                       return (
@@ -1835,7 +1836,7 @@ export default function ClassManagerView() {
                 {(() => {
                   const s = activeProject.students.find(x => x.id === reportStudentId);
                   if (!s) return null;
-                  const g = computeProjectStudentGrade(activeProject, s.id);
+                  const g = computeProjectStudentGrade(activeProject, s.id, globalSettings.subjects);
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 dark:bg-slate-950 p-6 rounded-xl border border-slate-150 dark:border-slate-850">
                       
@@ -1906,7 +1907,7 @@ export default function ClassManagerView() {
                 </thead>
                 <tbody className="divide-y divide-slate-150 text-slate-800 font-bold">
                   {activeProject.students.filter(s => s.status === 'Active').sort((a,b) => a.name.localeCompare(b.name)).map((s, idx) => {
-                    const g = computeProjectStudentGrade(activeProject, s.id);
+                    const g = computeProjectStudentGrade(activeProject, s.id, globalSettings.subjects);
                     return (
                       <tr key={s.id} className="hover:bg-slate-50/50">
                         <td className="py-2.5 font-mono">{idx + 1}</td>
@@ -2088,7 +2089,7 @@ export default function ClassManagerView() {
                       <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">WW</span>
                     </div>
                     <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                      Quizzes & Exams 
+                      Quizzes & Exams ({Math.round(activeProject.subject === 'Science' || activeProject.subject === 'Math' ? 40 : activeProject.subject === 'MAPEH' || activeProject.subject === 'TLE' ? 20 : 30)}%)
                     </div>
                   </button>
 
@@ -2106,7 +2107,7 @@ export default function ClassManagerView() {
                       <span className="text-[9px] font-mono font-extrabold bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 px-1.5 py-0.5 rounded">PT</span>
                     </div>
                     <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                      Projects & Hands-on 
+                      Projects & Hands-on ({Math.round(activeProject.subject === 'Science' || activeProject.subject === 'Math' ? 40 : activeProject.subject === 'MAPEH' || activeProject.subject === 'TLE' ? 60 : 50)}%)
                     </div>
                   </button>
 
@@ -2124,7 +2125,7 @@ export default function ClassManagerView() {
                       <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">QE</span>
                     </div>
                     <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                      Periodic Exam (20%)
+                      Periodic Quarterly Exam
                     </div>
                   </button>
                 </div>
