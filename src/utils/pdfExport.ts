@@ -78,69 +78,25 @@ function logTraceMetrics(
 }
 
 /**
- * Generates a clean, crisp vector PDF for DepEd Class Record / SF9 Academic Report from project data.
+ * Draws the official DepEd header and metadata box for a class record.
  */
-export async function exportClassRecordPDF(project: Project, customFilename?: string): Promise<boolean> {
-  try {
-    const rawStudents = project?.students || [];
-    const activeStudents = rawStudents.filter((s) => s.status === 'Active' || !s.status);
-    
-    // Debug Trace Logging
-    logTraceMetrics(
-      'exportClassRecordPDF',
-      rawStudents.length,
-      activeStudents.length,
-      activeStudents.length,
-      activeStudents.length,
-      'printable-report-card'
-    );
+function drawClassRecordHeader(
+  page: PDFPage,
+  startY: number,
+  project: Project,
+  config: { margin: number; usableWidth: number; font: PDFFont; fontBold: PDFFont }
+): number {
+  const { margin, usableWidth, font, fontBold } = config;
+  let y = startY;
 
-    const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-    // A4 Landscape orientation: 841.89 x 595.28 points
-    const pageWidth = 841.89;
-    const pageHeight = 595.28;
-    const margin = 28;
-    const usableWidth = pageWidth - margin * 2;
-
-    let page = pdfDoc.addPage([pageWidth, pageHeight]);
-    let y = pageHeight - margin;
-
-    // Helper for adding pages
-    const createNewPage = () => {
-      const newPage = pdfDoc.addPage([pageWidth, pageHeight]);
-      let newY = pageHeight - margin;
-
-      // Small Header on subsequent pages
-      newPage.drawText(`DepEd Class Record — ${project.subject} (${project.gradeLevel} - ${project.section})`, {
-        x: margin,
-        y: newY - 10,
-        size: 9,
-        font: fontBold,
-        color: COLOR_TEXT_MUTED,
-      });
-
-      newPage.drawLine({
-        start: { x: margin, y: newY - 16 },
-        end: { x: pageWidth - margin, y: newY - 16 },
-        thickness: 0.5,
-        color: COLOR_BORDER,
-      });
-
-      return { newPage, newY: newY - 30 };
-    };
-
-    // Draw Official Header
-    page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
-      x: margin,
-      y,
-      size: 8,
-      font: fontBold,
-      color: COLOR_TEXT_MUTED,
-    });
-    y -= 14;
+  page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
+    x: margin,
+    y,
+    size: 8,
+    font: fontBold,
+    color: COLOR_TEXT_MUTED,
+  });
+  y -= 14;
 
   page.drawText('OFFICIAL CLASS RECORD / ACADEMIC REPORT', {
     x: margin,
@@ -177,6 +133,120 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
   page.drawText(`Passing Mark: ${project.passingGrade}%`, { x: margin + colWidth * 3 + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
 
   return y - (metaBoxHeight + 16);
+}
+
+/**
+ * Renders the summary / report footer at the bottom of a page.
+ */
+function drawReportFooter(
+  pdfDoc: PDFDocument,
+  page: PDFPage,
+  startY: number,
+  summaryData: ReportSummaryData,
+  config: {
+    pageWidth: number;
+    margin: number;
+    usableWidth: number;
+    font: PDFFont;
+    fontBold: PDFFont;
+  }
+) {
+  const { margin, usableWidth, font, fontBold } = config;
+  let y = startY - 10;
+
+  // Footer separator line
+  page.drawLine({
+    start: { x: margin, y },
+    end: { x: margin + usableWidth, y },
+    thickness: 1.5,
+    color: COLOR_PRIMARY,
+  });
+  y -= 14;
+
+  page.drawText('CLASS SUMMARY', {
+    x: margin,
+    y,
+    size: 10,
+    font: fontBold,
+    color: COLOR_PRIMARY,
+  });
+  y -= 16;
+
+  // Summary box
+  const boxH = 48;
+  page.drawRectangle({
+    x: margin,
+    y: y - boxH,
+    width: usableWidth,
+    height: boxH,
+    color: COLOR_HEADER_BG,
+    borderColor: COLOR_BORDER,
+    borderWidth: 0.75,
+  });
+
+  const halfW = usableWidth / 2;
+  const thirdW = usableWidth / 3;
+  const row1 = y - 12;
+  const row2 = y - 28;
+
+  // Row 1
+  page.drawText(`Total Enrolled: ${summaryData.totalEnrolled}`, { x: margin + 8, y: row1, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(`Passed: ${summaryData.passedCount}`, { x: margin + thirdW + 8, y: row1, size: 8, font: fontBold, color: COLOR_SUCCESS });
+  page.drawText(`Failed: ${summaryData.failedCount}`, { x: margin + thirdW * 2 + 8, y: row1, size: 8, font: fontBold, color: COLOR_DANGER });
+
+  // Row 2
+  page.drawText(`Avg Grade: ${summaryData.avgGrade}%`, { x: margin + 8, y: row2, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(`Pass Rate: ${summaryData.passRate}%`, { x: margin + thirdW + 8, y: row2, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(`Highest: ${summaryData.highestGrade}% | Lowest: ${summaryData.lowestGrade}%`, { x: margin + thirdW * 2 + 8, y: row2, size: 8, font, color: COLOR_TEXT_MUTED });
+
+  y -= boxH + 14;
+
+  // Generated date
+  if (summaryData.generatedDate) {
+    page.drawText(`Generated: ${summaryData.generatedDate}`, {
+      x: margin,
+      y,
+      size: 7,
+      font,
+      color: COLOR_TEXT_MUTED,
+    });
+    y -= 12;
+  }
+
+  // Certification line
+  page.drawLine({
+    start: { x: margin + usableWidth * 0.6, y },
+    end: { x: margin + usableWidth * 0.9, y },
+    thickness: 0.5,
+    color: COLOR_BORDER,
+  });
+  page.drawText('Teacher / Adviser Signature', {
+    x: margin + usableWidth * 0.6 + 10,
+    y: y - 10,
+    size: 7,
+    font,
+    color: COLOR_TEXT_MUTED,
+  });
+
+  return y;
+}
+
+/**
+ * Ensures there is enough space on the current page for a footer of a given height.
+ * If not, creates a new page.
+ */
+function ensureSpaceForReportFooter(
+  page: PDFPage,
+  cursorY: number,
+  requiredHeight: number,
+  margin: number,
+  createNewPage: () => { newPage: PDFPage; newY: number }
+): { page: PDFPage; cursorY: number } {
+  if (cursorY - requiredHeight < margin + 20) {
+    const res = createNewPage();
+    return { page: res.newPage, cursorY: res.newY };
+  }
+  return { page, cursorY };
 }
 
 /**
@@ -408,6 +478,7 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
       const newPage = pdfDoc.addPage([pageWidth, pageHeight]);
       let newY = pageHeight - margin;
 
+      // Small Header on subsequent pages
       newPage.drawText(`DepEd Class Record — ${project.subject} (${project.gradeLevel} - ${project.section})`, {
         x: margin,
         y: newY - 10,
@@ -426,15 +497,83 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
       return { newPage, newY: newY - 30 };
     };
 
-    // Header
-    page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
-      x: margin,
+    // 1. Draw Official Header
+    y = drawClassRecordHeader(page, y, project, { margin, usableWidth, font, fontBold });
+
+    // 2. Table column definitions
+    const cols = [
+      { name: '#', width: 22 },
+      { name: 'LRN', width: 75 },
+      { name: 'Student Name', width: 170 },
+      { name: 'S', width: 16 },
+      { name: 'WW (WA)', width: 74 },
+      { name: 'PT (PA)', width: 74 },
+      { name: 'QA', width: 74 },
+      { name: 'IG', width: 40 },
+      { name: 'FG', width: 40 },
+      { name: 'Remarks', width: usableWidth - (22 + 75 + 170 + 16 + 74 + 74 + 74 + 40 + 40) },
+    ];
+
+    const tableResult = drawClassRecordTable(
+      pdfDoc,
+      page,
       y,
-      size: 8,
-      font: fontBold,
-      color: COLOR_TEXT_MUTED,
-    });
-    y -= 14;
+      project,
+      activeStudents,
+      cols,
+      { pageWidth, pageHeight, margin, usableWidth, font, fontBold, createNewPage }
+    );
+    page = tableResult.page;
+    y = tableResult.cursorY;
+
+    // 3. Compute Summary Metrics
+    const summaryData = computeClassSummaryMetrics(project, activeStudents);
+
+    // 4. Ensure Space & Draw Report Footer ONCE
+    const REQUIRED_FOOTER_HEIGHT = 120;
+    const spaceCheck = ensureSpaceForReportFooter(page, y, REQUIRED_FOOTER_HEIGHT, margin, createNewPage);
+    page = spaceCheck.page;
+    y = spaceCheck.cursorY;
+
+    drawReportFooter(pdfDoc, page, y, summaryData, { pageWidth, margin, usableWidth, font, fontBold });
+
+    // 5. Save & Download
+    const pdfBytes = await pdfDoc.save();
+    const defaultFilename = `ClassRecord_${project.gradeLevel}_${project.section}_${project.quarter}.pdf`
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_.-]/g, '');
+    downloadPdfBuffer(pdfBytes, customFilename || defaultFilename);
+
+    return true;
+  } catch (err) {
+    console.error('Class Record vector PDF export error:', err);
+    alert('An error occurred while generating the Class Record PDF. Fallback print triggered.');
+    window.print();
+    return false;
+  }
+}
+
+/**
+ * Draws the consolidated header with DepEd branding and metadata.
+ */
+function drawConsolidatedHeader(
+  page: PDFPage,
+  startY: number,
+  groupData: any,
+  compiledStudents: any[],
+  config: { margin: number; usableWidth: number; font: PDFFont; fontBold: PDFFont }
+): number {
+  const { margin, usableWidth, font, fontBold } = config;
+  let y = startY;
+
+  page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
+    x: margin,
+    y,
+    size: 8,
+    font: fontBold,
+    color: COLOR_TEXT_MUTED,
+  });
+  y -= 14;
 
   page.drawText('SUMMARY OF CONSOLIDATED QUARTERLY GRADES', {
     x: margin,
@@ -917,3 +1056,4 @@ export async function exportElementToPDF(
     return false;
   }
 }
+
