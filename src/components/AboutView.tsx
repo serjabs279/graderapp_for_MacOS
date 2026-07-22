@@ -155,7 +155,7 @@ export default function AboutView() {
               </div>
               <div className="flex justify-between items-center pb-2">
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300">PDF Generator</span>
-                <span className="text-xs font-sans font-bold text-slate-400 dark:text-slate-500">pdfmake v0.2.10</span>
+                <span className="text-xs font-sans font-bold text-slate-400 dark:text-slate-500">pdf-lib v1.17.1 (Vector Data Engine)</span>
               </div>
             </div>
           </div>

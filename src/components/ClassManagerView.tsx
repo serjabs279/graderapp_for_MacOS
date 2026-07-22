@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Student, Assessment, Project, SubjectType } from '../types';
 import { computeProjectStudentGrade, getSubjectWeightsLabel } from '../utils';
-import { exportElementToPDF } from '../utils/pdfExport';
+import { exportClassRecordPDF } from '../utils/pdfExport';
 import { 
   Plus, 
   Trash2, 
@@ -1738,7 +1738,7 @@ export default function ClassManagerView() {
                     setIsExportingPDF(true);
                     try {
                       const filename = `Academic_Report_${activeProject.gradeLevel}_${activeProject.section}_${activeProject.subject}.pdf`.replace(/\s+/g, '_');
-                      await exportElementToPDF('printable-report-card', filename);
+                      await exportClassRecordPDF(activeProject, filename);
                     } catch (e) {
                       console.error('PDF export error:', e);
                     } finally {
