@@ -59,13 +59,22 @@ export default function LoginView() {
       return;
     }
 
-    // Register credentials
-    updateCredentials(regUsername.trim(), regPassword);
+    // Register credentials and capture values to avoid any closure/state timing
+    const newUsername = regUsername.trim();
+    const newPassword = regPassword;
+    updateCredentials(newUsername, newPassword);
     setRegSuccess(true);
-    
-    // Automatically log them in after a short delay for fluid UX
+
+    // Automatically log them in after a short delay for fluid UX.
+    // If automatic sign-in fails, show an error and return the user
+    // to the register tab so they can attempt manual sign-in.
     setTimeout(() => {
-      login(regUsername.trim(), regPassword);
+      const success = login(newUsername, newPassword);
+      if (!success) {
+        setRegError('Automatic sign-in failed. Please sign in manually.');
+        setRegSuccess(false);
+        setActiveTab('login');
+      }
     }, 1200);
   };
 
