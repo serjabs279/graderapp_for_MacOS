@@ -122,13 +122,76 @@ export const SUBJECT_DEFAULTS: Record<SubjectType, { ww: number; pt: number; qa:
   TLE: { ww: 0.20, pt: 0.60, qa: 0.20 }
 };
 
-export function getSubjectWeightsLabel(type: SubjectType, customWeights?: Record<SubjectType, { ww: number; pt: number; qa: number }>) {
-  const w = (customWeights && customWeights[type]) || SUBJECT_DEFAULTS[type] || { ww: 0.30, pt: 0.50, qa: 0.20 };
+export function getSubjectWeights(
+  subject: string,
+  customWeights?: Record<string, { ww: number; pt: number; qa: number }>,
+  workspace?: 'JHS' | 'SHS',
+  assessmentProfileId?: string
+): { ww: number; pt: number; qa: number } {
+  if (workspace === 'SHS') {
+    const shsProfile = SHS_PROFILES.find(p => p.id === assessmentProfileId);
+    if (shsProfile) {
+      return { ww: shsProfile.ww, pt: shsProfile.pt, qa: shsProfile.qa };
+    }
+  }
+
+  const s = (subject || '').trim();
+  if (customWeights && customWeights[s]) {
+    return customWeights[s];
+  }
+
+  // Direct key lookup in SUBJECT_DEFAULTS
+  if (SUBJECT_DEFAULTS[s as SubjectType]) {
+    return SUBJECT_DEFAULTS[s as SubjectType];
+  }
+
+  // Common DepEd subject mappings & case-insensitive matching
+  const lower = s.toLowerCase();
+  if (lower.includes('math') || lower.includes('algebra') || lower.includes('geom') || lower.includes('trig') || lower.includes('stat') || lower.includes('calc')) {
+    return SUBJECT_DEFAULTS.Mathematics; // 40, 40, 20
+  }
+  if (lower.includes('sci') || lower.includes('bio') || lower.includes('chem') || lower.includes('phys')) {
+    return SUBJECT_DEFAULTS.Science; // 40, 40, 20
+  }
+  if (lower.includes('mapeh') || lower.includes('music') || lower.includes('art') || lower.includes('pe') || lower.includes('health')) {
+    return SUBJECT_DEFAULTS.MAPEH; // 20, 60, 20
+  }
+  if (lower.includes('tle') || lower.includes('epp') || lower.includes('tvl') || lower.includes('tech') || lower.includes('agri') || lower.includes('ict')) {
+    return SUBJECT_DEFAULTS.TLE; // 20, 60, 20
+  }
+  if (lower.includes('english') || lower.includes('eng')) {
+    return SUBJECT_DEFAULTS.English; // 30, 50, 20
+  }
+  if (lower.includes('filipino') || lower.includes('fil') || lower.includes('tagalog')) {
+    return SUBJECT_DEFAULTS.Filipino; // 30, 50, 20
+  }
+  if (lower.includes('ap') || lower.includes('araling') || lower.includes('soc') || lower.includes('history')) {
+    return SUBJECT_DEFAULTS.AP; // 30, 50, 20
+  }
+  if (lower.includes('value') || lower.includes('esp') || lower.includes('edukasyon') || lower.includes('conduct')) {
+    return SUBJECT_DEFAULTS['Values Education']; // 30, 50, 20
+  }
+
+  // Default DepEd Order No. 8 fallback (30% WW / 50% PT / 20% QA)
+  return { ww: 0.30, pt: 0.50, qa: 0.20 };
+}
+
+export function getSubjectWeightsLabel(
+  type: string,
+  customWeights?: Record<string, { ww: number; pt: number; qa: number }>,
+  workspace?: 'JHS' | 'SHS',
+  assessmentProfileId?: string
+) {
+  const w = getSubjectWeights(type, customWeights, workspace, assessmentProfileId);
   return `Written Works (${Math.round(w.ww * 100)}%) / Performance Tasks (${Math.round(w.pt * 100)}%) / Quarterly Exam (${Math.round(w.qa * 100)}%)`;
 }
 
 // Compute complete grade metrics for a student inside a Project
-export function computeProjectStudentGrade(project: Project, studentId: string) {
+export function computeProjectStudentGrade(
+  project: Project,
+  studentId: string,
+  customWeights?: Record<string, { ww: number; pt: number; qa: number }>
+) {
   const wwAssessments = project.assessments.filter(a => a.category === 'WW');
   const ptAssessments = project.assessments.filter(a => a.category === 'PT');
   const qeAssessments = project.assessments.filter(a => a.category === 'QE');
@@ -178,15 +241,12 @@ export function computeProjectStudentGrade(project: Project, studentId: string) 
   const qePercentage = qeMaxSum > 0 ? (qeRawSum / qeMaxSum) * 100 : 0;
 
   // Determine actual weights (from custom weights, defaults, or SHS profiles)
-  let weights = { ww: 0.30, pt: 0.50, qa: 0.20 };
-  if (project.workspace === 'SHS') {
-    const shsProfile = SHS_PROFILES.find(p => p.id === project.assessmentProfileId);
-    if (shsProfile) {
-      weights = { ww: shsProfile.ww, pt: shsProfile.pt, qa: shsProfile.qa };
-    }
-  } else {
-    weights = SUBJECT_DEFAULTS[project.subject as SubjectType] || { ww: 0.30, pt: 0.50, qa: 0.20 };
-  }
+  const weights = getSubjectWeights(
+    project.subject,
+    customWeights,
+    project.workspace,
+    project.assessmentProfileId
+  );
 
   const weightedWW = wwPercentage * weights.ww;
   const weightedPT = ptPercentage * weights.pt;

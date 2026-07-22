@@ -244,7 +244,7 @@ export default function DashboardView() {
     let didNotMeet = 0;        // < 75
 
     activeStudents.forEach(st => {
-      const g = computeProjectStudentGrade(activeProject, st.id);
+      const g = computeProjectStudentGrade(activeProject, st.id, globalSettings.subjects);
       if (g.hasScores) {
         sumGrades += g.finalGrade;
         gradedCount++;
@@ -552,7 +552,7 @@ export default function DashboardView() {
           x.name.trim().toUpperCase() === normName
         );
         if (!s) return null;
-        const r = computeProjectStudentGrade(proj, s.id);
+        const r = computeProjectStudentGrade(proj, s.id, globalSettings.subjects);
         return r.hasScores ? r.finalGrade : null;
       };
 
@@ -1121,7 +1121,7 @@ export default function DashboardView() {
                       x.name.trim().toUpperCase() === normName
                     );
                     if (!s) return null;
-                    const r = computeProjectStudentGrade(proj, s.id);
+                    const r = computeProjectStudentGrade(proj, s.id, globalSettings.subjects);
                     return r.hasScores ? r.finalGrade : null;
                   };
 
