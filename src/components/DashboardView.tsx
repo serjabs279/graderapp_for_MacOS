@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { SubjectType, Project, Student } from '../types';
 import { computeProjectStudentGrade, transmuteGrade, getSubjectWeightsLabel, SHS_PROFILES } from '../utils';
-import { exportElementToPDF } from '../utils/pdfExport';
+import { exportConsolidatedGradesPDF } from '../utils/pdfExport';
 import { 
   Users, 
   GraduationCap, 
@@ -671,7 +671,7 @@ export default function DashboardView() {
                   setIsExportingPDF(true);
                   try {
                     const filename = `Consolidated_Grades_${activeGroup.gradeLevel}_${activeGroup.section}_${activeGroup.subject}.pdf`.replace(/\s+/g, '_');
-                    await exportElementToPDF('print-sheet-area', filename);
+                    await exportConsolidatedGradesPDF(activeGroup, filename);
                   } catch (err) {
                     console.error('Export error:', err);
                   } finally {
