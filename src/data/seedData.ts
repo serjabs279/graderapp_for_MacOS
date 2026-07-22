@@ -1,7 +1,7 @@
 import { Project, GlobalSettings } from '../types';
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
-  schoolName: "SAN ROQUE PROVINCIAL HIGH SCHOOL",
+  schoolName: "SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED",
   teacherName: "Prof. Maria Clara G. Santos",
   defaultPassingGrade: 75,
   theme: "light",
@@ -22,7 +22,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
 export const SEED_PROJECTS: Project[] = [
   {
     id: "proj-english-g10",
-    schoolName: "SAN ROQUE PROVINCIAL HIGH SCHOOL",
+    schoolName: "SAN ROQUE PARISH HIGH SCHOOL INCORPORATED",
     schoolYear: "2026-2027",
     quarter: "1st Quarter",
     gradeLevel: "Grade 10",
@@ -124,7 +124,7 @@ export const SEED_PROJECTS: Project[] = [
   },
   {
     id: "proj-science-g10",
-    schoolName: "SAN ROQUE PROVINCIAL HIGH SCHOOL",
+    schoolName: "SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED",
     schoolYear: "2027-2028",
     quarter: "2nd Quarter",
     gradeLevel: "Grade 10",

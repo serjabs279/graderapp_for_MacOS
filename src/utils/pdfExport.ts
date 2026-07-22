@@ -175,7 +175,7 @@ function drawClassRecordHeader(
   let y = cursorY;
   const { margin, usableWidth, font, fontBold } = config;
 
-  page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
+  page.drawText('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', {
     x: margin,
     y,
     size: 8,
@@ -535,7 +535,7 @@ function drawConsolidatedHeader(
   let y = cursorY;
   const { margin, usableWidth, font, fontBold } = config;
 
-  page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
+  page.drawText('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', {
     x: margin,
     y,
     size: 8,
