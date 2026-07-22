@@ -122,7 +122,7 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
     };
 
     // Draw Official Header
-    page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
+    page.drawText('SAN ROQUE PARISH HIGH SCHOOL INCORPORATED', {
       x: margin,
       y,
       size: 8,
@@ -510,7 +510,7 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
     };
 
     // Header
-    page.drawText('REPUBLIC OF THE PHILIPPINES • DEPARTMENT OF EDUCATION', {
+    page.drawText('SAN ROQUE PARISH HIGH SCHOOL INCORPORATED', {
       x: margin,
       y,
       size: 8,
