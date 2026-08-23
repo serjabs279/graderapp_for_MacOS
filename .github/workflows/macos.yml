@@ -35,8 +35,128 @@ jobs:
       - name: Build Tauri
         run: npm run tauri build -- --target ${{ matrix.target }}
 
+      # ==========================================
+      # INSPECT THE GENERATED MACOS APPLICATION
+      # ==========================================
+
+      - name: Inspect DMG
+        run: |
+          echo "=========================================="
+          echo "DMG FILE"
+          echo "=========================================="
+
+          ls -lh \
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/
+
+          echo ""
+          echo "DMG SIZE:"
+          du -sh \
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+
+      - name: Inspect APP bundle
+        run: |
+          APP=$(find \
+            "src-tauri/target/${{ matrix.target }}/release/bundle/macos" \
+            -maxdepth 1 \
+            -name "*.app" \
+            -print -quit)
+
+          echo "=========================================="
+          echo "APP BUNDLE"
+          echo "=========================================="
+
+          echo "Application:"
+          echo "$APP"
+
+          echo ""
+          echo "APP SIZE:"
+          du -sh "$APP"
+
+          echo ""
+          echo "APP CONTENTS:"
+          find "$APP/Contents" -maxdepth 3 -print
+
+      - name: Verify macOS application
+        run: |
+          APP=$(find \
+            "src-tauri/target/${{ matrix.target }}/release/bundle/macos" \
+            -maxdepth 1 \
+            -name "*.app" \
+            -print -quit)
+
+          echo "=========================================="
+          echo "VERIFYING APPLICATION"
+          echo "=========================================="
+
+          # Check Info.plist
+          if [ -f "$APP/Contents/Info.plist" ]; then
+            echo "✅ Info.plist exists"
+          else
+            echo "❌ Info.plist is missing"
+            exit 1
+          fi
+
+          # Check MacOS executable directory
+          if [ -d "$APP/Contents/MacOS" ]; then
+            echo "✅ MacOS executable directory exists"
+          else
+            echo "❌ MacOS executable directory is missing"
+            exit 1
+          fi
+
+          # Show executable
+          echo ""
+          echo "EXECUTABLE:"
+          find "$APP/Contents/MacOS" -type f -maxdepth 1 -print
+
+          # Check Resources
+          if [ -d "$APP/Contents/Resources" ]; then
+            echo "✅ Resources directory exists"
+          else
+            echo "⚠️ Resources directory not found"
+          fi
+
+          echo ""
+          echo "APPLICATION VERIFICATION COMPLETE"
+
+      - name: Inspect application metadata
+        run: |
+          APP=$(find \
+            "src-tauri/target/${{ matrix.target }}/release/bundle/macos" \
+            -maxdepth 1 \
+            -name "*.app" \
+            -print -quit)
+
+          echo "=========================================="
+          echo "APPLICATION METADATA"
+          echo "=========================================="
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleName" \
+            "$APP/Contents/Info.plist" || true
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleIdentifier" \
+            "$APP/Contents/Info.plist" || true
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleShortVersionString" \
+            "$APP/Contents/Info.plist" || true
+
+      # ==========================================
+      # UPLOAD THE ACTUAL APP FOR INSPECTION
+      # ==========================================
+
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: macOS-${{ matrix.target }}
-          path: src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+          name: macOS-DMG-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+
+      - name: Upload APP bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-APP-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app/**
