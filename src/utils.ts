@@ -1,4 +1,5 @@
-import { Project, SubjectType } from './types';
+import { getCalendar, getFirstPeriod } from './calendar/academicCalendar';
+import { Project, SubjectType, SubjectWeight, Student, Assessment, QuarterData, LearnerObservedValues } from './types';
 
 // DepEd Order No. 8, s. 2015 Transmutation Table
 export function transmuteGrade(initialGrade: number): number {
@@ -51,45 +52,45 @@ export function transmuteGrade2027(initialGrade: number): number {
   const rounded = Math.round(initialGrade * 100) / 100;
   
   if (rounded >= 99.50) return 100;
-  if (rounded >= 98.32) return 99;
-  if (rounded >= 97.14) return 98;
-  if (rounded >= 95.96) return 97;
-  if (rounded >= 94.78) return 96;
-  if (rounded >= 93.60) return 95;
-  if (rounded >= 92.42) return 94;
-  if (rounded >= 91.24) return 93;
-  if (rounded >= 90.06) return 92;
-  if (rounded >= 88.88) return 91;
-  if (rounded >= 87.70) return 90;
-  if (rounded >= 86.52) return 89;
-  if (rounded >= 85.34) return 88;
-  if (rounded >= 84.16) return 87;
-  if (rounded >= 82.98) return 86;
-  if (rounded >= 81.80) return 85;
-  if (rounded >= 80.62) return 84;
-  if (rounded >= 79.44) return 83;
-  if (rounded >= 78.26) return 82;
-  if (rounded >= 77.08) return 81;
-  if (rounded >= 75.90) return 80;
-  if (rounded >= 74.72) return 79;
-  if (rounded >= 73.54) return 78;
-  if (rounded >= 72.36) return 77;
-  if (rounded >= 71.18) return 76;
+  if (rounded >= 97.50) return 99;
+  if (rounded >= 96.00) return 98;
+  if (rounded >= 95.00) return 97;
+  if (rounded >= 94.00) return 96;
+  if (rounded >= 93.00) return 95;
+  if (rounded >= 92.00) return 94;
+  if (rounded >= 91.00) return 93;
+  if (rounded >= 90.00) return 92;
+  if (rounded >= 89.00) return 91;
+  if (rounded >= 88.00) return 90;
+  if (rounded >= 87.00) return 89;
+  if (rounded >= 86.00) return 88;
+  if (rounded >= 85.00) return 87;
+  if (rounded >= 84.00) return 86;
+  if (rounded >= 83.00) return 85;
+  if (rounded >= 82.00) return 84;
+  if (rounded >= 81.00) return 83;
+  if (rounded >= 80.00) return 82;
+  if (rounded >= 79.00) return 81;
+  if (rounded >= 78.00) return 80;
+  if (rounded >= 77.00) return 79;
+  if (rounded >= 76.00) return 78;
+  if (rounded >= 75.00) return 77;
+  if (rounded >= 73.00) return 76;
   if (rounded >= 70.00) return 75;
-  if (rounded >= 65.34) return 74;
-  if (rounded >= 60.67) return 73;
-  if (rounded >= 56.01) return 72;
-  if (rounded >= 51.34) return 71;
-  if (rounded >= 46.67) return 70;
-  if (rounded >= 42.01) return 69;
-  if (rounded >= 37.34) return 68;
-  if (rounded >= 32.68) return 67;
-  if (rounded >= 28.01) return 66;
-  if (rounded >= 23.35) return 65;
-  if (rounded >= 18.68) return 64;
-  if (rounded >= 14.01) return 63;
-  if (rounded >= 9.35) return 62;
-  if (rounded >= 4.68) return 61;
+  if (rounded >= 68.00) return 74;
+  if (rounded >= 66.00) return 73;
+  if (rounded >= 64.00) return 72;
+  if (rounded >= 62.00) return 71;
+  if (rounded >= 60.00) return 70;
+  if (rounded >= 58.00) return 69;
+  if (rounded >= 56.00) return 68;
+  if (rounded >= 54.00) return 67;
+  if (rounded >= 52.00) return 66;
+  if (rounded >= 50.00) return 65;
+  if (rounded >= 48.00) return 64;
+  if (rounded >= 46.00) return 63;
+  if (rounded >= 43.00) return 62;
+  if (rounded >= 40.00) return 61;
   return 60;
 }
 
@@ -97,52 +98,68 @@ export function transmuteGrade2027(initialGrade: number): number {
 export interface SHSProfile {
   id: string;
   name: string;
-  ww: number;
-  pt: number;
-  qa: number;
+  wow: number;
+  ppt: number;
+  qste: number;
 }
 
 export const SHS_PROFILES: SHSProfile[] = [
-  { id: 'profile-1', name: 'Profile 1: Core Subjects & Academic Electives (WW: 20%, PT: 50%, Exam: 30%)', ww: 0.20, pt: 0.50, qa: 0.30 },
-  { id: 'profile-2', name: 'Profile 2: Field Exposure, Arts Apprenticeship, Creative Production & Innovation (WW: 15%, PT: 70%, Exam: 15%)', ww: 0.15, pt: 0.70, qa: 0.15 },
-  { id: 'profile-3', name: 'Profile 3: Arts, Sports, Health & Wellness Electives (WW: 20%, PT: 60%, Exam: 20%)', ww: 0.20, pt: 0.60, qa: 0.20 },
-  { id: 'profile-4', name: 'Profile 4: Research Electives, Design & Innovation (WW: 40%, PT: 60%, Exam: 0%)', ww: 0.40, pt: 0.60, qa: 0.00 },
-  { id: 'profile-5', name: 'Profile 5: TechPro Electives (WW: 15%, PT: 65%, Exam: 20%)', ww: 0.15, pt: 0.65, qa: 0.20 },
-  { id: 'profile-6', name: 'Profile 6: Work Immersion (WW: 20%, PT: 80%, Exam: 0%)', ww: 0.20, pt: 0.80, qa: 0.00 }
+  { id: 'profile-1', name: 'Profile 1: Core Subjects & Academic Electives (WOW: 20%, PPT: 50%, Exam: 30%)', wow: 0.20, ppt: 0.50, qste: 0.30 },
+  { id: 'profile-2', name: 'Profile 2: Field Exposure, Arts Apprenticeship, Creative Production & Innovation (WOW: 15%, PPT: 70%, Exam: 15%)', wow: 0.15, ppt: 0.70, qste: 0.15 },
+  { id: 'profile-3', name: 'Profile 3: Arts, Sports, Health & Wellness Electives (WOW: 20%, PPT: 60%, Exam: 20%)', wow: 0.20, ppt: 0.60, qste: 0.20 },
+  { id: 'profile-4', name: 'Profile 4: Research Electives, Design & Innovation (WOW: 40%, PPT: 60%, Exam: 0%)', wow: 0.40, ppt: 0.60, qste: 0.00 },
+  { id: 'profile-5', name: 'Profile 5: TechPro Electives (WOW: 15%, PPT: 65%, Exam: 20%)', wow: 0.15, ppt: 0.65, qste: 0.20 },
+  { id: 'profile-6', name: 'Profile 6: Work Immersion (WOW: 20%, PPT: 80%, Exam: 0%)', wow: 0.20, ppt: 0.80, qste: 0.00 }
 ];
 
-export const SUBJECT_DEFAULTS: Record<SubjectType, { ww: number; pt: number; qa: number }> = {
-  English: { ww: 0.30, pt: 0.50, qa: 0.20 },
-  Filipino: { ww: 0.30, pt: 0.50, qa: 0.20 },
-  Mathematics: { ww: 0.40, pt: 0.40, qa: 0.20 },
-  Science: { ww: 0.40, pt: 0.40, qa: 0.20 },
-  AP: { ww: 0.30, pt: 0.50, qa: 0.20 },
-  'Values Education': { ww: 0.30, pt: 0.50, qa: 0.20 },
-  MAPEH: { ww: 0.20, pt: 0.60, qa: 0.20 },
-  TLE: { ww: 0.20, pt: 0.60, qa: 0.20 }
+export const SUBJECT_DEFAULTS: Record<SubjectType, { wow: number; ppt: number; qste: number }> = {
+  English: { wow: 0.30, ppt: 0.50, qste: 0.20 },
+  Filipino: { wow: 0.30, ppt: 0.50, qste: 0.20 },
+  Mathematics: { wow: 0.40, ppt: 0.40, qste: 0.20 },
+  Science: { wow: 0.40, ppt: 0.40, qste: 0.20 },
+  AP: { wow: 0.30, ppt: 0.50, qste: 0.20 },
+  'Values Education': { wow: 0.30, ppt: 0.50, qste: 0.20 },
+  'Music & Arts': { wow: 0.20, ppt: 0.60, qste: 0.20 },
+  'PE & Health': { wow: 0.20, ppt: 0.60, qste: 0.20 },
+  TLE: { wow: 0.20, ppt: 0.60, qste: 0.20 }
 };
 
 export function getSubjectWeights(
   subject: string,
-  customWeights?: Record<string, { ww: number; pt: number; qa: number }>,
+  customWeights?: Record<string, { wow: number; ppt: number; qste: number }>,
   workspace?: 'JHS' | 'SHS',
   assessmentProfileId?: string
-): { ww: number; pt: number; qa: number } {
+): { wow: number; ppt: number; qste: number } {
   if (workspace === 'SHS') {
     const shsProfile = SHS_PROFILES.find(p => p.id === assessmentProfileId);
     if (shsProfile) {
-      return { ww: shsProfile.ww, pt: shsProfile.pt, qa: shsProfile.qa };
+      return { wow: shsProfile.wow, ppt: shsProfile.ppt, qste: shsProfile.qste };
     }
   }
 
   const s = (subject || '').trim();
-  if (customWeights && customWeights[s]) {
-    return customWeights[s];
+  const normalizedS = s.replace('/', ' & ');
+  const slashedS = s.replace(' & ', '/');
+
+  if (customWeights) {
+    const found = customWeights[s] || customWeights[normalizedS] || customWeights[slashedS];
+    if (found) {
+      const wow = typeof found.wow === 'number' ? found.wow : typeof (found as any).ww === 'number' ? (found as any).ww : undefined;
+      const ppt = typeof found.ppt === 'number' ? found.ppt : typeof (found as any).pt === 'number' ? (found as any).pt : undefined;
+      const qste = typeof found.qste === 'number' ? found.qste : typeof (found as any).qa === 'number' ? (found as any).qa : undefined;
+
+      if (wow !== undefined && ppt !== undefined && qste !== undefined) {
+        return { wow, ppt, qste };
+      }
+    }
   }
 
   // Direct key lookup in SUBJECT_DEFAULTS
   if (SUBJECT_DEFAULTS[s as SubjectType]) {
     return SUBJECT_DEFAULTS[s as SubjectType];
+  }
+  if (SUBJECT_DEFAULTS[normalizedS as SubjectType]) {
+    return SUBJECT_DEFAULTS[normalizedS as SubjectType];
   }
 
   // Common DepEd subject mappings & case-insensitive matching
@@ -153,8 +170,11 @@ export function getSubjectWeights(
   if (lower.includes('sci') || lower.includes('bio') || lower.includes('chem') || lower.includes('phys')) {
     return SUBJECT_DEFAULTS.Science; // 40, 40, 20
   }
-  if (lower.includes('mapeh') || lower.includes('music') || lower.includes('art') || lower.includes('pe') || lower.includes('health')) {
-    return SUBJECT_DEFAULTS.MAPEH; // 20, 60, 20
+  if (lower.includes('mapeh') || lower.includes('music') || lower.includes('art')) {
+    return SUBJECT_DEFAULTS['Music & Arts']; // 20, 60, 20
+  }
+  if (lower.includes('pe') || lower.includes('health') || lower.includes('physi')) {
+    return SUBJECT_DEFAULTS['PE & Health']; // 20, 60, 20
   }
   if (lower.includes('tle') || lower.includes('epp') || lower.includes('tvl') || lower.includes('tech') || lower.includes('agri') || lower.includes('ict')) {
     return SUBJECT_DEFAULTS.TLE; // 20, 60, 20
@@ -173,72 +193,137 @@ export function getSubjectWeights(
   }
 
   // Default DepEd Order No. 8 fallback (30% WW / 50% PT / 20% QA)
-  return { ww: 0.30, pt: 0.50, qa: 0.20 };
+  return { wow: 0.30, ppt: 0.50, qste: 0.20 };
 }
 
 export function getSubjectWeightsLabel(
   type: string,
-  customWeights?: Record<string, { ww: number; pt: number; qa: number }>,
+  customWeights?: Record<string, { wow: number; ppt: number; qste: number }>,
   workspace?: 'JHS' | 'SHS',
   assessmentProfileId?: string
 ) {
   const w = getSubjectWeights(type, customWeights, workspace, assessmentProfileId);
-  return `Written Works (${Math.round(w.ww * 100)}%) / Performance Tasks (${Math.round(w.pt * 100)}%) / Quarterly Exam (${Math.round(w.qa * 100)}%)`;
+  return `Written/Oral Works (${Math.round(w.wow * 100)}%) / Performance/ Product tasks (${Math.round(w.ppt * 100)}%) / Quarterly/Term Exams (${Math.round(w.qste * 100)}%)`;
 }
 
-// Compute complete grade metrics for a student inside a Project
+export function getEffectiveScore(
+  originalScore: number | undefined,
+  reassessmentScore: number | undefined,
+  perfectScore: number,
+  settings?: { enabled: boolean; masteryThreshold: number; policy: 'Average' | 'Highest' | 'Replacement' } | null,
+  assessmentEnabled?: boolean
+): number | undefined {
+  if (originalScore === undefined) return undefined;
+  if (!settings?.enabled || !assessmentEnabled) return originalScore;
+
+  const threshold = settings.masteryThreshold ?? 75;
+  const pct = (originalScore / perfectScore) * 100;
+  if (pct >= threshold) return originalScore; // Retain original if mastered
+
+  if (reassessmentScore !== undefined) {
+    const policy = settings.policy || 'Average';
+    if (policy === 'Highest') {
+      return Math.max(originalScore, reassessmentScore);
+    } else if (policy === 'Replacement') {
+      return reassessmentScore;
+    } else {
+      return Math.round(((originalScore + reassessmentScore) / 2) * 100) / 100;
+    }
+  }
+
+  return originalScore;
+}
+
+export function getLearnerReassessmentStatus(
+  originalScore: number | undefined,
+  reassessmentScore: number | undefined,
+  perfectScore: number,
+  settings?: { enabled: boolean; masteryThreshold: number } | null,
+  assessmentEnabled?: boolean
+): 'Normal' | 'Mastered' | 'Eligible' | 'Reassessed' {
+  if (originalScore === undefined) return 'Normal';
+  const threshold = settings?.masteryThreshold ?? 75;
+  const pct = (originalScore / perfectScore) * 100;
+
+  if (pct >= threshold) return 'Mastered';
+  if (settings?.enabled && assessmentEnabled) {
+    return reassessmentScore !== undefined ? 'Reassessed' : 'Eligible';
+  }
+  return 'Normal';
+}
+
+// Compute complete grade metrics for a student inside a Project for a specific quarter
 export function computeProjectStudentGrade(
   project: Project,
   studentId: string,
-  customWeights?: Record<string, { ww: number; pt: number; qa: number }>
+  customWeights?: Record<string, { wow: number; ppt: number; qste: number }>,
+  quarterId?: string
 ) {
-  const wwAssessments = project.assessments.filter(a => a.category === 'WW');
-  const ptAssessments = project.assessments.filter(a => a.category === 'PT');
-  const qeAssessments = project.assessments.filter(a => a.category === 'QE');
+  const qId = quarterId || project.lastActiveQuarter || getFirstPeriod();
+  const qData = project.quarters?.[qId];
 
-  const studentScores = project.scores[studentId] || {};
+  // If the quarter data doesn't exist, return empty stats
+  if (!qData) {
+    return {
+      wowRawSum: 0, wowMaxSum: 0, wowPercentage: 0, weightedWOW: 0,
+      pptRawSum: 0, pptMaxSum: 0, pptPercentage: 0, weightedPPT: 0,
+      qsteRawSum: 0, qsteMaxSum: 0, qstePercentage: 0, weightedQSTE: 0,
+      initialGrade: 0, finalGrade: 0, remarks: '-', isPassing: false, hasScores: false
+    };
+  }
 
-  // Compute Written Works raw percentages
-  let wwRawSum = 0;
-  let wwMaxSum = 0;
+  const wwAssessments = qData.assessments.filter(a => a.category === 'WOW');
+  const ptAssessments = qData.assessments.filter(a => a.category === 'PPT');
+  const qeAssessments = qData.assessments.filter(a => a.category === 'QSTE');
+
+  const studentScores = qData.scores[studentId] || {};
+  const studentReassessmentScores = qData.reassessmentScores?.[studentId] || {};
+  const settings = project.reassessmentSettings;
+
+  // Compute Written/Oral Works raw percentages using effective scores
+  let wowRawSum = 0;
+  let wowMaxSum = 0;
   let wwGradesCount = 0;
   wwAssessments.forEach(a => {
     const score = studentScores[a.id];
     if (score !== undefined) {
-      wwRawSum += score;
-      wwMaxSum += a.perfectScore;
+      const effScore = getEffectiveScore(score, studentReassessmentScores[a.id], a.perfectScore, settings, a.reassessmentEnabled);
+      wowRawSum += effScore !== undefined ? effScore : score;
+      wowMaxSum += a.perfectScore;
       wwGradesCount++;
     }
   });
-  const wwPercentage = wwMaxSum > 0 ? (wwRawSum / wwMaxSum) * 100 : 0;
+  const wowPercentage = wowMaxSum > 0 ? (wowRawSum / wowMaxSum) * 100 : 0;
 
-  // Compute Performance Tasks raw percentages
-  let ptRawSum = 0;
-  let ptMaxSum = 0;
+  // Compute Performance/ Product tasks raw percentages using effective scores
+  let pptRawSum = 0;
+  let pptMaxSum = 0;
   let ptGradesCount = 0;
   ptAssessments.forEach(a => {
     const score = studentScores[a.id];
     if (score !== undefined) {
-      ptRawSum += score;
-      ptMaxSum += a.perfectScore;
+      const effScore = getEffectiveScore(score, studentReassessmentScores[a.id], a.perfectScore, settings, a.reassessmentEnabled);
+      pptRawSum += effScore !== undefined ? effScore : score;
+      pptMaxSum += a.perfectScore;
       ptGradesCount++;
     }
   });
-  const ptPercentage = ptMaxSum > 0 ? (ptRawSum / ptMaxSum) * 100 : 0;
+  const pptPercentage = pptMaxSum > 0 ? (pptRawSum / pptMaxSum) * 100 : 0;
 
-  // Compute Quarterly Exam raw percentages
-  let qeRawSum = 0;
-  let qeMaxSum = 0;
+  // Compute Quarterly/Term Exams raw percentages using effective scores
+  let qsteRawSum = 0;
+  let qsteMaxSum = 0;
   let qeGradesCount = 0;
   qeAssessments.forEach(a => {
     const score = studentScores[a.id];
     if (score !== undefined) {
-      qeRawSum += score;
-      qeMaxSum += a.perfectScore;
+      const effScore = getEffectiveScore(score, studentReassessmentScores[a.id], a.perfectScore, settings, a.reassessmentEnabled);
+      qsteRawSum += effScore !== undefined ? effScore : score;
+      qsteMaxSum += a.perfectScore;
       qeGradesCount++;
     }
   });
-  const qePercentage = qeMaxSum > 0 ? (qeRawSum / qeMaxSum) * 100 : 0;
+  const qstePercentage = qsteMaxSum > 0 ? (qsteRawSum / qsteMaxSum) * 100 : 0;
 
   // Determine actual weights (from custom weights, defaults, or SHS profiles)
   const weights = getSubjectWeights(
@@ -248,11 +333,11 @@ export function computeProjectStudentGrade(
     project.assessmentProfileId
   );
 
-  const weightedWW = wwPercentage * weights.ww;
-  const weightedPT = ptPercentage * weights.pt;
-  const weightedQA = qePercentage * weights.qa;
+  const weightedWOW = wowPercentage * weights.wow;
+  const weightedPPT = pptPercentage * weights.ppt;
+  const weightedQSTE = qstePercentage * weights.qste;
 
-  const initialGrade = weightedWW + weightedPT + weightedQA;
+  const initialGrade = weightedWOW + weightedPPT + weightedQSTE;
   
   // 0-Based vs Adjusted Transmutation Grade depending on active project depedPolicy
   const finalGrade = project.depedPolicy === '2015'
@@ -266,20 +351,20 @@ export function computeProjectStudentGrade(
   const hasScores = (wwGradesCount > 0 || ptGradesCount > 0 || qeGradesCount > 0);
 
   return {
-    wwRawSum,
-    wwMaxSum,
-    wwPercentage: Math.round(wwPercentage * 100) / 100,
-    weightedWW: Math.round(weightedWW * 100) / 100,
+    wowRawSum: Math.round(wowRawSum * 100) / 100,
+    wowMaxSum,
+    wowPercentage: Math.round(wowPercentage * 100) / 100,
+    weightedWOW: Math.round(weightedWOW * 100) / 100,
 
-    ptRawSum,
-    ptMaxSum,
-    ptPercentage: Math.round(ptPercentage * 100) / 100,
-    weightedPT: Math.round(weightedPT * 100) / 100,
+    pptRawSum: Math.round(pptRawSum * 100) / 100,
+    pptMaxSum,
+    pptPercentage: Math.round(pptPercentage * 100) / 100,
+    weightedPPT: Math.round(weightedPPT * 100) / 100,
 
-    qeRawSum,
-    qeMaxSum,
-    qePercentage: Math.round(qePercentage * 100) / 100,
-    weightedQA: Math.round(weightedQA * 100) / 100,
+    qsteRawSum: Math.round(qsteRawSum * 100) / 100,
+    qsteMaxSum,
+    qstePercentage: Math.round(qstePercentage * 100) / 100,
+    weightedQSTE: Math.round(weightedQSTE * 100) / 100,
 
     initialGrade: Math.round(initialGrade * 100) / 100,
     finalGrade,

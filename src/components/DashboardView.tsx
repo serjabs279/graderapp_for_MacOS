@@ -3,14 +3,14 @@ import { useApp } from '../context/AppContext';
 import { SubjectType, Project, Student } from '../types';
 import { computeProjectStudentGrade, transmuteGrade, getSubjectWeightsLabel, SHS_PROFILES } from '../utils';
 import { exportConsolidatedGradesPDF } from '../utils/pdfExport';
-import { 
-  Users, 
-  GraduationCap, 
-  FolderPlus, 
-  Trash2, 
-  Copy, 
-  Archive, 
-  ExternalLink, 
+import {
+  Users,
+  GraduationCap,
+  FolderPlus,
+  Trash2,
+  Copy,
+  Archive,
+  ExternalLink,
   X,
   TrendingUp,
   Award,
@@ -30,13 +30,13 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export default function DashboardView() {
-  const { 
-    projects, 
-    activeProjectId, 
-    createProject, 
-    openProject, 
-    duplicateProject, 
-    archiveProject, 
+  const {
+    projects,
+    activeProjectId,
+    createProject,
+    openProject,
+    duplicateProject,
+    archiveProject,
     deleteProject,
     globalSettings,
     setActiveRoute,
@@ -266,15 +266,20 @@ export default function DashboardView() {
     const passingRate = gradedCount > 0 ? Math.round((passingCount / gradedCount) * 100) : 0;
     const failingRate = gradedCount > 0 ? 100 - passingRate : 0;
 
+    const activeQuarterId = activeProject.activeQuarterId || 'Q1';
+    const activeQuarterData = activeProject.quarters[activeQuarterId] || { assessments: [], scores: {} };
+    const assessments = activeQuarterData.assessments || [];
+    const scores = activeQuarterData.scores || {};
+
     // Assessment Completion Rate
     // Total possible scores cell matrix size = total students * total assessments
-    const totalAssessments = activeProject.assessments.length;
+    const totalAssessments = assessments.length;
     const totalPossibleCells = totalStudents * totalAssessments;
     let filledCellsCount = 0;
 
     activeStudents.forEach(st => {
-      const studentScores = activeProject.scores[st.id] || {};
-      activeProject.assessments.forEach(ass => {
+      const studentScores = scores[st.id] || {};
+      assessments.forEach(ass => {
         if (studentScores[ass.id] !== undefined) {
           filledCellsCount++;
         }
@@ -294,11 +299,11 @@ export default function DashboardView() {
     ];
 
     // Calculate individual assessment statistics
-    const assessmentStats = activeProject.assessments.map(ass => {
+    const assessmentStats = assessments.map(ass => {
       let totalRaw = 0;
       let count = 0;
       activeStudents.forEach(st => {
-        const score = activeProject.scores[st.id]?.[ass.id];
+        const score = scores[st.id]?.[ass.id];
         if (score !== undefined) {
           totalRaw += score;
           count++;
@@ -430,8 +435,8 @@ export default function DashboardView() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip 
-                    cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }} 
+                  <Tooltip
+                    cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }}
                     contentStyle={{ borderRadius: '12px', fontSize: '11px', border: '1px solid #e2e8f0', boxShadow: 'none' }}
                   />
                   <Bar dataKey="value" radius={[6, 6, 0, 0]}>
@@ -478,10 +483,9 @@ export default function DashboardView() {
                     </div>
                     {/* Tiny Progress bar */}
                     <div className="h-1 w-full bg-slate-55 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full ${
-                          ass.category === 'WW' ? 'bg-emerald-600' : ass.category === 'PT' ? 'bg-emerald-400' : 'bg-teal-500'
-                        }`}
+                      <div
+                        className={`h-full rounded-full ${ass.category === 'WW' ? 'bg-emerald-600' : ass.category === 'PT' ? 'bg-emerald-400' : 'bg-teal-500'
+                          }`}
                         style={{ width: `${ass.averagePercentage}%` }}
                       />
                     </div>
@@ -547,8 +551,8 @@ export default function DashboardView() {
       // Helper lookup function
       const getStudentQuarterGrade = (proj: Project, lrn: string, name: string) => {
         const normName = name.trim().toUpperCase();
-        const s = proj.students.find(x => 
-          (lrn && lrn !== '123456789123' && x.lrn === lrn) || 
+        const s = proj.students.find(x =>
+          (lrn && lrn !== '123456789123' && x.lrn === lrn) ||
           x.name.trim().toUpperCase() === normName
         );
         if (!s) return null;
@@ -560,10 +564,10 @@ export default function DashboardView() {
       const fullRoster = (() => {
         const studentsMap = new Map<string, Student>();
         const isDummyLrn = (l?: string) => !l || l === '123456789123' || l.startsWith('123');
-        
+
         activeGroup.projects.forEach(proj => {
           proj.students.forEach(st => {
-            const key = (st.lrn && !isDummyLrn(st.lrn) && st.lrn.trim().length >= 8) 
+            const key = (st.lrn && !isDummyLrn(st.lrn) && st.lrn.trim().length >= 8)
               ? `${st.name.trim().toUpperCase()}_${st.lrn.trim()}`
               : st.name.trim().toUpperCase();
             if (!studentsMap.has(key)) {
@@ -584,9 +588,9 @@ export default function DashboardView() {
           return sx === 'female' || sx === 'f' || sx === 'girl' || sx.startsWith('f');
         };
 
-        const m = list.filter(isM).sort((a,b) => a.name.localeCompare(b.name));
-        const f = list.filter(isF).sort((a,b) => a.name.localeCompare(b.name));
-        const unspec = list.filter(s => !isM(s) && !isF(s)).sort((a,b) => a.name.localeCompare(b.name));
+        const m = list.filter(isM).sort((a, b) => a.name.localeCompare(b.name));
+        const f = list.filter(isF).sort((a, b) => a.name.localeCompare(b.name));
+        const unspec = list.filter(s => !isM(s) && !isF(s)).sort((a, b) => a.name.localeCompare(b.name));
         return { males: m, females: f, unspec, all: [...m, ...f, ...unspec] };
       })();
 
@@ -746,14 +750,14 @@ export default function DashboardView() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-150 font-mono text-slate-700">
-                    
+
                     {/* Male Header */}
                     <tr className="bg-slate-100/40 text-[9px] font-sans font-black text-slate-500 border-b border-slate-200">
                       <td colSpan={5 + (showQ1 ? 1 : 0) + (showQ2 ? 1 : 0) + (showQ3 ? 1 : 0) + (showQ4 ? 1 : 0)} className="py-2 px-4 text-left uppercase tracking-wider font-extrabold text-indigo-700">
                         Males ({filteredMales.length} learners)
                       </td>
                     </tr>
-                    
+
                     {filteredMales.length === 0 ? (
                       <tr className="text-center text-slate-450 text-xs italic">
                         <td colSpan={5 + (showQ1 ? 1 : 0) + (showQ2 ? 1 : 0) + (showQ3 ? 1 : 0) + (showQ4 ? 1 : 0)} className="py-3">No male learners found.</td>
@@ -795,7 +799,7 @@ export default function DashboardView() {
                         Females ({filteredFemales.length} learners)
                       </td>
                     </tr>
-                    
+
                     {filteredFemales.length === 0 ? (
                       <tr className="text-center text-slate-450 text-xs italic">
                         <td colSpan={5 + (showQ1 ? 1 : 0) + (showQ2 ? 1 : 0) + (showQ3 ? 1 : 0) + (showQ4 ? 1 : 0)} className="py-3">No female learners found.</td>
@@ -876,7 +880,7 @@ export default function DashboardView() {
 
             {/* Stat summary layout and Signatures block */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              
+
               {/* Class statistics cards */}
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                 <h4 className="text-[9px] font-sans font-black text-slate-400 tracking-wider uppercase">Class Performance Summary</h4>
@@ -934,7 +938,7 @@ export default function DashboardView() {
                     This grade consolidation conforms with current Department of Education regulations and school year policy directives. This record remains securely stored offline.
                   </p>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-6 pt-6 text-center text-[9px] font-sans">
                   <div className="space-y-1">
                     <div className="border-b border-slate-900/40 pb-1 font-bold text-slate-900 uppercase font-serif tracking-wide">{globalSettings.teacherName}</div>
@@ -974,8 +978,8 @@ export default function DashboardView() {
             {workspaceMode === 'SHS' ? 'Senior High School (SHS) Gradebook' : 'Junior High School (JHS) Gradebook'}
           </h2>
           <p className="text-xs text-slate-450 dark:text-slate-400 font-semibold">
-            {workspaceMode === 'SHS' 
-              ? 'Manually configure subjects, choose specific assessment profiles (1-6) with defined DepEd weights, and group by Semester or Whole Year.' 
+            {workspaceMode === 'SHS'
+              ? 'Manually configure subjects, choose specific assessment profiles (1-6) with defined DepEd weights, and group by Semester or Whole Year.'
               : 'Create JHS grading projects, import class lists, build assessment rubrics, and run computations offline.'}
           </p>
         </div>
@@ -1004,28 +1008,26 @@ export default function DashboardView() {
                   {selectedConsolidatedClass ? 'Annual Report Card View' : dashboardTab === 'quarters' ? 'Grading Projects Directory' : 'Consolidated Annual Directory'}
                 </h3>
               </div>
-              
+
               {!selectedConsolidatedClass && (
                 <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-150 dark:border-slate-800/80 shrink-0">
                   <button
                     type="button"
                     onClick={() => { setDashboardTab('quarters'); }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      dashboardTab === 'quarters' 
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs' 
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${dashboardTab === 'quarters'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-                    }`}
+                      }`}
                   >
                     Independent Quarters
                   </button>
                   <button
                     type="button"
                     onClick={() => { setDashboardTab('consolidation'); }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      dashboardTab === 'consolidation' 
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs' 
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${dashboardTab === 'consolidation'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-                    }`}
+                      }`}
                   >
                     Consolidated Annual Reports
                   </button>
@@ -1063,11 +1065,10 @@ export default function DashboardView() {
                     <button
                       type="button"
                       onClick={() => setPrintFriendly(!printFriendly)}
-                      className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border w-full sm:w-auto ${
-                        printFriendly 
-                          ? 'bg-amber-550 text-white border-amber-550' 
+                      className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border w-full sm:w-auto ${printFriendly
+                          ? 'bg-amber-550 text-white border-amber-550'
                           : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800'
-                      }`}
+                        }`}
                     >
                       <Printer className="h-4 w-4" />
                       <span>{printFriendly ? 'Exit Print Mode' : 'Toggle Print Sheet'}</span>
@@ -1092,10 +1093,10 @@ export default function DashboardView() {
                   const duration = activeGroup.projects[0]?.projectDuration;
                   const semester = activeGroup.projects[0]?.semester;
 
-                  const q1Proj = activeGroup.projects.find(p => p.quarter.toLowerCase().includes('1st'));
-                  const q2Proj = activeGroup.projects.find(p => p.quarter.toLowerCase().includes('2nd'));
-                  const q3Proj = activeGroup.projects.find(p => p.quarter.toLowerCase().includes('3rd'));
-                  const q4Proj = activeGroup.projects.find(p => p.quarter.toLowerCase().includes('4th'));
+                  const q1Proj = activeGroup.projects.find(p => p.quarters?.['1st Quarter'] !== undefined);
+                  const q2Proj = activeGroup.projects.find(p => p.quarters?.['2nd Quarter'] !== undefined);
+                  const q3Proj = activeGroup.projects.find(p => p.quarters?.['3rd Quarter'] !== undefined);
+                  const q4Proj = activeGroup.projects.find(p => p.quarters?.['4th Quarter'] !== undefined);
 
                   // Decide which quarters are active in this group
                   let showQ1 = true;
@@ -1114,14 +1115,14 @@ export default function DashboardView() {
                   }
 
                   // Helper lookup function
-                  const getStudentQuarterGrade = (proj: Project, lrn: string, name: string) => {
+                  const getStudentQuarterGrade = (proj: Project, lrn: string, name: string, qId: string) => {
                     const normName = name.trim().toUpperCase();
-                    const s = proj.students.find(x => 
-                      (lrn && lrn !== '123456789123' && x.lrn === lrn) || 
+                    const s = proj.students.find(x =>
+                      (lrn && lrn !== '123456789123' && x.lrn === lrn) ||
                       x.name.trim().toUpperCase() === normName
                     );
                     if (!s) return null;
-                    const r = computeProjectStudentGrade(proj, s.id, globalSettings.subjects);
+                    const r = computeProjectStudentGrade(proj, s.id, globalSettings.subjects, qId);
                     return r.hasScores ? r.finalGrade : null;
                   };
 
@@ -1132,7 +1133,7 @@ export default function DashboardView() {
 
                     activeGroup.projects.forEach(proj => {
                       proj.students.forEach(st => {
-                        const key = (st.lrn && !isDummyLrn(st.lrn) && st.lrn.trim().length >= 8) 
+                        const key = (st.lrn && !isDummyLrn(st.lrn) && st.lrn.trim().length >= 8)
                           ? `${st.name.trim().toUpperCase()}_${st.lrn.trim()}`
                           : st.name.trim().toUpperCase();
                         if (!studentsMap.has(key)) {
@@ -1153,9 +1154,9 @@ export default function DashboardView() {
                       return sx === 'female' || sx === 'f' || sx === 'girl' || sx.startsWith('f');
                     };
 
-                    const m = list.filter(isM).sort((a,b) => a.name.localeCompare(b.name));
-                    const f = list.filter(isF).sort((a,b) => a.name.localeCompare(b.name));
-                    const unspec = list.filter(s => !isM(s) && !isF(s)).sort((a,b) => a.name.localeCompare(b.name));
+                    const m = list.filter(isM).sort((a, b) => a.name.localeCompare(b.name));
+                    const f = list.filter(isF).sort((a, b) => a.name.localeCompare(b.name));
+                    const unspec = list.filter(s => !isM(s) && !isF(s)).sort((a, b) => a.name.localeCompare(b.name));
                     return { males: m, females: f, unspec, all: [...m, ...f, ...unspec] };
                   })();
 
@@ -1183,10 +1184,10 @@ export default function DashboardView() {
                   let didNotMeet = 0;
 
                   fullRoster.all.forEach(st => {
-                    const q1 = showQ1 && q1Proj ? getStudentQuarterGrade(q1Proj, st.lrn, st.name) : null;
-                    const q2 = showQ2 && q2Proj ? getStudentQuarterGrade(q2Proj, st.lrn, st.name) : null;
-                    const q3 = showQ3 && q3Proj ? getStudentQuarterGrade(q3Proj, st.lrn, st.name) : null;
-                    const q4 = showQ4 && q4Proj ? getStudentQuarterGrade(q4Proj, st.lrn, st.name) : null;
+                    const q1 = showQ1 && q1Proj ? getStudentQuarterGrade(q1Proj, st.lrn, st.name, '1st Quarter') : null;
+                    const q2 = showQ2 && q2Proj ? getStudentQuarterGrade(q2Proj, st.lrn, st.name, '2nd Quarter') : null;
+                    const q3 = showQ3 && q3Proj ? getStudentQuarterGrade(q3Proj, st.lrn, st.name, '3rd Quarter') : null;
+                    const q4 = showQ4 && q4Proj ? getStudentQuarterGrade(q4Proj, st.lrn, st.name, '4th Quarter') : null;
 
                     const qs = [q1, q2, q3, q4].filter(v => v !== null) as number[];
                     if (qs.length > 0) {
@@ -1237,24 +1238,24 @@ export default function DashboardView() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-150 dark:divide-slate-850/60 font-mono">
-                              
+
                               {/* Male Header */}
                               <tr className="bg-slate-100/40 dark:bg-slate-950/30 text-[9px] font-sans font-black text-slate-500 border-b border-slate-200 dark:border-slate-855">
                                 <td colSpan={5 + (showQ1 ? 1 : 0) + (showQ2 ? 1 : 0) + (showQ3 ? 1 : 0) + (showQ4 ? 1 : 0)} className="py-2 px-4 text-left uppercase tracking-wider font-extrabold text-indigo-700 dark:text-indigo-400">
                                   Males ({filteredMales.length} learners)
                                 </td>
                               </tr>
-                              
+
                               {filteredMales.length === 0 ? (
                                 <tr className="text-center text-slate-450 text-xs italic">
                                   <td colSpan={5 + (showQ1 ? 1 : 0) + (showQ2 ? 1 : 0) + (showQ3 ? 1 : 0) + (showQ4 ? 1 : 0)} className="py-3">No male learners found.</td>
                                 </tr>
                               ) : (
                                 filteredMales.map((st, idx) => {
-                                  const q1 = showQ1 && q1Proj ? getStudentQuarterGrade(q1Proj, st.lrn, st.name) : null;
-                                  const q2 = showQ2 && q2Proj ? getStudentQuarterGrade(q2Proj, st.lrn, st.name) : null;
-                                  const q3 = showQ3 && q3Proj ? getStudentQuarterGrade(q3Proj, st.lrn, st.name) : null;
-                                  const q4 = showQ4 && q4Proj ? getStudentQuarterGrade(q4Proj, st.lrn, st.name) : null;
+                                  const q1 = showQ1 && q1Proj ? getStudentQuarterGrade(q1Proj, st.lrn, st.name, '1st Quarter') : null;
+                                  const q2 = showQ2 && q2Proj ? getStudentQuarterGrade(q2Proj, st.lrn, st.name, '2nd Quarter') : null;
+                                  const q3 = showQ3 && q3Proj ? getStudentQuarterGrade(q3Proj, st.lrn, st.name, '3rd Quarter') : null;
+                                  const q4 = showQ4 && q4Proj ? getStudentQuarterGrade(q4Proj, st.lrn, st.name, '4th Quarter') : null;
 
                                   const qs = [q1, q2, q3, q4].filter(v => v !== null) as number[];
                                   const finalG = qs.length > 0 ? Math.round(qs.reduce((a, b) => a + b, 0) / qs.length) : null;
@@ -1286,17 +1287,17 @@ export default function DashboardView() {
                                   Females ({filteredFemales.length} learners)
                                 </td>
                               </tr>
-                              
+
                               {filteredFemales.length === 0 ? (
                                 <tr className="text-center text-slate-450 text-xs italic">
                                   <td colSpan={5 + (showQ1 ? 1 : 0) + (showQ2 ? 1 : 0) + (showQ3 ? 1 : 0) + (showQ4 ? 1 : 0)} className="py-3">No female learners found.</td>
                                 </tr>
                               ) : (
                                 filteredFemales.map((st, idx) => {
-                                  const q1 = showQ1 && q1Proj ? getStudentQuarterGrade(q1Proj, st.lrn, st.name) : null;
-                                  const q2 = showQ2 && q2Proj ? getStudentQuarterGrade(q2Proj, st.lrn, st.name) : null;
-                                  const q3 = showQ3 && q3Proj ? getStudentQuarterGrade(q3Proj, st.lrn, st.name) : null;
-                                  const q4 = showQ4 && q4Proj ? getStudentQuarterGrade(q4Proj, st.lrn, st.name) : null;
+                                  const q1 = showQ1 && q1Proj ? getStudentQuarterGrade(q1Proj, st.lrn, st.name, '1st Quarter') : null;
+                                  const q2 = showQ2 && q2Proj ? getStudentQuarterGrade(q2Proj, st.lrn, st.name, '2nd Quarter') : null;
+                                  const q3 = showQ3 && q3Proj ? getStudentQuarterGrade(q3Proj, st.lrn, st.name, '3rd Quarter') : null;
+                                  const q4 = showQ4 && q4Proj ? getStudentQuarterGrade(q4Proj, st.lrn, st.name, '4th Quarter') : null;
 
                                   const qs = [q1, q2, q3, q4].filter(v => v !== null) as number[];
                                   const finalG = qs.length > 0 ? Math.round(qs.reduce((a, b) => a + b, 0) / qs.length) : null;
@@ -1331,10 +1332,10 @@ export default function DashboardView() {
                                     </td>
                                   </tr>
                                   {filteredUnspec.map((st, idx) => {
-                                    const q1 = showQ1 && q1Proj ? getStudentQuarterGrade(q1Proj, st.lrn, st.name) : null;
-                                    const q2 = showQ2 && q2Proj ? getStudentQuarterGrade(q2Proj, st.lrn, st.name) : null;
-                                    const q3 = showQ3 && q3Proj ? getStudentQuarterGrade(q3Proj, st.lrn, st.name) : null;
-                                    const q4 = showQ4 && q4Proj ? getStudentQuarterGrade(q4Proj, st.lrn, st.name) : null;
+                                    const q1 = showQ1 && q1Proj ? getStudentQuarterGrade(q1Proj, st.lrn, st.name, '1st Quarter') : null;
+                                    const q2 = showQ2 && q2Proj ? getStudentQuarterGrade(q2Proj, st.lrn, st.name, '2nd Quarter') : null;
+                                    const q3 = showQ3 && q3Proj ? getStudentQuarterGrade(q3Proj, st.lrn, st.name, '3rd Quarter') : null;
+                                    const q4 = showQ4 && q4Proj ? getStudentQuarterGrade(q4Proj, st.lrn, st.name, '4th Quarter') : null;
 
                                     const qs = [q1, q2, q3, q4].filter(v => v !== null) as number[];
                                     const finalG = qs.length > 0 ? Math.round(qs.reduce((a, b) => a + b, 0) / qs.length) : null;
@@ -1367,7 +1368,7 @@ export default function DashboardView() {
 
                       {/* Stat summary layout and Signatures block */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                        
+
                         {/* Class statistics cards */}
                         <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3">
                           <h4 className="text-[9px] font-sans font-black text-slate-400 tracking-wider uppercase">Class Performance Summary</h4>
@@ -1425,7 +1426,7 @@ export default function DashboardView() {
                               This grade consolidation conforms with current Department of Education regulations and school year policy directives. This record remains securely stored offline.
                             </p>
                           </div>
-                          
+
                           <div className="grid grid-cols-2 gap-6 pt-6 text-center text-[9px] font-sans">
                             <div className="space-y-1">
                               <div className="border-b border-slate-900/40 dark:border-slate-100/40 pb-1 font-bold text-slate-900 dark:text-white uppercase font-serif tracking-wide">{globalSettings.teacherName}</div>
@@ -1456,11 +1457,10 @@ export default function DashboardView() {
                       return sMap.size;
                     })();
 
-                    const quartersFound = group.projects.map(p => p.quarter);
-                    const q1 = quartersFound.some(q => q.toLowerCase().includes('1st'));
-                    const q2 = quartersFound.some(q => q.toLowerCase().includes('2nd'));
-                    const q3 = quartersFound.some(q => q.toLowerCase().includes('3rd'));
-                    const q4 = quartersFound.some(q => q.toLowerCase().includes('4th'));
+                    const q1 = group.projects.some(p => p.quarters?.['1st Quarter'] !== undefined);
+                    const q2 = group.projects.some(p => p.quarters?.['2nd Quarter'] !== undefined);
+                    const q3 = group.projects.some(p => p.quarters?.['3rd Quarter'] !== undefined);
+                    const q4 = group.projects.some(p => p.quarters?.['4th Quarter'] !== undefined);
 
                     return (
                       <div key={group.key} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/30 dark:hover:bg-slate-850/20 px-2 rounded-xl transition-colors">
@@ -1473,7 +1473,7 @@ export default function DashboardView() {
                               S.Y. {group.schoolYear}
                             </span>
                           </div>
-                          
+
                           <div className="flex items-center gap-3 text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
                             <span>Compiled Learners: <strong className="text-slate-600 dark:text-slate-300 font-black">{uniqueStudents}</strong></span>
                             <span>|</span>
@@ -1552,11 +1552,10 @@ export default function DashboardView() {
                       <button
                         type="button"
                         onClick={() => archiveProject(proj.id, !proj.isArchived)}
-                        className={`p-2 rounded-lg cursor-pointer transition-colors ${
-                          proj.isArchived 
-                            ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/20' 
+                        className={`p-2 rounded-lg cursor-pointer transition-colors ${proj.isArchived
+                            ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/20'
                             : 'bg-slate-50 dark:bg-slate-850 text-slate-650'
-                        }`}
+                          }`}
                         title={proj.isArchived ? "Restore Project" : "Archive Project"}
                       >
                         <Archive className="h-4 w-4" />
@@ -1588,9 +1587,9 @@ export default function DashboardView() {
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
             <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
               <FolderPlus className="h-5 w-5 text-indigo-600" />
-              Create Project (Phase 2)
+              Create GradeBook
             </h3>
-            
+
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
@@ -1617,7 +1616,8 @@ export default function DashboardView() {
                     <option value="Science">Science</option>
                     <option value="AP">Araling Panlipunan (AP)</option>
                     <option value="Values Education">Values Education</option>
-                    <option value="MAPEH">MAPEH</option>
+                    <option value="Music & Arts">Music & Arts</option>
+                    <option value="PE & Health">PE & Health</option>
                     <option value="TLE">TLE</option>
                   </select>
                 )}
@@ -1722,47 +1722,16 @@ export default function DashboardView() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
-                <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Quarter</label>
-                  <select
-                    value={quarter}
-                    onChange={(e) => setQuarter(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-bold"
-                  >
-                    {workspaceMode === 'SHS' && shsDuration === 'One Semester' ? (
-                      shsSemester === 'Semester 1' ? (
-                        <>
-                          <option value="1st Quarter">1st Quarter</option>
-                          <option value="2nd Quarter">2nd Quarter</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="3rd Quarter">3rd Quarter</option>
-                          <option value="4th Quarter">4th Quarter</option>
-                        </>
-                      )
-                    ) : (
-                      <>
-                        <option value="1st Quarter">1st Quarter</option>
-                        <option value="2nd Quarter">2nd Quarter</option>
-                        <option value="3rd Quarter">3rd Quarter</option>
-                        <option value="4th Quarter">4th Quarter</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Passing Score</label>
-                  <input
-                    type="number"
-                    min={60}
-                    max={100}
-                    value={passingGrade}
-                    onChange={(e) => setPassingGrade(parseInt(e.target.value) || 75)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-mono font-bold"
-                  />
-                </div>
+              <div>
+                <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Passing Score</label>
+                <input
+                  type="number"
+                  min={60}
+                  max={100}
+                  value={passingGrade}
+                  onChange={(e) => setPassingGrade(parseInt(e.target.value) || 75)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-mono font-bold"
+                />
               </div>
 
               <div>
@@ -1803,7 +1772,7 @@ export default function DashboardView() {
                 <HelpCircle className="h-6 w-6 text-indigo-500" />
               )}
             </div>
-            
+
             <div className="space-y-1.5">
               <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest">{customAlert.title}</h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-relaxed whitespace-pre-line">{customAlert.message}</p>
@@ -1829,7 +1798,7 @@ export default function DashboardView() {
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-850">
               <AlertCircle className="h-6 w-6 text-indigo-500 animate-pulse" />
             </div>
-            
+
             <div className="space-y-1.5">
               <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest">{customConfirm.title}</h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">{customConfirm.message}</p>

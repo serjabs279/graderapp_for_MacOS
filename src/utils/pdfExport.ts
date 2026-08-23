@@ -1,6 +1,8 @@
-import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont, PDFImage } from 'pdf-lib';
+import { getCalendar, getFirstPeriod } from '../calendar/academicCalendar';
 import { Project, Student } from '../types';
 import { computeProjectStudentGrade } from '../utils';
+import { AlignRight } from 'lucide-react';
 
 // Brand & Layout Colors for pdf-lib
 const COLOR_PRIMARY = rgb(15 / 255, 23 / 255, 42 / 255);    // Slate 900
@@ -13,6 +15,27 @@ const COLOR_SUCCESS = rgb(22 / 255, 101 / 255, 52 / 255);    // Emerald 800
 const COLOR_SUCCESS_BG = rgb(240 / 255, 253 / 255, 244 / 255); // Emerald 50
 const COLOR_DANGER = rgb(153 / 255, 27 / 255, 27 / 255);      // Red 800
 const COLOR_DANGER_BG = rgb(254 / 255, 242 / 255, 242 / 255);  // Red 50
+
+export interface PDFLogos {
+  schoolLogoBase64?: string;
+  depedLogoBase64?: string;
+}
+
+async function embedLogo(pdfDoc: PDFDocument, base64Url?: string): Promise<PDFImage | null> {
+  if (!base64Url) return null;
+  try {
+    const base64Data = base64Url.split(',')[1] || base64Url;
+    const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    if (base64Url.includes('image/jpeg') || base64Url.includes('image/jpg')) {
+      return await pdfDoc.embedJpg(bytes);
+    } else {
+      return await pdfDoc.embedPng(bytes);
+    }
+  } catch (e) {
+    console.warn('Failed to embed logo', e);
+    return null;
+  }
+}
 
 export interface ReportSummaryData {
   totalEnrolled: number;
@@ -170,13 +193,22 @@ function drawClassRecordHeader(
   page: PDFPage,
   cursorY: number,
   project: Project,
-  config: { margin: number; usableWidth: number; font: PDFFont; fontBold: PDFFont }
+  config: { margin: number; usableWidth: number; font: PDFFont; fontBold: PDFFont; schoolImg: PDFImage | null; depedImg: PDFImage | null; pageWidth: number }
 ): number {
   let y = cursorY;
-  const { margin, usableWidth, font, fontBold } = config;
+  const { margin, usableWidth, font, fontBold, schoolImg, depedImg, pageWidth } = config;
 
+  // Draw Logos (School = left, DepEd = right)
+  if (schoolImg) {
+    page.drawImage(schoolImg, { x: margin + 4, y: y - 26, width: 28, height: 28 });
+  }
+  if (depedImg) {
+    page.drawImage(depedImg, { x: pageWidth - margin - 32, y: y - 26, width: 28, height: 28 });
+  }
+
+  // Draw Title (centered between logos)
   page.drawText('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', {
-    x: margin,
+    x: pageWidth / 2 - fontBold.widthOfTextAtSize('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', 8) / 2,
     y,
     size: 8,
     font: fontBold,
@@ -185,7 +217,7 @@ function drawClassRecordHeader(
   y -= 14;
 
   page.drawText('OFFICIAL CLASS RECORD / ACADEMIC REPORT', {
-    x: margin,
+    x: pageWidth / 2 - fontBold.widthOfTextAtSize('OFFICIAL CLASS RECORD / ACADEMIC REPORT', 16) / 2,
     y,
     size: 16,
     font: fontBold,
@@ -211,7 +243,7 @@ function drawClassRecordHeader(
   page.drawText(`School: ${project.schoolName || 'N/A'}`, { x: margin + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
   page.drawText(`School Year: ${project.schoolYear}`, { x: margin + colWidth + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
   page.drawText(`Grade & Section: ${project.gradeLevel} - ${project.section}`, { x: margin + colWidth * 2 + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
-  page.drawText(`Quarter: ${project.quarter}`, { x: margin + colWidth * 3 + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(`Quarter: ${project.lastActiveQuarter || getFirstPeriod()}`, { x: margin + colWidth * 3 + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
 
   page.drawText(`Subject: ${project.subject}`, { x: margin + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
   page.drawText(`Teacher: ${project.teacherName || 'N/A'}`, { x: margin + colWidth + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
@@ -378,9 +410,9 @@ function drawClassRecordTable(
         { text: student.lrn || '—', width: cols[1].width, bold: false },
         { text: fitText(student.name, fontBold, 7.5, cols[2].width - 8), width: cols[2].width, bold: true },
         { text: student.sex ? student.sex.charAt(0) : '—', width: cols[3].width, bold: false },
-        { text: `${stats.wwPercentage.toFixed(1)}% (${stats.weightedWW.toFixed(1)})`, width: cols[4].width, bold: false },
-        { text: `${stats.ptPercentage.toFixed(1)}% (${stats.weightedPT.toFixed(1)})`, width: cols[5].width, bold: false },
-        { text: `${stats.qePercentage.toFixed(1)}% (${stats.weightedQA.toFixed(1)})`, width: cols[6].width, bold: false },
+        { text: `${stats.wowPercentage.toFixed(1)}% (${stats.weightedWOW.toFixed(1)})`, width: cols[4].width, bold: false },
+        { text: `${stats.pptPercentage.toFixed(1)}% (${stats.weightedPPT.toFixed(1)})`, width: cols[5].width, bold: false },
+        { text: `${stats.qstePercentage.toFixed(1)}% (${stats.weightedQSTE.toFixed(1)})`, width: cols[6].width, bold: false },
         { text: `${stats.initialGrade.toFixed(1)}`, width: cols[7].width, bold: false },
         { text: `${stats.finalGrade}`, width: cols[8].width, bold: true },
         {
@@ -418,7 +450,7 @@ function drawClassRecordTable(
  * Architecture Flow:
  * Header -> Student Table -> ensureSpaceForReportFooter -> drawReportFooter (once at end) -> save
  */
-export async function exportClassRecordPDF(project: Project, customFilename?: string): Promise<boolean> {
+export async function exportClassRecordPDF(project: Project, customFilename?: string, logos?: PDFLogos): Promise<boolean> {
   try {
     const rawStudents = project?.students || [];
     const activeStudents = rawStudents.filter((s) => s.status === 'Active' || !s.status);
@@ -436,6 +468,9 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const schoolImg = await embedLogo(pdfDoc, logos?.schoolLogoBase64);
+    const depedImg = await embedLogo(pdfDoc, logos?.depedLogoBase64);
 
     // A4 Landscape orientation: 841.89 x 595.28 points
     const pageWidth = 841.89;
@@ -469,14 +504,14 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
     };
 
     // 1. Draw Header
-    y = drawClassRecordHeader(page, y, project, { margin, usableWidth, font, fontBold });
+    y = drawClassRecordHeader(page, y, project, { margin, usableWidth, font, fontBold, schoolImg, depedImg, pageWidth });
 
     // 2. Draw Table
     const cols = [
       { name: '#', width: 22 },
       { name: 'LRN', width: 75 },
       { name: 'Student Name', width: 160 },
-      { name: 'Sex', width: 35 },
+      { name: 'Sex', width: 100 },
       { name: 'Written Wk (%)', width: 85 },
       { name: 'Perf. Tasks (%)', width: 85 },
       { name: 'Exam (%)', width: 70 },
@@ -510,8 +545,9 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
 
     // 5. Save & Download
     const pdfBytes = await pdfDoc.save();
-    const defaultFilename = `DepEd_Class_Record_${project.gradeLevel}_${project.section}_${project.subject}.pdf`.replace(/\s+/g, '_');
-    downloadPdfBuffer(pdfBytes, customFilename || defaultFilename);
+    const safeSubjectName = (project.subject || 'Subject').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeSection = (project.section || 'Section').replace(/[^a-zA-Z0-9_-]/g, '_');
+    downloadPdfBuffer(pdfBytes, customFilename || `ClassRecord_${safeSubjectName}_${project.gradeLevel}_${safeSection}_${(project.lastActiveQuarter || getFirstPeriod()).replace(/\s/g, '')}.pdf`);
 
     return true;
   } catch (err) {
@@ -530,13 +566,21 @@ function drawConsolidatedHeader(
   cursorY: number,
   groupData: any,
   compiledStudents: any[],
-  config: { margin: number; usableWidth: number; font: PDFFont; fontBold: PDFFont }
+  config: { margin: number; usableWidth: number; font: PDFFont; fontBold: PDFFont; schoolImg: PDFImage | null; depedImg: PDFImage | null; pageWidth: number }
 ): number {
   let y = cursorY;
-  const { margin, usableWidth, font, fontBold } = config;
+  const { margin, usableWidth, font, fontBold, schoolImg, depedImg, pageWidth } = config;
+
+  // Draw Logos (School = left, DepEd = right)
+  if (schoolImg) {
+    page.drawImage(schoolImg, { x: margin + 4, y: y - 26, width: 28, height: 28 });
+  }
+  if (depedImg) {
+    page.drawImage(depedImg, { x: pageWidth - margin - 32, y: y - 26, width: 28, height: 28 });
+  }
 
   page.drawText('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', {
-    x: margin,
+    x: pageWidth / 2 - fontBold.widthOfTextAtSize('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', 8) / 2,
     y,
     size: 8,
     font: fontBold,
@@ -545,7 +589,7 @@ function drawConsolidatedHeader(
   y -= 14;
 
   page.drawText('SUMMARY OF CONSOLIDATED QUARTERLY GRADES', {
-    x: margin,
+    x: pageWidth / 2 - fontBold.widthOfTextAtSize('SUMMARY OF CONSOLIDATED QUARTERLY GRADES', 14) / 2,
     y,
     size: 14,
     font: fontBold,
@@ -770,7 +814,7 @@ function drawConsolidatedTable(
  * Architecture Flow:
  * Header -> Student Table -> ensureSpaceForReportFooter -> drawReportFooter (once at end) -> save
  */
-export async function exportConsolidatedGradesPDF(groupData: any, customFilename?: string): Promise<boolean> {
+export async function exportConsolidatedGradesPDF(groupData: any, customFilename?: string, logos?: PDFLogos): Promise<boolean> {
   try {
     let compiledStudents: any[] = [];
 
@@ -780,12 +824,10 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
       const studentsMap = new Map<string, any>();
       const isDummyLrn = (l?: string) => !l || l === '123456789123' || l.startsWith('123');
 
-      const q1Proj = groupData.projects.find((p: any) => p.quarter.toLowerCase().includes('1st'));
-      const q2Proj = groupData.projects.find((p: any) => p.quarter.toLowerCase().includes('2nd'));
-      const q3Proj = groupData.projects.find((p: any) => p.quarter.toLowerCase().includes('3rd'));
-      const q4Proj = groupData.projects.find((p: any) => p.quarter.toLowerCase().includes('4th'));
+      const consolidatedProject = groupData.projects[0];
+      if (!consolidatedProject) return false;
 
-      const getStudentQuarterGrade = (proj: any, lrn: string, name: string) => {
+      const getStudentQuarterGrade = (proj: any, lrn: string, name: string, qId: string) => {
         if (!proj) return null;
         const normName = name.trim().toUpperCase();
         const s = (proj.students || []).find((x: any) =>
@@ -793,7 +835,7 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
           x.name.trim().toUpperCase() === normName
         );
         if (!s) return null;
-        const r = computeProjectStudentGrade(proj, s.id);
+        const r = computeProjectStudentGrade(proj, s.id, undefined, qId);
         return r.hasScores ? r.finalGrade : null;
       };
 
@@ -810,10 +852,10 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
 
       const list = Array.from(studentsMap.values());
       compiledStudents = list.map((st) => {
-        const q1 = getStudentQuarterGrade(q1Proj, st.lrn, st.name);
-        const q2 = getStudentQuarterGrade(q2Proj, st.lrn, st.name);
-        const q3 = getStudentQuarterGrade(q3Proj, st.lrn, st.name);
-        const q4 = getStudentQuarterGrade(q4Proj, st.lrn, st.name);
+        const q1 = getStudentQuarterGrade(consolidatedProject, st.lrn, st.name, (getCalendar().periods[0]?.id || '1st Quarter'));
+        const q2 = getStudentQuarterGrade(consolidatedProject, st.lrn, st.name, '2nd Quarter');
+        const q3 = getStudentQuarterGrade(consolidatedProject, st.lrn, st.name, '3rd Quarter');
+        const q4 = getStudentQuarterGrade(consolidatedProject, st.lrn, st.name, '4th Quarter');
 
         const qs = [q1, q2, q3, q4].filter((v) => v !== null) as number[];
         const finalGrade = qs.length > 0 ? Math.round(qs.reduce((a, b) => a + b, 0) / qs.length) : null;
@@ -846,6 +888,9 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+    const schoolImg = await embedLogo(pdfDoc, logos?.schoolLogoBase64);
+    const depedImg = await embedLogo(pdfDoc, logos?.depedLogoBase64);
+
     // A4 Portrait orientation: 595.28 x 841.89 points
     const pageWidth = 595.28;
     const pageHeight = 841.89;
@@ -877,8 +922,8 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
       return { newPage, newY: newY - 30 };
     };
 
-    // 1. Header
-    y = drawConsolidatedHeader(page, y, groupData, compiledStudents, { margin, usableWidth, font, fontBold });
+    // 1. Draw Header
+    y = drawConsolidatedHeader(page, y, groupData, compiledStudents, { margin, usableWidth, font, fontBold, schoolImg, depedImg, pageWidth });
 
     // 2. Table
     const cols = [

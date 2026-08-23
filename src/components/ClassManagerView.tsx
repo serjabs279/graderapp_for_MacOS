@@ -1,24 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Student, Assessment, Project, SubjectType } from '../types';
-import { computeProjectStudentGrade, getSubjectWeightsLabel } from '../utils';
+import { computeProjectStudentGrade, getSubjectWeights, getSubjectWeightsLabel, getEffectiveScore, getLearnerReassessmentStatus } from '../utils';
+import { getProjectPeriods } from '../calendar/academicCalendar';
 import { exportClassRecordPDF } from '../utils/pdfExport';
-import { 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  Copy, 
-  ChevronUp, 
-  ChevronDown, 
-  Search, 
-  ArrowUpDown, 
-  UserPlus, 
-  Upload, 
-  FileSpreadsheet, 
-  Printer, 
+import TeacherExcelExportModal from './TeacherExcelExportModal';
+import {
+  Plus,
+  Trash2,
+  Edit3,
+  Copy,
+  ChevronUp,
+  ChevronDown,
+  Search,
+  ArrowUpDown,
+  UserPlus,
+  Upload,
+  FileSpreadsheet,
+  Printer,
   FileDown,
-  FileText, 
-  BarChart4, 
+  FileText,
+  BarChart4,
   Database,
   Archive,
   FolderSync,
@@ -34,32 +36,51 @@ import {
 type TabType = 'gradebook' | 'assessments' | 'roster' | 'reports' | 'project-settings';
 
 export default function ClassManagerView() {
-  const { 
-    projects, 
-    activeProjectId, 
+  const {
+    projects,
+    activeProjectId,
     globalSettings,
-    openProject, 
-    duplicateProject, 
-    archiveProject, 
+    openProject,
+    duplicateProject,
+    archiveProject,
     deleteProject,
     saveProject,
-    
+
     addStudentToActive,
     updateStudentInActive,
     deleteStudentFromActive,
     importRosterToActive,
     syncRosterToSectionGroup,
-    
+
     addAssessmentToActive,
     updateAssessmentInActive,
     deleteAssessmentFromActive,
     reorderAssessmentsInActive,
-    
+
     updateScoreInActive,
-    clearScoreInActive
+    clearScoreInActive,
+    updateReassessmentScoreInActive,
+    clearReassessmentScoreInActive,
+    toggleReassessmentForAssessment,
+    updateReassessmentSettingsInActive,
+    enableReassessmentModeForQuarter,
+    updateActiveProjectQuarter
   } = useApp();
 
   const activeProject = projects.find(p => p.id === activeProjectId);
+
+  // Mastery-Based Component Reassessment framework states
+  const [reassessmentMode, setReassessmentMode] = useState(false);
+  const [showReassessmentSettingsModal, setShowReassessmentSettingsModal] = useState(false);
+
+  // Derive active quarter state from project (calendar-driven)
+  const activeQuarterId = activeProject?.lastActiveQuarter || '1st Quarter';
+  const activeQuarterData = activeProject?.quarters?.[activeQuarterId];
+
+  // Compute the list of periods this project supports (1 or 4 quarters, 3 terms, etc.)
+  const projectPeriods: string[] = activeProject
+    ? getProjectPeriods(activeProject, (globalSettings.calendarType || 'Quarter') as 'Quarter' | 'Trimester')
+    : [];
 
   // Workspace sub-tabs
   const [activeTab, setActiveTab] = useState<TabType>('gradebook');
@@ -77,7 +98,7 @@ export default function ClassManagerView() {
   // Search/Sort roster states
   const [studentSearch, setStudentSearch] = useState('');
   const [studentSort, setStudentSort] = useState<'name-asc' | 'name-desc' | 'lrn' | 'sex'>('name-asc');
-  
+
   // CSV batch import states
   const [csvPasteMode, setCsvPasteMode] = useState(false);
   const [csvInput, setCsvInput] = useState('');
@@ -93,30 +114,31 @@ export default function ClassManagerView() {
 
   // Assessment form states
   const [assName, setAssName] = useState('');
-  const [assCategory, setAssCategory] = useState<'WW' | 'PT' | 'QE'>('WW');
+  const [assCategory, setAssCategory] = useState<'WOW' | 'PPT' | 'QSTE'>('WOW');
   const [assPerfectScore, setAssPerfectScore] = useState(20);
   const [assDate, setAssDate] = useState(new Date().toISOString().split('T')[0]);
   const [assDescription, setAssDescription] = useState('');
 
   // Quick Add Assessment Modal states
   const [isAddAssessmentModalOpen, setIsAddAssessmentModalOpen] = useState(false);
-  const [modalAssCategory, setModalAssCategory] = useState<'WW' | 'PT' | 'QE'>('WW');
+  const [isExcelExportOpen, setIsExcelExportOpen] = useState(false);
+  const [modalAssCategory, setModalAssCategory] = useState<'WOW' | 'PPT' | 'QSTE'>('WOW');
   const [modalAssName, setModalAssName] = useState('');
   const [modalAssPerfectScore, setModalAssPerfectScore] = useState<number>(20);
   const [modalAssDate, setModalAssDate] = useState('');
   const [modalAssDescription, setModalAssDescription] = useState('');
 
-  const openAddAssessmentModal = (cat: 'WW' | 'PT' | 'QE' = 'WW') => {
+  const openAddAssessmentModal = (cat: 'WOW' | 'PPT' | 'QSTE' = 'WOW') => {
     if (!activeProject) return;
     setModalAssCategory(cat);
 
-    const existingInCat = activeProject.assessments.filter(a => a.category === cat);
+    const existingInCat = (activeQuarterData?.assessments || []).filter(a => a.category === cat);
     const nextNum = existingInCat.length + 1;
 
-    if (cat === 'WW') {
+    if (cat === 'WOW') {
       setModalAssName(`WW${nextNum}: Written Work ${nextNum}`);
       setModalAssPerfectScore(20);
-    } else if (cat === 'PT') {
+    } else if (cat === 'PPT') {
       setModalAssName(`PT${nextNum}: Performance Task ${nextNum}`);
       setModalAssPerfectScore(50);
     } else {
@@ -129,16 +151,16 @@ export default function ClassManagerView() {
     setIsAddAssessmentModalOpen(true);
   };
 
-  const handleModalCategoryChange = (cat: 'WW' | 'PT' | 'QE') => {
+  const handleModalCategoryChange = (cat: 'WOW' | 'PPT' | 'QSTE') => {
     setModalAssCategory(cat);
     if (!activeProject) return;
-    const existingInCat = activeProject.assessments.filter(a => a.category === cat);
+    const existingInCat = (activeQuarterData?.assessments || []).filter(a => a.category === cat);
     const nextNum = existingInCat.length + 1;
 
-    if (cat === 'WW') {
+    if (cat === 'WOW') {
       setModalAssName(`WW${nextNum}: Written Work ${nextNum}`);
       setModalAssPerfectScore(20);
-    } else if (cat === 'PT') {
+    } else if (cat === 'PPT') {
       setModalAssName(`PT${nextNum}: Performance Task ${nextNum}`);
       setModalAssPerfectScore(50);
     } else {
@@ -158,7 +180,7 @@ export default function ClassManagerView() {
       return;
     }
 
-    addAssessmentToActive({
+    addAssessmentToActive(activeQuarterId, {
       name: modalAssName.trim(),
       category: modalAssCategory,
       perfectScore: modalAssPerfectScore,
@@ -225,24 +247,33 @@ export default function ClassManagerView() {
   const saveEditingCell = () => {
     if (!editingScore || !activeProject) return;
     const { studentId, assessmentId, tempValue } = editingScore;
-    const assessment = activeProject.assessments.find(a => a.id === assessmentId);
+    const assessment = (activeQuarterData?.assessments || []).find(a => a.id === assessmentId);
     if (!assessment) return;
 
     if (tempValue.trim() === '') {
-      // Clear score
-      const currentScore = activeProject.scores[studentId]?.[assessmentId];
-      setUndoStack(prev => [...prev, { studentId, assessmentId, prevVal: currentScore }]);
-      setRedoStack([]);
-      clearScoreInActive(studentId, assessmentId);
+      if (reassessmentMode) {
+        clearReassessmentScoreInActive(activeQuarterId, studentId, assessmentId);
+      } else {
+        const currentScore = (activeQuarterData?.scores || {})[studentId]?.[assessmentId];
+        setUndoStack(prev => [...prev, { studentId, assessmentId, prevVal: currentScore }]);
+        setRedoStack([]);
+        clearScoreInActive(activeQuarterId, studentId, assessmentId);
+      }
     } else {
       const parsed = parseInt(tempValue);
       if (isNaN(parsed) || parsed < 0 || parsed > assessment.perfectScore) {
         showCustomAlert(`Must be a whole number between 0 and the perfect score of ${assessment.perfectScore}.`, "Invalid Score Entry", "error");
       } else {
-        const currentScore = activeProject.scores[studentId]?.[assessmentId];
-        setUndoStack(prev => [...prev, { studentId, assessmentId, prevVal: currentScore }]);
-        setRedoStack([]);
-        updateScoreInActive(studentId, assessmentId, parsed);
+        if (reassessmentMode) {
+          // In reassessment mode, always save the reassessment score regardless of mastery.
+          // The effective score engine will apply policy (Average/Highest/Replacement).
+          updateReassessmentScoreInActive(activeQuarterId, studentId, assessmentId, parsed);
+        } else {
+          const currentScore = (activeQuarterData?.scores || {})[studentId]?.[assessmentId];
+          setUndoStack(prev => [...prev, { studentId, assessmentId, prevVal: currentScore }]);
+          setRedoStack([]);
+          updateScoreInActive(activeQuarterId, studentId, assessmentId, parsed);
+        }
       }
     }
     setEditingScore(null);
@@ -252,7 +283,7 @@ export default function ClassManagerView() {
   const handleTableKeyDown = (e: React.KeyboardEvent, studentId: string, assessmentId: string, studentIndex: number, assessmentIndex: number) => {
     if (!activeProject) return;
     const activeStudents = activeProject.students.filter(s => s.status === 'Active');
-    const assessments = [...activeProject.assessments].sort((a,b) => a.order - b.order);
+    const assessments = [...(activeQuarterData?.assessments || [])].sort((a, b) => a.order - b.order);
 
     if (editingScore) {
       if (e.key === 'Enter') {
@@ -272,7 +303,9 @@ export default function ClassManagerView() {
 
     if (e.key === 'Enter') {
       e.preventDefault();
-      const currentScore = activeProject.scores[studentId]?.[assessmentId];
+      const currentScore = reassessmentMode
+        ? (activeQuarterData?.reassessmentScores || {})[studentId]?.[assessmentId]
+        : (activeQuarterData?.scores || {})[studentId]?.[assessmentId];
       setEditingScore({
         studentId,
         assessmentId,
@@ -321,15 +354,15 @@ export default function ClassManagerView() {
   const handleUndo = () => {
     if (undoStack.length === 0 || !activeProject) return;
     const lastEdit = undoStack[undoStack.length - 1];
-    const currentVal = activeProject.scores[lastEdit.studentId]?.[lastEdit.assessmentId];
+    const currentVal = (activeQuarterData?.scores || {})[lastEdit.studentId]?.[lastEdit.assessmentId];
 
     setRedoStack(prev => [...prev, { studentId: lastEdit.studentId, assessmentId: lastEdit.assessmentId, nextVal: currentVal }]);
     setUndoStack(prev => prev.slice(0, -1));
 
     if (lastEdit.prevVal === undefined) {
-      clearScoreInActive(lastEdit.studentId, lastEdit.assessmentId);
+      clearScoreInActive(activeQuarterId, lastEdit.studentId, lastEdit.assessmentId);
     } else {
-      updateScoreInActive(lastEdit.studentId, lastEdit.assessmentId, lastEdit.prevVal);
+      updateScoreInActive(activeQuarterId, lastEdit.studentId, lastEdit.assessmentId, lastEdit.prevVal);
     }
   };
 
@@ -337,15 +370,15 @@ export default function ClassManagerView() {
   const handleRedo = () => {
     if (redoStack.length === 0 || !activeProject) return;
     const lastRedo = redoStack[redoStack.length - 1];
-    const currentVal = activeProject.scores[lastRedo.studentId]?.[lastRedo.assessmentId];
+    const currentVal = (activeQuarterData?.scores || {})[lastRedo.studentId]?.[lastRedo.assessmentId];
 
     setUndoStack(prev => [...prev, { studentId: lastRedo.studentId, assessmentId: lastRedo.assessmentId, prevVal: currentVal }]);
     setRedoStack(prev => prev.slice(0, -1));
 
     if (lastRedo.nextVal === undefined) {
-      clearScoreInActive(lastRedo.studentId, lastRedo.assessmentId);
+      clearScoreInActive(activeQuarterId, lastRedo.studentId, lastRedo.assessmentId);
     } else {
-      updateScoreInActive(lastRedo.studentId, lastRedo.assessmentId, lastRedo.nextVal);
+      updateScoreInActive(activeQuarterId, lastRedo.studentId, lastRedo.assessmentId, lastRedo.nextVal);
     }
   };
 
@@ -412,7 +445,7 @@ export default function ClassManagerView() {
     if (!csvInput.trim()) return;
     const lines = csvInput.trim().split(/\r?\n/);
     const parsedStudents: Omit<Student, 'id'>[] = [];
-    
+
     let generatedLrnCounter = 1000000000;
 
     lines.forEach((rawLine, lineIdx) => {
@@ -422,10 +455,10 @@ export default function ClassManagerView() {
       const upperLine = line.toUpperCase();
       // Skip headers and summary lines
       if (
-        upperLine.includes('LEARNER NAME') || 
-        upperLine.includes('STUDENT NAME') || 
+        upperLine.includes('LEARNER NAME') ||
+        upperLine.includes('STUDENT NAME') ||
         (upperLine.includes('LRN') && upperLine.includes('SEX')) ||
-        upperLine.startsWith('MALE') || 
+        upperLine.startsWith('MALE') ||
         upperLine.startsWith('FEMALE') ||
         upperLine.startsWith('TOTAL') ||
         upperLine.startsWith('LIST OF LEARNERS')
@@ -461,7 +494,7 @@ export default function ClassManagerView() {
       }
 
       // 2. Check for Sex token ('M', 'F', 'Male', 'Female', 'MALE', 'FEMALE')
-      let sexIdx = parts.findIndex((p, idx) => 
+      let sexIdx = parts.findIndex((p, idx) =>
         idx !== lrnIdx && /^(m|f|male|female|m\.?|f\.?)$/i.test(p.trim())
       );
 
@@ -532,7 +565,7 @@ export default function ClassManagerView() {
   const handleAddAssessment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!assName.trim()) return;
-    addAssessmentToActive({
+    addAssessmentToActive(activeQuarterId, {
       name: assName.trim(),
       category: assCategory,
       perfectScore: assPerfectScore,
@@ -552,7 +585,7 @@ export default function ClassManagerView() {
 
     activeStudents.forEach(s => {
       const g = computeProjectStudentGrade(activeProject, s.id, globalSettings.subjects);
-      csvContent += `"${s.name}",${s.lrn},${s.sex},${g.wwPercentage}%,${g.ptPercentage}%,${g.qePercentage}%,${g.initialGrade},${g.finalGrade},${g.remarks}\n`;
+      csvContent += `"${s.name}",${s.lrn},${s.sex},${g.wowPercentage}%,${g.pptPercentage}%,${g.qstePercentage}%,${g.initialGrade},${g.finalGrade},${g.remarks}\n`;
     });
 
     const encodedUri = encodeURI(csvContent);
@@ -619,31 +652,31 @@ export default function ClassManagerView() {
   });
 
   if (studentSort === 'name-asc') {
-    activeStudents.sort((a,b) => a.name.localeCompare(b.name));
+    activeStudents.sort((a, b) => a.name.localeCompare(b.name));
   } else if (studentSort === 'name-desc') {
-    activeStudents.sort((a,b) => b.name.localeCompare(a.name));
+    activeStudents.sort((a, b) => b.name.localeCompare(a.name));
   } else if (studentSort === 'lrn') {
-    activeStudents.sort((a,b) => a.lrn.localeCompare(b.lrn));
+    activeStudents.sort((a, b) => a.lrn.localeCompare(b.lrn));
   } else if (studentSort === 'sex') {
-    activeStudents.sort((a,b) => a.sex.localeCompare(b.sex));
+    activeStudents.sort((a, b) => a.sex.localeCompare(b.sex));
   }
 
-  const sortedAssessments = [...activeProject.assessments].sort((a,b) => a.order - b.order);
-  const wwAssessments = sortedAssessments.filter(a => a.category === 'WW');
-  const ptAssessments = sortedAssessments.filter(a => a.category === 'PT');
-  const qeAssessments = sortedAssessments.filter(a => a.category === 'QE');
+  const sortedAssessments = [...(activeQuarterData?.assessments || [])].sort((a, b) => a.order - b.order);
+  const wwAssessments = sortedAssessments.filter(a => a.category === 'WOW');
+  const ptAssessments = sortedAssessments.filter(a => a.category === 'PPT');
+  const qeAssessments = sortedAssessments.filter(a => a.category === 'QSTE');
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
-      
+
       {/* Mini Workspace Header bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 p-4.5 rounded-2xl shadow-3xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[9px] font-mono font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
-              {activeProject.gradeLevel} • {activeProject.quarter} • S.Y. {activeProject.schoolYear}
+              {activeProject.gradeLevel} • {activeQuarterId} • S.Y. {activeProject.schoolYear}
             </span>
-            
+
             {/* Completed/In-Progress Badge Trigger */}
             <button
               onClick={() => {
@@ -653,52 +686,67 @@ export default function ClassManagerView() {
                   isCompleted: nextCompleted
                 });
               }}
-              className={`text-[8.5px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider transition-all cursor-pointer border flex items-center gap-1.5 ${
-                activeProject.isCompleted
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-450 hover:bg-emerald-100/50'
-                  : 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/15 text-indigo-700 dark:text-indigo-450 hover:bg-indigo-100/50'
-              }`}
+              className={`text-[8.5px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider transition-all cursor-pointer border flex items-center gap-1.5 ${activeProject.isCompleted
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-450 hover:bg-emerald-100/50'
+                : 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/15 text-indigo-700 dark:text-indigo-450 hover:bg-indigo-100/50'
+                }`}
               title="Click to toggle project completion status"
             >
               <span className={`h-1.5 w-1.5 rounded-full ${activeProject.isCompleted ? 'bg-emerald-500' : 'bg-indigo-500 animate-pulse'}`} />
               {activeProject.isCompleted ? 'Quarter Completed' : 'Quarter In Progress'}
             </button>
           </div>
-          
+
           <h2 className="text-base font-black text-slate-800 dark:text-slate-100 leading-tight">
             {activeProject.subject} • Class Grid ({activeProject.section})
           </h2>
         </div>
 
+        {/* Quarter / Term Switcher */}
+        {projectPeriods.length > 1 && (
+          <div className="flex flex-wrap gap-1 bg-indigo-50 dark:bg-indigo-950/20 p-1 rounded-xl border border-indigo-100 dark:border-indigo-900/30 text-xs w-full sm:w-auto">
+            {projectPeriods.map(period => (
+              <button
+                key={period}
+                onClick={() => updateActiveProjectQuarter(period)}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeQuarterId === period
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
+                  }`}
+                title={`Switch to ${period}`}
+              >
+                {period}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Tab Selection */}
         <div className="flex flex-wrap gap-1 bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-150 dark:border-slate-850 text-xs w-full sm:w-auto">
           <button
             onClick={() => setActiveTab('gradebook')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-              activeTab === 'gradebook' 
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs' 
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'gradebook'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
           >
             Gradebook
           </button>
           <button
             onClick={() => setActiveTab('assessments')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-              activeTab === 'assessments' 
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs' 
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'assessments'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
           >
-            Assessments ({activeProject.assessments.length})
+            Assessments ({(activeQuarterData?.assessments || []).length})
           </button>
           <button
             onClick={() => setActiveTab('roster')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-              activeTab === 'roster' 
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs' 
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'roster'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
           >
             Roster ({activeProject.students.length})
           </button>
@@ -710,11 +758,10 @@ export default function ClassManagerView() {
                 setReportStudentId(activeProject.students[0].id);
               }
             }}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-              activeTab === 'reports' 
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs' 
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'reports'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
           >
             Reports & Print
           </button>
@@ -732,7 +779,7 @@ export default function ClassManagerView() {
                 <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0" />
                 <span>This quarter grading project is marked as Completed. Grade values and rosters are officially finalized.</span>
               </div>
-              <button 
+              <button
                 onClick={() => {
                   saveProject({
                     ...activeProject,
@@ -745,7 +792,7 @@ export default function ClassManagerView() {
               </button>
             </div>
           )}
-          
+
           {/* Quick Stats & Controls row */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-slate-100/40 dark:bg-slate-950/30 p-3.5 rounded-2xl border border-slate-150 dark:border-slate-850/85">
             <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -755,9 +802,9 @@ export default function ClassManagerView() {
               <div className="flex items-center gap-1.5 bg-emerald-50/50 dark:bg-emerald-950/25 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-100/40 dark:border-emerald-900/10 font-sans text-[10px] font-bold">
                 PASSING: {activeProject.passingGrade}
               </div>
-              
+
               <div className="flex items-center gap-1.5 bg-teal-50/50 dark:bg-teal-950/25 text-teal-700 dark:text-teal-400 px-2.5 py-1 rounded-lg border border-teal-100/40 dark:border-teal-900/10 font-sans text-[10px] font-bold">
-                POLICY: 
+                POLICY:
                 <select
                   value={activeProject.depedPolicy}
                   onChange={(e) => {
@@ -773,7 +820,7 @@ export default function ClassManagerView() {
                   <option value="2027">MATATAG Adjusted Transmutation (SY 2027-2028)</option>
                 </select>
               </div>
-              
+
               {/* Dynamic student filtering directly on spreadsheet canvas */}
               <div className="relative min-w-[200px]">
                 <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
@@ -788,10 +835,10 @@ export default function ClassManagerView() {
             </div>
 
             {/* Quick Add Assessment & Undo, Redo, Export Controls */}
-            <div className="flex flex-wrap items-center gap-2 self-end md:self-auto shrink-0">
+            <div className="flex flex-wrap items-center gap-2 self-end md:self-auto">
               <div className="flex items-center gap-1.5 border-r border-slate-200 dark:border-slate-800 pr-2.5">
                 <button
-                  onClick={() => openAddAssessmentModal('WW')}
+                  onClick={() => openAddAssessmentModal('WOW')}
                   className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 text-[10px] font-black rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1"
                   title="Add Written Work Column"
                 >
@@ -800,7 +847,7 @@ export default function ClassManagerView() {
                 </button>
 
                 <button
-                  onClick={() => openAddAssessmentModal('PT')}
+                  onClick={() => openAddAssessmentModal('PPT')}
                   className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60 text-[10px] font-black rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1"
                   title="Add Performance Task Column"
                 >
@@ -809,21 +856,12 @@ export default function ClassManagerView() {
                 </button>
 
                 <button
-                  onClick={() => openAddAssessmentModal('QE')}
+                  onClick={() => openAddAssessmentModal('QSTE')}
                   className="px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:hover:bg-emerald-800/50 text-emerald-800 dark:text-emerald-200 border border-emerald-300/60 dark:border-emerald-700/60 text-[10px] font-black rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1"
                   title="Add Quarterly Exam Column"
                 >
                   <Plus className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300" />
                   <span>+ QE</span>
-                </button>
-
-                <button
-                  onClick={() => openAddAssessmentModal('WW')}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black rounded-lg transition-all shadow-3xs cursor-pointer flex items-center gap-1.5"
-                  title="Open Add Assessment Column Pop-Up Modal"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Add Column</span>
                 </button>
               </div>
 
@@ -843,14 +881,85 @@ export default function ClassManagerView() {
               >
                 Redo ({redoStack.length})
               </button>
-              <button
-                onClick={handleExportCSVReport}
-                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-bold rounded-lg transition-all shadow-3xs cursor-pointer flex items-center gap-1.5"
-              >
-                <FileSpreadsheet className="h-3.5 w-3.5" /> Export Class Record
-              </button>
+
+              {/* ── Mastery-Based Reassessment Toggle ── */}
+              <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-800 pl-2">
+                <button
+                  onClick={() => {
+                    const next = !reassessmentMode;
+                    if (next && activeProject) {
+                      // Single atomic write: enable settings + all assessments in one save
+                      const existingSettings = activeProject.reassessmentSettings;
+                      enableReassessmentModeForQuarter(activeQuarterId, {
+                        enabled: true,
+                        masteryThreshold: existingSettings?.masteryThreshold ?? 75,
+                        interventionThreshold: existingSettings?.interventionThreshold ?? 50,
+                        policy: existingSettings?.policy ?? 'Average'
+                      });
+                    }
+                    setReassessmentMode(next);
+                  }}
+                  className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1.5 border ${reassessmentMode
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 animate-pulse'
+                    : (activeProject.reassessmentSettings?.enabled
+                      ? 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700')
+                    }`}
+                  title={reassessmentMode ? 'Exit Component Reassessment Mode' : 'Enter Component Reassessment Mode'}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {reassessmentMode ? 'Exit Reassessment' : 'Reassessment Mode'}
+                </button>
+                <button
+                  onClick={() => setShowReassessmentSettingsModal(true)}
+                  className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 text-[10px] font-black rounded-lg transition-all cursor-pointer shadow-3xs"
+                  title="Configure Reassessment Settings"
+                >
+                  ⚙
+                </button>
+              </div>
+
+              {/* Export Buttons */}
+              <div className="flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-2">
+                <button
+                  onClick={() => setIsExcelExportOpen(true)}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-lg transition-all duration-200 shadow-3xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5" />
+                  Export for Adviser (JSON)
+                </button>
+
+                <button
+                  onClick={handleExportCSVReport}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-bold rounded-lg transition-all duration-200 shadow-3xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5" />
+                  Export Class Record
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Reassessment Mode Active Banner */}
+          {reassessmentMode && (
+            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-400 text-xs rounded-xl flex items-center justify-between gap-3 font-bold animate-fade-in shadow-3xs">
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
+                <div>
+                  <span className="font-black">Component Reassessment Mode Active.</span>
+                  {' '}Cells display original scores (top) and effective scores (bottom). Click any cell to enter a reassessment score for eligible learners.
+                  {activeProject.reassessmentSettings && (
+                    <span className="ml-2 text-amber-600 dark:text-amber-500">
+                      Policy: <strong>{activeProject.reassessmentSettings.policy}</strong> · Mastery: <strong>{activeProject.reassessmentSettings.masteryThreshold}%</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => setReassessmentMode(false)} className="shrink-0 px-2.5 py-1 bg-amber-200 dark:bg-amber-900 hover:bg-amber-300 text-amber-800 dark:text-amber-200 rounded-lg text-[10px] font-black cursor-pointer">
+                Exit Mode
+              </button>
+            </div>
+          )}
 
           {activeProject.students.length === 0 ? (
             <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl py-16 text-center space-y-4">
@@ -862,24 +971,24 @@ export default function ClassManagerView() {
                 Open Learner Roster
               </button>
             </div>
-          ) : activeProject.assessments.length === 0 ? (
+          ) : (activeQuarterData?.assessments || []).length === 0 ? (
             <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl py-16 text-center space-y-4">
               <p className="text-xs text-slate-400 font-bold">No assessment columns yet. Click below to quickly create Written Works, Performance Tasks, or Quarterly Exams.</p>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
-                  onClick={() => openAddAssessmentModal('WW')}
+                  onClick={() => openAddAssessmentModal('WOW')}
                   className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-3xs flex items-center gap-2"
                 >
                   <Plus className="h-4 w-4" /> Add Written Work (+WW)
                 </button>
                 <button
-                  onClick={() => openAddAssessmentModal('PT')}
+                  onClick={() => openAddAssessmentModal('PPT')}
                   className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-3xs flex items-center gap-2"
                 >
                   <Plus className="h-4 w-4" /> Add Performance Task (+PT)
                 </button>
                 <button
-                  onClick={() => openAddAssessmentModal('QE')}
+                  onClick={() => openAddAssessmentModal('QSTE')}
                   className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-3xs flex items-center gap-2"
                 >
                   <Plus className="h-4 w-4" /> Add Quarterly Exam (+QE)
@@ -900,7 +1009,7 @@ export default function ClassManagerView() {
                           <div className="flex items-center justify-center gap-2">
                             <span>Written Works </span>
                             <button
-                              onClick={() => openAddAssessmentModal('WW')}
+                              onClick={() => openAddAssessmentModal('WOW')}
                               className="px-1.5 py-0.5 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/60 dark:hover:bg-indigo-800 text-indigo-800 dark:text-indigo-200 text-[8px] font-black rounded cursor-pointer transition-colors"
                               title="Add new Written Work column"
                             >
@@ -914,7 +1023,7 @@ export default function ClassManagerView() {
                           <div className="flex items-center justify-center gap-2">
                             <span>Performance Tasks </span>
                             <button
-                              onClick={() => openAddAssessmentModal('PT')}
+                              onClick={() => openAddAssessmentModal('PPT')}
                               className="px-1.5 py-0.5 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/60 dark:hover:bg-teal-800 text-teal-800 dark:text-teal-200 text-[8px] font-black rounded cursor-pointer transition-colors"
                               title="Add new Performance Task column"
                             >
@@ -928,7 +1037,7 @@ export default function ClassManagerView() {
                           <div className="flex items-center justify-center gap-2">
                             <span>Quarterly Exam</span>
                             <button
-                              onClick={() => openAddAssessmentModal('QE')}
+                              onClick={() => openAddAssessmentModal('QSTE')}
                               className="px-1.5 py-0.5 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/60 dark:hover:bg-emerald-800 text-emerald-800 dark:text-emerald-200 text-[8px] font-black rounded cursor-pointer transition-colors"
                               title="Add new Quarterly Exam column"
                             >
@@ -999,12 +1108,12 @@ export default function ClassManagerView() {
 
                   <tbody className="divide-y divide-slate-150 dark:divide-slate-850/60">
                     {activeStudents.map((st, sIdx) => {
-                      const computed = computeProjectStudentGrade(activeProject, st.id, globalSettings.subjects);
-                      const scores = activeProject.scores[st.id] || {};
+                      const computed = computeProjectStudentGrade(activeProject, st.id, globalSettings.subjects, activeQuarterId);
+                      const scores = (activeQuarterData?.scores || {})[st.id] || {};
 
                       return (
-                        <tr 
-                          key={st.id} 
+                        <tr
+                          key={st.id}
                           className="group hover:bg-slate-50/50 dark:hover:bg-slate-850/10 text-xs text-slate-700 dark:text-slate-300 font-medium transition-colors"
                         >
                           {/* Frozen student details with distinct right shadow/border */}
@@ -1023,33 +1132,46 @@ export default function ClassManagerView() {
                           {/* WW Score Cells */}
                           {wwAssessments.map((ass, aIdx) => {
                             const score = scores[ass.id];
-                            const isMissing = score === undefined;
+                            const reassessmentScore = (activeQuarterData?.reassessmentScores || {})[st.id]?.[ass.id];
+                            const effectiveScore = getEffectiveScore(score, reassessmentScore, ass.perfectScore, activeProject.reassessmentSettings, ass.reassessmentEnabled);
+                            const status = getLearnerReassessmentStatus(score, reassessmentScore, ass.perfectScore, activeProject.reassessmentSettings, ass.reassessmentEnabled);
+                            const displayScore = reassessmentMode ? reassessmentScore : score;
+                            const isMissing = reassessmentMode ? score === undefined : score === undefined;
                             const isCellSelected = selectedCell?.studentId === st.id && selectedCell?.assessmentId === ass.id;
                             const isEditing = editingScore?.studentId === st.id && editingScore?.assessmentId === ass.id;
+                            const isEligible = reassessmentMode && ass.reassessmentEnabled && status === 'Eligible';
+                            const isReassessed = reassessmentMode && status === 'Reassessed';
+                            const isMastered = reassessmentMode && status === 'Mastered';
 
                             return (
-                              <td 
-                                key={ass.id} 
+                              <td
+                                key={ass.id}
                                 onClick={() => {
                                   setSelectedCell({ studentId: st.id, assessmentId: ass.id });
                                   if (!isEditing) {
-                                    setEditingScore({ studentId: st.id, assessmentId: ass.id, tempValue: score !== undefined ? score.toString() : '' });
+                                    const initVal = reassessmentMode ? reassessmentScore : score;
+                                    setEditingScore({ studentId: st.id, assessmentId: ass.id, tempValue: initVal !== undefined ? initVal.toString() : '' });
                                   }
                                 }}
                                 onKeyDown={(e) => handleTableKeyDown(e, st.id, ass.id, sIdx, sortedAssessments.findIndex(x => x.id === ass.id))}
                                 tabIndex={0}
                                 className="p-1.5 text-center font-mono transition-all outline-hidden cursor-pointer relative"
-                                title="Click to edit score"
+                                title={reassessmentMode ? `Original: ${score ?? '—'} | Reassessment: ${reassessmentScore ?? '—'} | Effective: ${effectiveScore ?? '—'}` : 'Click to edit score'}
                               >
-                                <div className={`w-14 mx-auto py-1 px-1 rounded-lg border-2 text-center transition-all flex items-center justify-center min-h-[32px] font-mono text-xs font-bold shadow-2xs ${
-                                  isEditing
-                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/80 ring-2 ring-emerald-500/30 text-emerald-950 dark:text-emerald-100'
-                                    : isCellSelected
-                                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/30'
-                                      : isMissing
-                                        ? 'border-slate-300 dark:border-slate-700 bg-emerald-50/20 dark:bg-emerald-950/10 text-slate-400 dark:text-slate-500 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/30'
-                                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20'
-                                }`}>
+                                <div className={`w-14 mx-auto py-1 px-1 rounded-lg border-2 text-center transition-all flex flex-col items-center justify-center min-h-[32px] font-mono text-xs font-bold shadow-2xs ${isEditing
+                                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/80 ring-2 ring-emerald-500/30 text-emerald-950 dark:text-emerald-100'
+                                  : isCellSelected
+                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/30'
+                                    : isReassessed
+                                      ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-800 dark:text-indigo-200'
+                                      : isEligible
+                                        ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 hover:border-amber-500'
+                                        : isMastered
+                                          ? 'border-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400'
+                                          : score === undefined
+                                            ? 'border-slate-300 dark:border-slate-700 bg-emerald-50/20 dark:bg-emerald-950/10 text-slate-400 dark:text-slate-500 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/30'
+                                            : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20'
+                                  }`}>
                                   {isEditing ? (
                                     <input
                                       ref={inputRef}
@@ -1063,6 +1185,12 @@ export default function ClassManagerView() {
                                       placeholder={`0-${ass.perfectScore}`}
                                       className="w-full text-center bg-transparent text-emerald-950 dark:text-emerald-100 font-mono text-xs font-black focus:outline-hidden"
                                     />
+                                  ) : reassessmentMode ? (
+                                    <div className="flex flex-col items-center gap-0">
+                                      <span className="text-[9px] text-slate-400 leading-none">{score ?? '—'}</span>
+                                      <span className={`font-extrabold leading-tight text-xs ${isReassessed ? 'text-indigo-700 dark:text-indigo-300' : isEligible ? 'text-amber-700 dark:text-amber-300' : 'text-slate-400'
+                                        }`}>{effectiveScore ?? '—'}</span>
+                                    </div>
                                   ) : (
                                     score !== undefined ? (
                                       <span className="font-extrabold">{score}</span>
@@ -1077,13 +1205,13 @@ export default function ClassManagerView() {
                           {wwAssessments.length > 0 && (
                             <>
                               <td className="py-3 px-1.5 text-center font-mono bg-indigo-50/10 dark:bg-indigo-950/5 text-slate-500 dark:text-slate-450 font-medium">
-                                {computed.wwRawSum}
+                                {computed.wowRawSum}
                               </td>
                               <td className="py-3 px-1.5 text-center font-mono bg-indigo-50/10 dark:bg-indigo-950/5 text-slate-600 dark:text-slate-400 font-bold">
-                                {computed.wwPercentage}%
+                                {computed.wowPercentage}%
                               </td>
                               <td className="py-3 px-1.5 text-center font-mono bg-indigo-50/20 dark:bg-indigo-950/10 text-indigo-600 dark:text-indigo-400 font-extrabold border-r border-slate-150 dark:border-slate-800">
-                                {computed.weightedWW}
+                                {computed.weightedWOW}
                               </td>
                             </>
                           )}
@@ -1091,33 +1219,44 @@ export default function ClassManagerView() {
                           {/* PT Score Cells */}
                           {ptAssessments.map((ass, aIdx) => {
                             const score = scores[ass.id];
-                            const isMissing = score === undefined;
+                            const reassessmentScore = (activeQuarterData?.reassessmentScores || {})[st.id]?.[ass.id];
+                            const effectiveScore = getEffectiveScore(score, reassessmentScore, ass.perfectScore, activeProject.reassessmentSettings, ass.reassessmentEnabled);
+                            const status = getLearnerReassessmentStatus(score, reassessmentScore, ass.perfectScore, activeProject.reassessmentSettings, ass.reassessmentEnabled);
                             const isCellSelected = selectedCell?.studentId === st.id && selectedCell?.assessmentId === ass.id;
                             const isEditing = editingScore?.studentId === st.id && editingScore?.assessmentId === ass.id;
+                            const isEligible = reassessmentMode && ass.reassessmentEnabled && status === 'Eligible';
+                            const isReassessed = reassessmentMode && status === 'Reassessed';
+                            const isMastered = reassessmentMode && status === 'Mastered';
 
                             return (
-                              <td 
-                                key={ass.id} 
+                              <td
+                                key={ass.id}
                                 onClick={() => {
                                   setSelectedCell({ studentId: st.id, assessmentId: ass.id });
                                   if (!isEditing) {
-                                    setEditingScore({ studentId: st.id, assessmentId: ass.id, tempValue: score !== undefined ? score.toString() : '' });
+                                    const initVal = reassessmentMode ? reassessmentScore : score;
+                                    setEditingScore({ studentId: st.id, assessmentId: ass.id, tempValue: initVal !== undefined ? initVal.toString() : '' });
                                   }
                                 }}
                                 onKeyDown={(e) => handleTableKeyDown(e, st.id, ass.id, sIdx, sortedAssessments.findIndex(x => x.id === ass.id))}
                                 tabIndex={0}
                                 className="p-1.5 text-center font-mono transition-all outline-hidden cursor-pointer relative"
-                                title="Click to edit score"
+                                title={reassessmentMode ? `Original: ${score ?? '—'} | Reassessment: ${reassessmentScore ?? '—'} | Effective: ${effectiveScore ?? '—'}` : 'Click to edit score'}
                               >
-                                <div className={`w-14 mx-auto py-1 px-1 rounded-lg border-2 text-center transition-all flex items-center justify-center min-h-[32px] font-mono text-xs font-bold shadow-2xs ${
-                                  isEditing
-                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/80 ring-2 ring-emerald-500/30 text-emerald-950 dark:text-emerald-100'
-                                    : isCellSelected
-                                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/30'
-                                      : isMissing
-                                        ? 'border-slate-300 dark:border-slate-700 bg-emerald-50/20 dark:bg-emerald-950/10 text-slate-400 dark:text-slate-500 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/30'
-                                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20'
-                                }`}>
+                                <div className={`w-14 mx-auto py-1 px-1 rounded-lg border-2 text-center transition-all flex flex-col items-center justify-center min-h-[32px] font-mono text-xs font-bold shadow-2xs ${isEditing
+                                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/80 ring-2 ring-emerald-500/30 text-emerald-950 dark:text-emerald-100'
+                                  : isCellSelected
+                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/30'
+                                    : isReassessed
+                                      ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-800 dark:text-indigo-200'
+                                      : isEligible
+                                        ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 hover:border-amber-500'
+                                        : isMastered
+                                          ? 'border-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400'
+                                          : score === undefined
+                                            ? 'border-slate-300 dark:border-slate-700 bg-emerald-50/20 dark:bg-emerald-950/10 text-slate-400 dark:text-slate-500 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/30'
+                                            : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20'
+                                  }`}>
                                   {isEditing ? (
                                     <input
                                       ref={inputRef}
@@ -1131,6 +1270,12 @@ export default function ClassManagerView() {
                                       placeholder={`0-${ass.perfectScore}`}
                                       className="w-full text-center bg-transparent text-emerald-950 dark:text-emerald-100 font-mono text-xs font-black focus:outline-hidden"
                                     />
+                                  ) : reassessmentMode ? (
+                                    <div className="flex flex-col items-center gap-0">
+                                      <span className="text-[9px] text-slate-400 leading-none">{score ?? '—'}</span>
+                                      <span className={`font-extrabold leading-tight text-xs ${isReassessed ? 'text-indigo-700 dark:text-indigo-300' : isEligible ? 'text-amber-700 dark:text-amber-300' : 'text-slate-400'
+                                        }`}>{effectiveScore ?? '—'}</span>
+                                    </div>
                                   ) : (
                                     score !== undefined ? (
                                       <span className="font-extrabold">{score}</span>
@@ -1145,13 +1290,13 @@ export default function ClassManagerView() {
                           {ptAssessments.length > 0 && (
                             <>
                               <td className="py-3 px-1.5 text-center font-mono bg-teal-50/10 dark:bg-teal-950/5 text-slate-500 dark:text-slate-450 font-medium">
-                                {computed.ptRawSum}
+                                {computed.pptRawSum}
                               </td>
                               <td className="py-3 px-1.5 text-center font-mono bg-teal-50/10 dark:bg-teal-950/5 text-slate-600 dark:text-slate-400 font-bold">
-                                {computed.ptPercentage}%
+                                {computed.pptPercentage}%
                               </td>
                               <td className="py-3 px-1.5 text-center font-mono bg-teal-50/20 dark:bg-teal-950/10 text-teal-600 dark:text-teal-400 font-extrabold border-r border-slate-150 dark:border-slate-800">
-                                {computed.weightedPT}
+                                {computed.weightedPPT}
                               </td>
                             </>
                           )}
@@ -1159,33 +1304,44 @@ export default function ClassManagerView() {
                           {/* QE Score Cells */}
                           {qeAssessments.map((ass, aIdx) => {
                             const score = scores[ass.id];
-                            const isMissing = score === undefined;
+                            const reassessmentScore = (activeQuarterData?.reassessmentScores || {})[st.id]?.[ass.id];
+                            const effectiveScore = getEffectiveScore(score, reassessmentScore, ass.perfectScore, activeProject.reassessmentSettings, ass.reassessmentEnabled);
+                            const status = getLearnerReassessmentStatus(score, reassessmentScore, ass.perfectScore, activeProject.reassessmentSettings, ass.reassessmentEnabled);
                             const isCellSelected = selectedCell?.studentId === st.id && selectedCell?.assessmentId === ass.id;
                             const isEditing = editingScore?.studentId === st.id && editingScore?.assessmentId === ass.id;
+                            const isEligible = reassessmentMode && ass.reassessmentEnabled && status === 'Eligible';
+                            const isReassessed = reassessmentMode && status === 'Reassessed';
+                            const isMastered = reassessmentMode && status === 'Mastered';
 
                             return (
-                              <td 
-                                key={ass.id} 
+                              <td
+                                key={ass.id}
                                 onClick={() => {
                                   setSelectedCell({ studentId: st.id, assessmentId: ass.id });
                                   if (!isEditing) {
-                                    setEditingScore({ studentId: st.id, assessmentId: ass.id, tempValue: score !== undefined ? score.toString() : '' });
+                                    const initVal = reassessmentMode ? reassessmentScore : score;
+                                    setEditingScore({ studentId: st.id, assessmentId: ass.id, tempValue: initVal !== undefined ? initVal.toString() : '' });
                                   }
                                 }}
                                 onKeyDown={(e) => handleTableKeyDown(e, st.id, ass.id, sIdx, sortedAssessments.findIndex(x => x.id === ass.id))}
                                 tabIndex={0}
                                 className="p-1.5 text-center font-mono transition-all outline-hidden cursor-pointer relative"
-                                title="Click to edit score"
+                                title={reassessmentMode ? `Original: ${score ?? '—'} | Reassessment: ${reassessmentScore ?? '—'} | Effective: ${effectiveScore ?? '—'}` : 'Click to edit score'}
                               >
-                                <div className={`w-14 mx-auto py-1 px-1 rounded-lg border-2 text-center transition-all flex items-center justify-center min-h-[32px] font-mono text-xs font-bold shadow-2xs ${
-                                  isEditing
-                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/80 ring-2 ring-emerald-500/30 text-emerald-950 dark:text-emerald-100'
-                                    : isCellSelected
-                                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/30'
-                                      : isMissing
-                                        ? 'border-slate-300 dark:border-slate-700 bg-emerald-50/20 dark:bg-emerald-950/10 text-slate-400 dark:text-slate-500 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/30'
-                                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20'
-                                }`}>
+                                <div className={`w-14 mx-auto py-1 px-1 rounded-lg border-2 text-center transition-all flex flex-col items-center justify-center min-h-[32px] font-mono text-xs font-bold shadow-2xs ${isEditing
+                                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/80 ring-2 ring-emerald-500/30 text-emerald-950 dark:text-emerald-100'
+                                  : isCellSelected
+                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/30'
+                                    : isReassessed
+                                      ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-800 dark:text-indigo-200'
+                                      : isEligible
+                                        ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 hover:border-amber-500'
+                                        : isMastered
+                                          ? 'border-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400'
+                                          : score === undefined
+                                            ? 'border-slate-300 dark:border-slate-700 bg-emerald-50/20 dark:bg-emerald-950/10 text-slate-400 dark:text-slate-500 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/30'
+                                            : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20'
+                                  }`}>
                                   {isEditing ? (
                                     <input
                                       ref={inputRef}
@@ -1199,6 +1355,12 @@ export default function ClassManagerView() {
                                       placeholder={`0-${ass.perfectScore}`}
                                       className="w-full text-center bg-transparent text-emerald-950 dark:text-emerald-100 font-mono text-xs font-black focus:outline-hidden"
                                     />
+                                  ) : reassessmentMode ? (
+                                    <div className="flex flex-col items-center gap-0">
+                                      <span className="text-[9px] text-slate-400 leading-none">{score ?? '—'}</span>
+                                      <span className={`font-extrabold leading-tight text-xs ${isReassessed ? 'text-indigo-700 dark:text-indigo-300' : isEligible ? 'text-amber-700 dark:text-amber-300' : 'text-slate-400'
+                                        }`}>{effectiveScore ?? '—'}</span>
+                                    </div>
                                   ) : (
                                     score !== undefined ? (
                                       <span className="font-extrabold">{score}</span>
@@ -1213,10 +1375,10 @@ export default function ClassManagerView() {
                           {qeAssessments.length > 0 && (
                             <>
                               <td className="py-3 px-1.5 text-center font-mono bg-emerald-50/10 dark:bg-emerald-950/5 text-slate-600 dark:text-slate-400 font-bold">
-                                {computed.qePercentage}%
+                                {computed.qstePercentage}%
                               </td>
                               <td className="py-3 px-1.5 text-center font-mono bg-emerald-50/20 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-450 font-extrabold border-r border-slate-150 dark:border-slate-800">
-                                {computed.weightedQA}
+                                {computed.weightedQSTE}
                               </td>
                             </>
                           )}
@@ -1256,7 +1418,7 @@ export default function ClassManagerView() {
                   <HelpCircle className="h-4 w-4 text-indigo-500 shrink-0 animate-pulse" />
                   <span>Click any score cell or press <kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-sm font-sans text-[9px] shadow-4xs font-bold">Enter</kbd> to edit scores in real-time. Blank cells indicate missing scores.</span>
                 </div>
-                
+
                 {/* Keyboard Shortcuts Legend */}
                 <div className="flex flex-wrap items-center gap-3 text-[9px] font-sans font-bold text-slate-450 dark:text-slate-500 self-start md:self-auto shrink-0">
                   <span className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500">Shortcuts:</span>
@@ -1290,86 +1452,129 @@ export default function ClassManagerView() {
           {/* Assessment List */}
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
             <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-              Active Assessment List ({activeProject.assessments.length})
+              Active Assessment List ({(activeQuarterData?.assessments || []).length})
             </h3>
 
-            {activeProject.assessments.length === 0 ? (
+            {(activeQuarterData?.assessments || []).length === 0 ? (
               <div className="text-center py-12 text-slate-400 text-xs font-semibold">
                 No custom assessments defined. Use the creation board on the right to install grading categories.
               </div>
             ) : (
               <div className="space-y-3.5 max-h-[500px] overflow-y-auto pr-1">
                 {sortedAssessments.map((ass, index) => (
-                  <div 
-                    key={ass.id} 
-                    className="p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-950/10 hover:border-slate-200 dark:hover:border-slate-700 transition-all flex justify-between items-center"
-                  >
-                    <div className="space-y-1 max-w-[70%]">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded-sm ${
-                          ass.category === 'WW' ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/20' : ass.category === 'PT' ? 'bg-teal-50 text-teal-600 dark:bg-teal-950/20' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20'
-                        }`}>
-                          {ass.category === 'WW' ? 'Written Works' : ass.category === 'PT' ? 'Performance Tasks' : 'Quarterly Exam'}
-                        </span>
-                        {ass.date && (
-                          <span className="text-[9px] font-mono text-slate-400">
-                            {new Date(ass.date).toLocaleDateString()}
+                  <div key={ass.id}>
+                    <div
+                      className="p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-950/10 hover:border-slate-200 dark:hover:border-slate-700 transition-all flex justify-between items-center"
+                    >
+                      <div className="space-y-1 max-w-[70%]">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded-sm ${ass.category === 'WOW' ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/20' : ass.category === 'PPT' ? 'bg-teal-50 text-teal-600 dark:bg-teal-950/20' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20'
+                            }`}>
+                            {ass.category === 'WOW' ? 'Written Works' : ass.category === 'PPT' ? 'Performance Tasks' : 'Quarterly Exam'}
                           </span>
+                          {ass.date && (
+                            <span className="text-[9px] font-mono text-slate-400">
+                              {new Date(ass.date).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-xs font-black text-slate-800 dark:text-slate-200">{ass.name}</h4>
+                        {ass.description && (
+                          <p className="text-[10px] text-slate-400 leading-normal truncate">{ass.description}</p>
                         )}
+                        <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
+                          Perfect Score: {ass.perfectScore} raw points
+                        </div>
                       </div>
-                      <h4 className="text-xs font-black text-slate-800 dark:text-slate-200">{ass.name}</h4>
-                      {ass.description && (
-                        <p className="text-[10px] text-slate-400 leading-normal truncate">{ass.description}</p>
-                      )}
-                      <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
-                        Perfect Score: {ass.perfectScore} raw points
+
+                      {/* Reordering & Deleting triggers */}
+                      <div className="flex flex-col items-end gap-1.5">
+                        <div className="flex items-center gap-1">
+                          <button
+                            disabled={index === 0}
+                            onClick={() => {
+                              const cpy = [...sortedAssessments];
+                              const temp = cpy[index];
+                              cpy[index] = cpy[index - 1];
+                              cpy[index - 1] = temp;
+                              reorderAssessmentsInActive(activeQuarterId, cpy);
+                            }}
+                            className="p-1.5 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-md hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                            title="Move Up"
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            disabled={index === sortedAssessments.length - 1}
+                            onClick={() => {
+                              const cpy = [...sortedAssessments];
+                              const temp = cpy[index];
+                              cpy[index] = cpy[index + 1];
+                              cpy[index + 1] = temp;
+                              reorderAssessmentsInActive(activeQuarterId, cpy);
+                            }}
+                            className="p-1.5 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-md hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                            title="Move Down"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              showCustomConfirm(
+                                `Are you sure you want to permanently delete the assessment [${ass.name}]? All student score cells registered under this category will be purged. This action cannot be undone.`,
+                                () => deleteAssessmentFromActive(activeQuarterId, ass.id),
+                                "Delete Assessment"
+                              );
+                            }}
+                            className="p-1.5 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 rounded-md hover:bg-rose-100 transition-colors cursor-pointer"
+                            title="Delete Assessment"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                        {/* Per-Assessment Reassessment Toggle */}
+                        {activeProject.reassessmentSettings?.enabled && (
+                          <button
+                            onClick={() => toggleReassessmentForAssessment(activeQuarterId, ass.id, !ass.reassessmentEnabled)}
+                            className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1 cursor-pointer border ${ass.reassessmentEnabled
+                              ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/40'
+                              : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                              }`}
+                            title={ass.reassessmentEnabled ? 'Disable reassessment for this assessment' : 'Enable reassessment for this assessment'}
+                          >
+                            <Sparkles className="h-3 w-3" />
+                            {ass.reassessmentEnabled ? 'Reassess: On' : 'Reassess: Off'}
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {/* Reordering & Deleting triggers */}
-                    <div className="flex items-center gap-1">
-                      <button
-                        disabled={index === 0}
-                        onClick={() => {
-                          const cpy = [...sortedAssessments];
-                          const temp = cpy[index];
-                          cpy[index] = cpy[index - 1];
-                          cpy[index - 1] = temp;
-                          reorderAssessmentsInActive(cpy);
-                        }}
-                        className="p-1.5 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-md hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
-                        title="Move Up"
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </button>
-                      <button
-                        disabled={index === sortedAssessments.length - 1}
-                        onClick={() => {
-                          const cpy = [...sortedAssessments];
-                          const temp = cpy[index];
-                          cpy[index] = cpy[index + 1];
-                          cpy[index + 1] = temp;
-                          reorderAssessmentsInActive(cpy);
-                        }}
-                        className="p-1.5 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-md hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
-                        title="Move Down"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          showCustomConfirm(
-                            `Are you sure you want to permanently delete the assessment [${ass.name}]? All student score cells registered under this category will be purged. This action cannot be undone.`,
-                            () => deleteAssessmentFromActive(ass.id),
-                            "Delete Assessment"
-                          );
-                        }}
-                        className="p-1.5 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 rounded-md hover:bg-rose-100 transition-colors cursor-pointer"
-                        title="Delete Assessment"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+                    {/* Per-Assessment Class Mastery Analysis */}
+                    {activeProject.reassessmentSettings?.enabled && ass.reassessmentEnabled && (() => {
+                      const activeStudents2 = activeProject.students.filter(s => s.status === 'Active');
+                      const threshold = activeProject.reassessmentSettings!.masteryThreshold;
+                      const interventionPct = activeProject.reassessmentSettings!.interventionThreshold;
+                      const scores2 = activeQuarterData?.scores || {};
+                      const withScores = activeStudents2.filter(s => scores2[s.id]?.[ass.id] !== undefined);
+                      if (withScores.length === 0) return null;
+                      const masteredCount = withScores.filter(s => ((scores2[s.id][ass.id] / ass.perfectScore) * 100) >= threshold).length;
+                      const masteryPct = Math.round((masteredCount / withScores.length) * 100);
+                      const eligibleCount = withScores.length - masteredCount;
+                      const needsReteach = (100 - masteryPct) >= interventionPct;
+                      return (
+                        <div className={`mt-1.5 px-3 py-2 rounded-lg border text-[10px] font-semibold flex items-center gap-3 ${needsReteach
+                          ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900/30 dark:text-rose-400'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
+                          }`}>
+                          <Sparkles className={`h-3 w-3 shrink-0 ${needsReteach ? 'text-rose-500' : 'text-amber-500'}`} />
+                          <span>
+                            Class Mastery: <strong>{masteryPct}%</strong> ({masteredCount}/{withScores.length} mastered) ·{' '}
+                            <strong>{eligibleCount}</strong> eligible for reassessment
+                            {needsReteach && <span className="ml-1 font-black text-rose-700 dark:text-rose-400"> ⚠ Reteaching Recommended</span>}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -1461,7 +1666,7 @@ export default function ClassManagerView() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Roster list */}
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-5">
-            
+
             {/* Search and Sort controls */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 pb-2 border-b border-slate-100 dark:border-slate-850">
               <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest">
@@ -1506,9 +1711,8 @@ export default function ClassManagerView() {
                       <p className="text-[10px] font-mono text-slate-450 dark:text-slate-500 font-bold">
                         LRN: {st.lrn} | Sex: {st.sex} {st.studentNumber ? `| No: ${st.studentNumber}` : ''}
                       </p>
-                      <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded-sm ${
-                        st.status === 'Active' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20' : st.status === 'Dropped' ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/20' : 'bg-slate-50 text-slate-500 dark:bg-slate-950/20'
-                      }`}>
+                      <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded-sm ${st.status === 'Active' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20' : st.status === 'Dropped' ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/20' : 'bg-slate-50 text-slate-500 dark:bg-slate-950/20'
+                        }`}>
                         {st.status}
                       </span>
                     </div>
@@ -1543,7 +1747,7 @@ export default function ClassManagerView() {
 
           {/* Roster inputs */}
           <div className="space-y-6">
-            
+
             {/* Manual student add */}
             <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4 h-fit">
               <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
@@ -1620,7 +1824,7 @@ export default function ClassManagerView() {
                 <p className="text-[10.5px] text-slate-400 leading-normal font-semibold">
                   Instantly copy the complete learner roster from any other existing class with one click to avoid manual encoding.
                 </p>
-                
+
                 <div className="space-y-3">
                   <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 block">Roster Source Class</label>
                   <select
@@ -1758,6 +1962,12 @@ export default function ClassManagerView() {
                   <Printer className="h-4 w-4" /> Direct Print
                 </button>
                 <button
+                  onClick={() => setIsExcelExportOpen(true)}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer shadow-3xs"
+                >
+                  <FileSpreadsheet className="h-4 w-4" /> Export Excel
+                </button>
+                <button
                   onClick={handleExportCSVReport}
                   className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer shadow-3xs"
                 >
@@ -1768,7 +1978,7 @@ export default function ClassManagerView() {
 
             {/* Individual report options view selector */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              
+
               {/* Report 1: Learner Summary Card Selector */}
               <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-150 dark:border-slate-850 space-y-3">
                 <div className="flex items-center gap-2 text-indigo-650 dark:text-indigo-400 font-black text-xs uppercase tracking-wider">
@@ -1809,13 +2019,13 @@ export default function ClassManagerView() {
 
           {/* Printable Layout Canvas */}
           <div id="printable-report-card" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-2xl p-8 shadow-xs max-w-4xl mx-auto space-y-8 font-sans print:border-0 print:shadow-none print:p-0">
-            
+
             {/* Report Header */}
             <div className="text-center space-y-1.5 border-b-2 border-slate-900 dark:border-slate-100 pb-5">
               <span className="text-[10px] font-mono font-black tracking-widest text-slate-400 uppercase">OFFICIAL ACADEMIC GRADED DOCUMENT</span>
               <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white uppercase">{activeProject.schoolName}</h1>
               <p className="text-xs text-slate-450 dark:text-slate-400 font-bold">
-                DepEd Region Grade report • S.Y. {activeProject.schoolYear} • {activeProject.quarter}
+                DepEd Region Grade report • S.Y. {activeProject.schoolYear} • {activeQuarterId}
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-left text-[10px] font-mono pt-3 border-t border-dashed border-slate-200 mt-3 text-slate-500">
                 <div><span className="font-bold uppercase">GRADE LEVEL:</span> <span className="font-extrabold text-slate-800 dark:text-slate-200">{activeProject.gradeLevel}</span></div>
@@ -1838,45 +2048,99 @@ export default function ClassManagerView() {
                   if (!s) return null;
                   const g = computeProjectStudentGrade(activeProject, s.id, globalSettings.subjects);
                   return (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 dark:bg-slate-950 p-6 rounded-xl border border-slate-150 dark:border-slate-850">
-                      
-                      <div className="space-y-3">
-                        <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Student Profile</div>
-                        <div>
-                          <div className="text-xs font-black text-slate-850 dark:text-slate-200">{s.name}</div>
-                          <div className="text-[10px] text-slate-450 dark:text-slate-550 mt-0.5">LRN: {s.lrn}</div>
-                          <div className="text-[10px] text-slate-450 dark:text-slate-550">Sex: {s.sex}</div>
-                          <div className="text-[10px] text-slate-450 dark:text-slate-550 mt-1">Status: <span className="font-bold text-emerald-600">{s.status}</span></div>
-                        </div>
-                      </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 dark:bg-slate-950 p-6 rounded-xl border border-slate-150 dark:border-slate-850">
 
-                      <div className="space-y-2 col-span-2">
-                        <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Subject Component Ratios</div>
-                        
-                        <div className="space-y-1.5 text-xs text-slate-700 dark:text-slate-350 font-bold">
-                          <div className="flex justify-between">
-                            <span>Written Works Ratio:</span>
-                            <span className="font-mono">{g.wwPercentage}% score &rarr; {g.weightedWW}% weighted</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Performance Tasks Ratio:</span>
-                            <span className="font-mono">{g.ptPercentage}% score &rarr; {g.weightedPT}% weighted</span>
-                          </div>
-                          <div className="flex justify-between pb-1.5 border-b border-slate-200 dark:border-slate-800">
-                            <span>Quarterly Periodic Exam:</span>
-                            <span className="font-mono">{g.qePercentage}% score &rarr; {g.weightedQA}% weighted</span>
-                          </div>
-                          <div className="flex justify-between pt-1.5 text-slate-900 dark:text-slate-100 font-extrabold">
-                            <span>Weighted Initial Raw Score:</span>
-                            <span className="font-mono text-indigo-650">{g.initialGrade}%</span>
-                          </div>
-                          <div className="flex justify-between text-indigo-700 dark:text-indigo-400 font-black text-sm pt-1">
-                            <span>Final Quarterly Card Grade:</span>
-                            <span className="font-mono">{g.finalGrade} ({g.remarks})</span>
+                        <div className="space-y-3">
+                          <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Student Profile</div>
+                          <div>
+                            <div className="text-xs font-black text-slate-850 dark:text-slate-200">{s.name}</div>
+                            <div className="text-[10px] text-slate-450 dark:text-slate-550 mt-0.5">LRN: {s.lrn}</div>
+                            <div className="text-[10px] text-slate-450 dark:text-slate-550">Sex: {s.sex}</div>
+                            <div className="text-[10px] text-slate-450 dark:text-slate-550 mt-1">Status: <span className="font-bold text-emerald-600">{s.status}</span></div>
                           </div>
                         </div>
+
+                        <div className="space-y-2 col-span-2">
+                          <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Subject Component Ratios</div>
+
+                          <div className="space-y-1.5 text-xs text-slate-700 dark:text-slate-350 font-bold">
+                            <div className="flex justify-between">
+                              <span>Written Works Ratio:</span>
+                              <span className="font-mono">{g.wowPercentage}% score &rarr; {g.weightedWOW}% weighted</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Performance Tasks Ratio:</span>
+                              <span className="font-mono">{g.pptPercentage}% score &rarr; {g.weightedPPT}% weighted</span>
+                            </div>
+                            <div className="flex justify-between pb-1.5 border-b border-slate-200 dark:border-slate-800">
+                              <span>Quarterly Periodic Exam:</span>
+                              <span className="font-mono">{g.qstePercentage}% score &rarr; {g.weightedQSTE}% weighted</span>
+                            </div>
+                            <div className="flex justify-between pt-1.5 text-slate-900 dark:text-slate-100 font-extrabold">
+                              <span>Weighted Initial Raw Score:</span>
+                              <span className="font-mono text-indigo-650">{g.initialGrade}%</span>
+                            </div>
+                            <div className="flex justify-between text-indigo-700 dark:text-indigo-400 font-black text-sm pt-1">
+                              <span>Final Quarterly Card Grade:</span>
+                              <span className="font-mono">{g.finalGrade} ({g.remarks})</span>
+                            </div>
+                          </div>
+                        </div>
+
                       </div>
 
+                      {/* Detailed Scores Breakdown */}
+                      <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 rounded-xl p-5 space-y-4">
+                        <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Assessment Scores Breakdown</div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {(() => {
+                            const assessments = activeQuarterData ? [...activeQuarterData.assessments].sort((a, b) => a.order - b.order) : [];
+                            const studentScores = activeQuarterData ? (activeQuarterData.scores[s.id] || {}) : {};
+
+                            const wwList = assessments.filter(a => a.category === 'WOW');
+                            const ptList = assessments.filter(a => a.category === 'PPT');
+                            const qeList = assessments.filter(a => a.category === 'QSTE');
+
+                            const renderAssessmentList = (title: string, list: typeof wwList, colorClass: string, bgClass: string, borderClass: string) => (
+                              <div className={`p-4 rounded-xl border ${borderClass} ${bgClass} space-y-2`}>
+                                <div className={`text-[10px] font-mono font-black uppercase tracking-wider ${colorClass}`}>{title}</div>
+                                {list.length === 0 ? (
+                                  <div className="text-[10px] text-slate-400 font-bold italic py-2">No assessments recorded</div>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    {list.map(a => {
+                                      const score = studentScores[a.id];
+                                      const scoreDisplay = score !== undefined ? `${score} / ${a.perfectScore}` : `Missing / ${a.perfectScore}`;
+                                      const pctDisplay = score !== undefined ? `${((score / a.perfectScore) * 100).toFixed(0)}%` : '-';
+                                      return (
+                                        <div key={a.id} className="flex justify-between items-center text-xs border-b border-slate-100 dark:border-slate-800/50 pb-1 last:border-b-0">
+                                          <div className="truncate pr-2">
+                                            <span className="font-extrabold text-slate-700 dark:text-slate-350">{a.name}</span>
+                                            {a.date && <span className="text-[9px] font-mono text-slate-450 block">{a.date}</span>}
+                                          </div>
+                                          <div className="text-right shrink-0">
+                                            <span className="font-mono font-black text-slate-800 dark:text-slate-200">{scoreDisplay}</span>
+                                            <span className="text-[9px] font-mono text-slate-400 block">{pctDisplay}</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+
+                            return (
+                              <>
+                                {renderAssessmentList("Written Works", wwList, "text-indigo-600 dark:text-indigo-400", "bg-indigo-50/20 dark:bg-indigo-950/10", "border-indigo-100 dark:border-indigo-900/30")}
+                                {renderAssessmentList("Performance Tasks", ptList, "text-teal-600 dark:text-teal-400", "bg-teal-50/20 dark:bg-teal-950/10", "border-teal-100 dark:border-teal-900/30")}
+                                {renderAssessmentList("Quarterly Exams", qeList, "text-emerald-600 dark:text-emerald-400", "bg-emerald-50/20 dark:bg-emerald-950/10", "border-emerald-100 dark:border-emerald-900/30")}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
                     </div>
                   );
                 })()}
@@ -1906,7 +2170,7 @@ export default function ClassManagerView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-150 text-slate-800 font-bold">
-                  {activeProject.students.filter(s => s.status === 'Active').sort((a,b) => a.name.localeCompare(b.name)).map((s, idx) => {
+                  {activeProject.students.filter(s => s.status === 'Active').sort((a, b) => a.name.localeCompare(b.name)).map((s, idx) => {
                     const g = computeProjectStudentGrade(activeProject, s.id, globalSettings.subjects);
                     return (
                       <tr key={s.id} className="hover:bg-slate-50/50">
@@ -1914,9 +2178,9 @@ export default function ClassManagerView() {
                         <td className="py-2.5 uppercase text-slate-950">{s.name}</td>
                         <td className="py-2.5 text-center font-mono">{s.lrn}</td>
                         <td className="py-2.5 text-center">{s.sex[0]}</td>
-                        <td className="py-2.5 text-center font-mono">{g.weightedWW}%</td>
-                        <td className="py-2.5 text-center font-mono">{g.weightedPT}%</td>
-                        <td className="py-2.5 text-center font-mono">{g.weightedQA}%</td>
+                        <td className="py-2.5 text-center font-mono">{g.weightedWOW}%</td>
+                        <td className="py-2.5 text-center font-mono">{g.weightedPPT}%</td>
+                        <td className="py-2.5 text-center font-mono">{g.weightedQSTE}%</td>
                         <td className="py-2.5 text-center font-mono text-slate-500">{g.initialGrade}%</td>
                         <td className="py-2.5 text-center font-mono text-indigo-700 text-xs font-black">{g.finalGrade}</td>
                         <td className="py-2.5 text-center">
@@ -2075,59 +2339,68 @@ export default function ClassManagerView() {
                   Select Grading Component Category
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleModalCategoryChange('WW')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      modalAssCategory === 'WW'
-                        ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-500 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/30'
-                        : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
-                    }`}
-                  >
-                    <div className="text-[11px] font-black flex items-center justify-between">
-                      <span>Written Work</span>
-                      <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">WW</span>
-                    </div>
-                    <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                      Quizzes & Exams ({Math.round(activeProject.subject === 'Science' || activeProject.subject === 'Math' ? 40 : activeProject.subject === 'MAPEH' || activeProject.subject === 'TLE' ? 20 : 30)}%)
-                    </div>
-                  </button>
+                    {(() => {
+                      const activeWeights = getSubjectWeights(
+                        activeProject.subject,
+                        globalSettings.subjects,
+                        activeProject.workspace,
+                        activeProject.assessmentProfileId
+                      );
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleModalCategoryChange('WOW')}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${modalAssCategory === 'WOW'
+                              ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-500 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/30'
+                              : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
+                              }`}
+                          >
+                            <div className="text-[11px] font-black flex items-center justify-between">
+                              <span>Written Work</span>
+                              <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">WW</span>
+                            </div>
+                            <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
+                              Quizzes & Exams ({Math.round(activeWeights.wow * 100)}%)
+                            </div>
+                          </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleModalCategoryChange('PT')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      modalAssCategory === 'PT'
-                        ? 'bg-teal-50/80 dark:bg-teal-950/50 border-teal-500 text-teal-900 dark:text-teal-100 ring-2 ring-teal-500/30'
-                        : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
-                    }`}
-                  >
-                    <div className="text-[11px] font-black flex items-center justify-between">
-                      <span>Performance Task</span>
-                      <span className="text-[9px] font-mono font-extrabold bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 px-1.5 py-0.5 rounded">PT</span>
-                    </div>
-                    <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                      Projects & Hands-on ({Math.round(activeProject.subject === 'Science' || activeProject.subject === 'Math' ? 40 : activeProject.subject === 'MAPEH' || activeProject.subject === 'TLE' ? 60 : 50)}%)
-                    </div>
-                  </button>
+                          <button
+                            type="button"
+                            onClick={() => handleModalCategoryChange('PPT')}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${modalAssCategory === 'PPT'
+                              ? 'bg-teal-50/80 dark:bg-teal-950/50 border-teal-500 text-teal-900 dark:text-teal-100 ring-2 ring-teal-500/30'
+                              : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
+                              }`}
+                          >
+                            <div className="text-[11px] font-black flex items-center justify-between">
+                              <span>Performance Task</span>
+                              <span className="text-[9px] font-mono font-extrabold bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 px-1.5 py-0.5 rounded">PT</span>
+                            </div>
+                            <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
+                              Projects & Hands-on ({Math.round(activeWeights.ppt * 100)}%)
+                            </div>
+                          </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleModalCategoryChange('QE')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      modalAssCategory === 'QE'
-                        ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-500 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/30'
-                        : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
-                    }`}
-                  >
-                    <div className="text-[11px] font-black flex items-center justify-between">
-                      <span>Quarterly Exam</span>
-                      <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">QE</span>
-                    </div>
-                    <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                      Periodic Quarterly Exam
-                    </div>
-                  </button>
+                          <button
+                            type="button"
+                            onClick={() => handleModalCategoryChange('QSTE')}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${modalAssCategory === 'QSTE'
+                              ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-500 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/30'
+                              : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
+                              }`}
+                          >
+                            <div className="text-[11px] font-black flex items-center justify-between">
+                              <span>Quarterly Exam</span>
+                              <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">QE</span>
+                            </div>
+                            <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
+                              Periodic Exam ({Math.round(activeWeights.qste * 100)}%)
+                            </div>
+                          </button>
+                        </>
+                      );
+                    })()}
                 </div>
               </div>
 
@@ -2137,7 +2410,7 @@ export default function ClassManagerView() {
                   Quick Naming Presets
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {modalAssCategory === 'WW' && [
+                  {modalAssCategory === 'WOW' && [
                     "WW: Short Quiz",
                     "WW: Long Quiz",
                     "WW: Unit Test",
@@ -2154,7 +2427,7 @@ export default function ClassManagerView() {
                     </button>
                   ))}
 
-                  {modalAssCategory === 'PT' && [
+                  {modalAssCategory === 'PPT' && [
                     "PT: Group Project",
                     "PT: Laboratory Activity",
                     "PT: Oral Presentation",
@@ -2171,7 +2444,7 @@ export default function ClassManagerView() {
                     </button>
                   ))}
 
-                  {modalAssCategory === 'QE' && [
+                  {modalAssCategory === 'QSTE' && [
                     "1st Quarterly Exam",
                     "2nd Quarterly Exam",
                     "3rd Quarterly Exam",
@@ -2217,11 +2490,10 @@ export default function ClassManagerView() {
                         key={pts}
                         type="button"
                         onClick={() => setModalAssPerfectScore(pts)}
-                        className={`text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
-                          modalAssPerfectScore === pts
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-                        }`}
+                        className={`text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded cursor-pointer transition-colors ${modalAssPerfectScore === pts
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                          }`}
                       >
                         {pts} pts
                       </button>
@@ -2303,7 +2575,7 @@ export default function ClassManagerView() {
                 <HelpCircle className="h-6 w-6 text-indigo-500" />
               )}
             </div>
-            
+
             <div className="space-y-1.5">
               <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest">{customAlert.title}</h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-relaxed whitespace-pre-line">{customAlert.message}</p>
@@ -2329,7 +2601,7 @@ export default function ClassManagerView() {
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-850">
               <AlertCircle className="h-6 w-6 text-indigo-500 animate-pulse" />
             </div>
-            
+
             <div className="space-y-1.5">
               <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest">{customConfirm.title}</h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">{customConfirm.message}</p>
@@ -2357,6 +2629,139 @@ export default function ClassManagerView() {
           </div>
         </div>
       )}
+
+      {isExcelExportOpen && activeProject && (
+        <TeacherExcelExportModal
+          project={activeProject}
+          onClose={() => setIsExcelExportOpen(false)}
+        />
+      )}
+
+      {/* ─── Component Reassessment Settings Modal ─── */}
+      {showReassessmentSettingsModal && activeProject && (() => {
+        const current = activeProject.reassessmentSettings ?? { enabled: false, masteryThreshold: 75, interventionThreshold: 50, policy: 'Average' as const };
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md space-y-5 p-6 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-amber-500" />
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">Component Reassessment Settings</h3>
+                </div>
+                <button onClick={() => setShowReassessmentSettingsModal(false)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"><X className="h-4 w-4" /></button>
+              </div>
+
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Configure mastery-based component reassessment for this grading project. Original scores are never overwritten. Effective scores are computed dynamically.
+              </p>
+
+              <div className="space-y-4">
+                {/* Enable / Disable */}
+                <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div>
+                    <div className="text-xs font-black text-slate-800 dark:text-slate-200">Enable Component Reassessment</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Unlocks reassessment for individual assessments in this project</div>
+                  </div>
+                  <button
+                    onClick={() => updateReassessmentSettingsInActive({ ...current, enabled: !current.enabled })}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${current.enabled ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform ${current.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                {current.enabled && (
+                  <>
+                    {/* Mastery Threshold */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400">
+                        Mastery Threshold: <strong className="text-amber-600">{current.masteryThreshold}%</strong>
+                      </label>
+                      <input
+                        type="range" min={50} max={100} step={5}
+                        value={current.masteryThreshold}
+                        onChange={e => updateReassessmentSettingsInActive({ ...current, masteryThreshold: +e.target.value })}
+                        className="w-full accent-amber-500"
+                      />
+                      <div className="text-[9px] text-slate-400">Students scoring below this threshold are eligible for reassessment.</div>
+                    </div>
+
+                    {/* Intervention Threshold */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400">
+                        Class Intervention Threshold: <strong className="text-rose-600">{current.interventionThreshold}%</strong>
+                      </label>
+                      <input
+                        type="range" min={20} max={100} step={5}
+                        value={current.interventionThreshold}
+                        onChange={e => updateReassessmentSettingsInActive({ ...current, interventionThreshold: +e.target.value })}
+                        className="w-full accent-rose-500"
+                      />
+                      <div className="text-[9px] text-slate-400">When this % of students fail mastery, a reteaching recommendation is shown.</div>
+                    </div>
+
+                    {/* Computation Policy */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400">Effective Score Policy</label>
+                      <div className="flex flex-col gap-1.5">
+                        {(['Average', 'Highest', 'Replacement'] as const).map(p => (
+                          <button
+                            key={p}
+                            onClick={() => updateReassessmentSettingsInActive({ ...current, policy: p })}
+                            className={`w-full text-left px-3 py-2 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${current.policy === p
+                              ? 'bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-amber-300'
+                              }`}
+                          >
+                            <span className="font-black">{p}</span>
+                            <span className="text-[10px] ml-2 opacity-70">
+                              {p === 'Average' ? '(Original + Reassessment) ÷ 2' : p === 'Highest' ? 'max(Original, Reassessment)' : 'Replace with Reassessment score'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Remove All Reassessment Data */}
+                    <button
+                      onClick={() => {
+                        showCustomConfirm(
+                          'This will permanently remove all reassessment scores for this quarter. Original scores are unaffected. Continue?',
+                          () => {
+                            const qData = activeProject.quarters[activeQuarterId];
+                            if (!qData) return;
+                            saveProject({
+                              ...activeProject,
+                              quarters: {
+                                ...activeProject.quarters,
+                                [activeQuarterId]: { ...qData, reassessmentScores: {} }
+                              }
+                            });
+                            setShowReassessmentSettingsModal(false);
+                          },
+                          'Remove All Reassessment Data'
+                        );
+                      }}
+                      className="w-full py-2 px-4 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/30 text-[10px] font-black rounded-xl cursor-pointer transition-all"
+                    >
+                      Remove All Reassessment Data for This Quarter
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowReassessmentSettingsModal(false)}
+                  className="px-5 py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-black rounded-xl cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

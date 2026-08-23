@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { SubjectType } from '../types';
+import { SubjectType, ArchiveFile, ArchiveValidationResult, ARCHIVE_VERSION } from '../types';
 import { 
   Building2, 
   RotateCcw, 
@@ -14,7 +14,9 @@ import {
   Download,
   CheckCircle,
   FileUp,
-  Languages
+  Languages,
+  Archive,
+  X
 } from 'lucide-react';
 
 export default function SettingsView() {
@@ -24,6 +26,8 @@ export default function SettingsView() {
     resetDatabase,
     backupData,
     restoreData,
+    restoreArchive,
+    rolloverAcademicYear,
     authUsername,
     authPassword,
     updateCredentials
@@ -35,10 +39,26 @@ export default function SettingsView() {
   const [theme, setTheme] = useState(globalSettings.theme);
   const [language, setLanguage] = useState(globalSettings.language);
   const [depedPolicy, setDepedPolicy] = useState(globalSettings.depedPolicy);
+  const [calendarType, setCalendarType] = useState(globalSettings.calendarType || 'Quarter');
   const [subjects, setSubjects] = useState(globalSettings.subjects);
+  const [depedLogoBase64, setDepedLogoBase64] = useState<string | undefined>(globalSettings.depedLogoBase64);
+  const [schoolLogoBase64, setSchoolLogoBase64] = useState<string | undefined>(globalSettings.schoolLogoBase64);
 
   const [saved, setSaved] = useState(false);
   const [restored, setRestored] = useState<boolean | null>(null);
+
+  // Rollover States
+  const [showRolloverModal, setShowRolloverModal] = useState(false);
+  const [rolloverYear, setRolloverYear] = useState('');
+  const [rolloverCalendar, setRolloverCalendar] = useState<'Quarter' | 'Trimester'>('Quarter');
+  const [rolloverError, setRolloverError] = useState<string | null>(null);
+  const [backupDownloaded, setBackupDownloaded] = useState(false);
+
+  // Archive Restore States
+  const [pendingArchive, setPendingArchive] = useState<ArchiveFile | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [restoreSuccess, setRestoreSuccess] = useState(false);
 
   // New states for custom credentials
   const [newUsername, setNewUsername] = useState(authUsername);
@@ -46,21 +66,35 @@ export default function SettingsView() {
   const [confirmPassword, setConfirmPassword] = useState(authPassword);
   const [credMessage, setCredMessage] = useState<string | null>(null);
 
-  const handleWeightChange = (subj: SubjectType, component: 'ww' | 'pt' | 'qa', value: string) => {
-    const rawVal = parseInt(value) || 0;
-    const numVal = Math.max(0, Math.min(100, rawVal)) / 100;
-    setSubjects(prev => ({
-      ...prev,
-      [subj]: {
-        ...prev[subj],
-        [component]: numVal
-      }
-    }));
+  const getSubjectWeightObj = (subj: SubjectType) => {
+    const w = subjects?.[subj];
+    if (!w) return { wow: 0.3, ppt: 0.5, qste: 0.2 };
+    return {
+      wow: typeof w.wow === 'number' ? w.wow : ((w as any).ww ?? 0.3),
+      ppt: typeof w.ppt === 'number' ? w.ppt : ((w as any).pt ?? 0.5),
+      qste: typeof w.qste === 'number' ? w.qste : ((w as any).qa ?? 0.2)
+    };
+  };
+
+  const handleWeightChange = (subj: SubjectType, component: 'wow' | 'ppt' | 'qste', value: string) => {
+    const rawVal = parseInt(value);
+    const safeRaw = isNaN(rawVal) ? 0 : Math.max(0, Math.min(100, rawVal));
+    const numVal = safeRaw / 100;
+    setSubjects(prev => {
+      const cur = getSubjectWeightObj(subj);
+      return {
+        ...prev,
+        [subj]: {
+          ...cur,
+          [component]: numVal
+        }
+      };
+    });
   };
 
   const getSubjectSum = (subj: SubjectType) => {
-    const w = subjects[subj];
-    return Math.round((w.ww + w.pt + w.qa) * 100);
+    const w = getSubjectWeightObj(subj);
+    return Math.round((w.wow + w.ppt + w.qste) * 100);
   };
 
   const isAllWeightsValid = Object.keys(subjects).every(
@@ -70,7 +104,7 @@ export default function SettingsView() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAllWeightsValid) {
-      alert("Validation Error: Please make sure that Written Works, Performance Tasks, and Quarterly Exams weights sum to exactly 100% for each of the 8 subjects.");
+      alert("Validation Error: Please make sure that Written/ Oral Works, Performance/ Product tasks, and Quarterly/ Summative/ Term Exams weights sum to exactly 100% for each of the 8 subjects.");
       return;
     }
 
@@ -81,7 +115,10 @@ export default function SettingsView() {
       theme,
       language,
       depedPolicy,
-      subjects
+      calendarType,
+      subjects,
+      depedLogoBase64,
+      schoolLogoBase64
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -98,9 +135,85 @@ export default function SettingsView() {
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
+    setBackupDownloaded(true);
   };
 
-  // Phase 9: Restore database from JSON
+  // ─── Archive Validation ────────────────────────────────────────────────────
+  const validateArchive = (text: string): ArchiveValidationResult => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return { valid: false, archive: null, error: 'Invalid JSON: The file could not be parsed. Please make sure it is a valid archive file.' };
+    }
+
+    const obj = parsed as Record<string, unknown>;
+
+    if (!obj.metadata) {
+      return { valid: false, archive: null, error: 'Missing metadata block. This does not appear to be a versioned SRPHS archive. It may be an older backup format.' };
+    }
+
+    const meta = obj.metadata as Record<string, unknown>;
+    const required = ['archiveVersion', 'schoolYear', 'calendarType', 'createdAt', 'createdBy'];
+    for (const field of required) {
+      if (!meta[field]) {
+        return { valid: false, archive: null, error: `Missing required metadata field: "${field}". The archive may be corrupted.` };
+      }
+    }
+
+    if (meta.archiveVersion !== ARCHIVE_VERSION) {
+      return {
+        valid: false, archive: null,
+        error: `Unsupported archive version: "${meta.archiveVersion}". This application supports version "${ARCHIVE_VERSION}" archives only.`
+      };
+    }
+
+    if (!Array.isArray(obj.projects)) {
+      return { valid: false, archive: null, error: 'Archive is missing the "projects" array. The file may be incomplete or corrupted.' };
+    }
+
+    return { valid: true, archive: obj as unknown as ArchiveFile, error: null };
+  };
+
+  // ─── Archive Upload Handler ───────────────────────────────────────────────
+  const handleArchiveUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset input so re-selecting the same file still fires onChange
+    e.target.value = '';
+    if (!file) return;
+
+    setArchiveError(null);
+    setPendingArchive(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const result = validateArchive(text);
+      if (!result.valid) {
+        setArchiveError(result.error);
+        return;
+      }
+      setPendingArchive(result.archive);
+      setShowRestoreModal(true);
+    };
+    reader.readAsText(file);
+  };
+
+  // ─── Confirm Restore ─────────────────────────────────────────────────────
+  const handleConfirmRestore = () => {
+    if (!pendingArchive) return;
+    const success = restoreArchive(pendingArchive);
+    if (success) {
+      setRestoreSuccess(true);
+      setShowRestoreModal(false);
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      setArchiveError('Restore failed unexpectedly. Please try again.');
+      setShowRestoreModal(false);
+    }
+  };
+
+  // Phase 9: Restore database from JSON (legacy — kept for old backup files)
   const handleRestoreUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -110,12 +223,9 @@ export default function SettingsView() {
         const success = restoreData(text);
         setRestored(success);
         if (success) {
-          // reload form states
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
+          setTimeout(() => { window.location.reload(); }, 1500);
         } else {
-          alert("Failed to restore backup. Invalid JSON file format.");
+          alert('Failed to restore backup. Invalid JSON file format.');
         }
       };
       reader.readAsText(file);
@@ -236,7 +346,89 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     <option value="2027">MATATAG Adjusted Transmutation (SY 2027-2028 onwards)</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">Academic Calendar Mode (JHS Only)</label>
+                  <select
+                    value={calendarType}
+                    onChange={(e) => setCalendarType(e.target.value as 'Quarter' | 'Trimester')}
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                  >
+                    <option value="Quarter">Quarter Calendar (4 Terms)</option>
+                    <option value="Trimester">Trimester Calendar (3 Terms)</option>
+                  </select>
+                </div>
               </div>
+
+              {/* Logo Uploads */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400 block mb-2">
+                    Default School Logo
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex items-center justify-center overflow-hidden shrink-0">
+                      {schoolLogoBase64 ? (
+                        <img src={schoolLogoBase64} alt="School Logo" className="h-full w-full object-contain p-1" />
+                      ) : (
+                        <Building2 className="h-6 w-6 text-slate-300 dark:text-slate-600" />
+                      )}
+                    </div>
+                    <label className="flex-1">
+                      <div className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg transition-colors cursor-pointer border border-slate-200 dark:border-slate-700">
+                        <Upload className="h-3.5 w-3.5" /> Upload PNG
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (evt) => setSchoolLogoBase64(evt.target?.result as string);
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400 block mb-2">
+                    Default DepEd Logo
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex items-center justify-center overflow-hidden shrink-0">
+                      {depedLogoBase64 ? (
+                        <img src={depedLogoBase64} alt="DepEd Logo" className="h-full w-full object-contain p-1" />
+                      ) : (
+                        <Building2 className="h-6 w-6 text-slate-300 dark:text-slate-600" />
+                      )}
+                    </div>
+                    <label className="flex-1">
+                      <div className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg transition-colors cursor-pointer border border-slate-200 dark:border-slate-700">
+                        <Upload className="h-3.5 w-3.5" /> Upload PNG
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (evt) => setDepedLogoBase64(evt.target?.result as string);
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
             {/* Assessment Weights Configuration */}
@@ -263,14 +455,15 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-850 text-[9px] font-mono text-slate-450 uppercase tracking-widest font-bold">
                       <th className="py-2.5">Subject</th>
-                      <th className="py-2.5 text-center w-24">WW (%)</th>
-                      <th className="py-2.5 text-center w-24">PT (%)</th>
-                      <th className="py-2.5 text-center w-24">QE (%)</th>
+                      <th className="py-2.5 text-center w-24">WOW (%)</th>
+                      <th className="py-2.5 text-center w-24">PPT (%)</th>
+                      <th className="py-2.5 text-center w-24">QSTE (%)</th>
                       <th className="py-2.5 text-center w-28">Validation Sum</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
                     {(Object.keys(subjects) as SubjectType[]).map((subj) => {
+                      const wObj = getSubjectWeightObj(subj);
                       const sum = getSubjectSum(subj);
                       const isValid = sum === 100;
                       return (
@@ -283,8 +476,8 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                               type="number"
                               min={0}
                               max={100}
-                              value={Math.round(subjects[subj].ww * 100)}
-                              onChange={(e) => handleWeightChange(subj, 'ww', e.target.value)}
+                              value={isNaN(wObj.wow) ? '' : Math.round(wObj.wow * 100)}
+                              onChange={(e) => handleWeightChange(subj, 'wow', e.target.value)}
                               className="w-16 text-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-lg py-1 px-1.5 font-mono text-xs font-bold focus:outline-hidden"
                             />
                           </td>
@@ -293,8 +486,8 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                               type="number"
                               min={0}
                               max={100}
-                              value={Math.round(subjects[subj].pt * 100)}
-                              onChange={(e) => handleWeightChange(subj, 'pt', e.target.value)}
+                              value={isNaN(wObj.ppt) ? '' : Math.round(wObj.ppt * 100)}
+                              onChange={(e) => handleWeightChange(subj, 'ppt', e.target.value)}
                               className="w-16 text-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-lg py-1 px-1.5 font-mono text-xs font-bold focus:outline-hidden"
                             />
                           </td>
@@ -303,8 +496,8 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                               type="number"
                               min={0}
                               max={100}
-                              value={Math.round(subjects[subj].qa * 100)}
-                              onChange={(e) => handleWeightChange(subj, 'qa', e.target.value)}
+                              value={isNaN(wObj.qste) ? '' : Math.round(wObj.qste * 100)}
+                              onChange={(e) => handleWeightChange(subj, 'qste', e.target.value)}
                               className="w-16 text-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-lg py-1 px-1.5 font-mono text-xs font-bold focus:outline-hidden"
                             />
                           </td>
@@ -447,21 +640,51 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                 <Download className="h-4 w-4" /> Export Backup File
               </button>
 
-              <div className="border-t border-slate-100 dark:border-slate-850 pt-4 space-y-2">
+              {/* Archive Restore Section */}
+              <div className="border-t border-slate-100 dark:border-slate-850 pt-4 space-y-3">
                 <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold">
-                  Restore from a previous backup file:
+                  Restore a previous academic year from an archive file:
                 </p>
-                <label className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-black rounded-xl transition-colors cursor-pointer border border-dashed border-emerald-200 dark:border-emerald-900/60">
-                  <FileUp className="h-4 w-4" />
-                  <span>Upload JSON Backup</span>
-                  <input type="file" accept=".json" onChange={handleRestoreUpload} className="hidden" />
-                </label>
-                {restored && (
-                  <div className="text-[10px] text-emerald-600 font-mono font-bold text-center mt-1">
-                    ✓ Restore successful! Reloading portal...
+
+                {archiveError && (
+                  <div className="flex items-start gap-2 p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-xl">
+                    <AlertTriangle className="h-4 w-4 text-rose-500 mt-0.5 shrink-0" />
+                    <p className="text-[11px] text-rose-700 dark:text-rose-400 font-bold leading-normal">{archiveError}</p>
                   </div>
                 )}
+
+                {restoreSuccess && (
+                  <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl">
+                    <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">Restore successful! Reloading portal...</p>
+                  </div>
+                )}
+
+                <label className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-black rounded-xl transition-colors cursor-pointer border border-dashed border-emerald-200 dark:border-emerald-900/60">
+                  <FileUp className="h-4 w-4" />
+                  <span>Select Archive File (.json)</span>
+                  <input type="file" accept=".json" onChange={handleArchiveUpload} className="hidden" />
+                </label>
               </div>
+            </div>
+
+            {/* Academic Year Rollover Card */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
+              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Archive className="h-5 w-5 text-indigo-500" />
+                Academic Year Rollover
+              </h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
+                Officially close the current academic year. Generates an archive, then resets all active data to prepare for the new year.
+              </p>
+              
+              <button
+                type="button"
+                onClick={() => setShowRolloverModal(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 text-xs font-black rounded-xl transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-900/50"
+              >
+                Initiate Year Rollover
+              </button>
             </div>
 
             {/* Database Purge/Reset Card */}
@@ -510,6 +733,188 @@ CREATE TABLE IF NOT EXISTS grading_projects (
           </div>
         </div>
       </form>
+
+      {/* Rollover Modal */}
+      {showRolloverModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+              <h3 className="font-black text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <Archive className="h-4 w-4 text-indigo-500" />
+                Academic Year Rollover
+              </h3>
+              <button onClick={() => {
+                setShowRolloverModal(false);
+                setBackupDownloaded(false);
+              }} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              {rolloverError && (
+                <div className="p-3 bg-rose-50 text-rose-700 text-xs font-bold rounded-xl border border-rose-100">
+                  {rolloverError}
+                </div>
+              )}
+              
+              <div className="space-y-4">
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-800 dark:text-indigo-300 text-xs font-semibold rounded-xl border border-indigo-100 dark:border-indigo-900/30">
+                  Step 1: Download backup archive of current academic year before proceeding.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleBackupDownload}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-black rounded-lg transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
+                >
+                  <Download className="h-4 w-4" /> Download Backup Archive
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                  New Academic Year (e.g. 2026-2027)
+                </label>
+                <input
+                  type="text"
+                  placeholder="YYYY-YYYY"
+                  value={rolloverYear}
+                  onChange={(e) => {
+                    setRolloverYear(e.target.value);
+                    setRolloverError(null);
+                  }}
+                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-bold focus:outline-hidden"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                  Calendar Type
+                </label>
+                <select
+                  value={rolloverCalendar}
+                  onChange={(e) => setRolloverCalendar(e.target.value as 'Quarter' | 'Trimester')}
+                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-bold focus:outline-hidden"
+                >
+                  <option value="Quarter">Quarter</option>
+                  <option value="Trimester">Trimester</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRolloverModal(false);
+                  setBackupDownloaded(false);
+                }}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!backupDownloaded}
+                onClick={() => {
+                  if (!backupDownloaded) return;
+                  if (!/^\d{4}-\d{4}$/.test(rolloverYear)) {
+                    setRolloverError('Invalid format. Please use YYYY-YYYY format (e.g. 2026-2027).');
+                    return;
+                  }
+                  if (confirm('Are you sure you want to execute rollover? All current data will be wiped.')) {
+                    const success = rolloverAcademicYear(rolloverYear, rolloverCalendar);
+                    if (success) {
+                      window.location.reload();
+                    } else {
+                      setRolloverError('Rollover failed. Please try again.');
+                    }
+                  }
+                }}
+                className={`px-4 py-2 text-xs font-black rounded-lg transition-colors shadow-sm ${backupDownloaded ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer' : 'bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-600 cursor-not-allowed'}`}
+              >
+                Confirm and Rollover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Archive Restore Preview Modal */}
+      {showRestoreModal && pendingArchive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+              <h3 className="font-black text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <Archive className="h-4 w-4 text-emerald-500" />
+                Restore Archive — Preview
+              </h3>
+              <button
+                onClick={() => { setShowRestoreModal(false); setPendingArchive(null); }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Preview Table */}
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
+                The following academic year archive will be restored. Review the details carefully before confirming.
+              </p>
+
+              <div className="bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                <table className="w-full text-xs">
+                  <tbody>
+                    {[
+                      { label: 'Academic Year', value: pendingArchive.metadata.schoolYear },
+                      { label: 'Calendar Type', value: pendingArchive.metadata.calendarType },
+                      { label: 'Created By', value: pendingArchive.metadata.createdBy },
+                      { label: 'Export Date', value: new Date(pendingArchive.metadata.createdAt).toLocaleString() },
+                      { label: 'Archive Version', value: `v${pendingArchive.metadata.archiveVersion}` },
+                      { label: 'Projects', value: String(pendingArchive.metadata.totalProjects) },
+                      { label: 'Students (total)', value: String(pendingArchive.metadata.totalStudents) },
+                      { label: 'Adviser Classes', value: String(pendingArchive.metadata.totalAdviserClasses) },
+                    ].map(({ label, value }, i) => (
+                      <tr key={label} className={i % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-950'}>
+                        <td className="py-2 px-4 font-bold text-slate-500 dark:text-slate-400 w-40">{label}</td>
+                        <td className="py-2 px-4 font-black text-slate-800 dark:text-slate-200 font-mono">{value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Danger Warning */}
+              <div className="flex items-start gap-2.5 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl">
+                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-bold leading-normal">
+                  <span className="uppercase tracking-wide">Warning:</span> This will permanently replace all current academic year data — projects, students, assessments, scores, adviser classes, and settings. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => { setShowRestoreModal(false); setPendingArchive(null); }}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                className="px-4 py-2 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm cursor-pointer"
+              >
+                Restore Archive
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

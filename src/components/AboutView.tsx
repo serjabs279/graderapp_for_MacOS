@@ -1,13 +1,13 @@
 import React from 'react';
-import { 
-  GraduationCap, 
-  HelpCircle, 
-  ShieldCheck, 
-  Settings, 
-  Cpu, 
-  Database, 
-  FileText, 
-  Key, 
+import {
+  GraduationCap,
+  HelpCircle,
+  ShieldCheck,
+  Settings,
+  Cpu,
+  Database,
+  FileText,
+  Key,
   Flame,
   CheckCircle2,
   HardDrive
@@ -69,12 +69,12 @@ export default function AboutView() {
                   Go to the Project Hub and enter the Class parameters (Grade level, Section, Subject, School Year, Quarter, and Teacher name). Click "Create Project" or open a recently created project.
                 </p>
               </div>
-              
+
               <div className="relative">
                 <span className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-indigo-600 border-4 border-white dark:border-slate-900 flex items-center justify-center text-[10px] text-white font-bold" />
                 <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">2. Build the Assessment Matrix</h4>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium">
-                  Inside the workspace, define assessments for **Written Works (WW)**, **Performance Tasks (PT)**, and the **Quarterly Exam (QE)**. Custom maximum raw scores ensure proper weighted grade computation.
+                  Inside the workspace, define assessments for **Written/Oral Works (WOW)**, **Performance/ Product tasks (PT)**, and the **Quarterly/Term Exams (QE)**. Custom maximum raw scores ensure proper weighted grade computation.
                 </p>
               </div>
 
@@ -126,53 +126,54 @@ export default function AboutView() {
         {/* Right Column: Tech Specs & Desktop info */}
         <div className="space-y-6">
           {/* Tech Stack Specs */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-2xl p-6 md:p-8 shadow-xs space-y-4">
-            <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <Cpu className="h-5 w-5 text-indigo-600" />
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-2xl p-6 md:p-8 shadow-xs">
+            <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+              <Cpu className="h-5 w-5 text-emerald-600" />
               Technology Stack
             </h3>
 
-            <div className="space-y-3 pt-1">
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-850 pb-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Desktop Shell</span>
-                <span className="text-xs font-sans font-bold text-slate-400 dark:text-slate-500">Electron v31.2.0</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-850 pb-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Frontend Engine</span>
-                <span className="text-xs font-sans font-bold text-slate-400 dark:text-slate-500">React v18 + Vite</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-850 pb-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Local Database</span>
-                <span className="text-xs font-sans font-bold text-slate-400 dark:text-slate-500">SQLite3 (node-sqlite3)</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-850 pb-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Database ORM</span>
-                <span className="text-xs font-sans font-bold text-slate-400 dark:text-slate-500">Drizzle ORM</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-850 pb-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">State Management</span>
-                <span className="text-xs font-sans font-bold text-slate-400 dark:text-slate-500">Zustand</span>
-              </div>
-              <div className="flex justify-between items-center pb-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">PDF Generator</span>
-                <span className="text-xs font-sans font-bold text-slate-400 dark:text-slate-500">pdf-lib v1.17.1 (Vector Data Engine)</span>
-              </div>
-            </div>
-          </div>
+            <div className="grid grid-cols-[140px_1fr] gap-y-5 gap-x-6 text-xs">
 
-          {/* Database Architecture Block */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-2xl p-6 md:p-8 shadow-xs space-y-4">
-            <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <Database className="h-5 w-5 text-indigo-600" />
-              Desktop Storage Model
-            </h3>
-            <p className="text-xs text-slate-450 dark:text-slate-400 leading-relaxed font-semibold">
-              When distributed as a `.dmg` or `.exe` app, the system embeds SQLite to maintain database integrity locally.
-            </p>
-            <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-150/70 dark:border-slate-850 flex items-start gap-3">
-              <HardDrive className="h-5 w-5 text-indigo-600 shrink-0 mt-0.5" />
-              <div className="text-[11px] text-slate-550 dark:text-slate-400 leading-relaxed font-bold">
-                <span className="font-extrabold text-slate-850 dark:text-slate-200">LOCAL-FIRST INTEGRITY:</span> All grading data remains on your physical desktop storage. No internet, no latency, no cloud leakage.
+              <div className="font-bold text-slate-800 dark:text-slate-200">
+                Desktop Shell
+              </div>
+              <div className="text-slate-400 dark:text-slate-500 font-semibold">
+                Tauri 2.11.5
+              </div>
+
+              <div className="font-bold text-slate-800 dark:text-slate-200">
+                Frontend Engine
+              </div>
+              <div className="text-slate-400 dark:text-slate-500 font-semibold">
+                React v18 + Vite
+              </div>
+
+              <div className="font-bold text-slate-800 dark:text-slate-200">
+                Local Database
+              </div>
+              <div className="text-slate-400 dark:text-slate-500 font-semibold">
+                SQLite3 (node-sqlite3)
+              </div>
+
+              <div className="font-bold text-slate-800 dark:text-slate-200">
+                Database ORM
+              </div>
+              <div className="text-slate-400 dark:text-slate-500 font-semibold">
+                Drizzle ORM
+              </div>
+
+              <div className="font-bold text-slate-800 dark:text-slate-200">
+                State Management
+              </div>
+              <div className="text-slate-400 dark:text-slate-500 font-semibold">
+                Zustand
+              </div>
+
+              <div className="font-bold text-slate-800 dark:text-slate-200">
+                PDF Generator
+              </div>
+              <div className="text-slate-400 dark:text-slate-500 font-semibold">
+                pdf-lib v1.17.1 (Vector Data Engine)
               </div>
             </div>
           </div>
@@ -180,4 +181,4 @@ export default function AboutView() {
       </div>
     </div>
   );
-}
+} 

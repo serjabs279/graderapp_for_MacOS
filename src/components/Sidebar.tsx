@@ -1,15 +1,15 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  LayoutDashboard, 
-  Flame, 
-  Settings, 
-  Info, 
-  Sun, 
-  Moon, 
-  FolderOpen, 
-  GraduationCap, 
-  Layers, 
+import {
+  LayoutDashboard,
+  Flame,
+  Settings,
+  Info,
+  Sun,
+  Moon,
+  FolderOpen,
+  GraduationCap,
+  Layers,
   Library,
   ChevronLeft,
   ChevronRight,
@@ -17,10 +17,10 @@ import {
 } from 'lucide-react';
 
 export default function Sidebar() {
-  const { 
-    activeRoute, 
-    setActiveRoute, 
-    darkMode, 
+  const {
+    activeRoute,
+    setActiveRoute,
+    darkMode,
     toggleDarkMode,
     globalSettings,
     projects,
@@ -35,18 +35,18 @@ export default function Sidebar() {
   const activeProject = projects.find(p => p.id === activeProjectId);
 
   const menuItems = [
-    { id: 'dashboard', label: 'Project Hub', icon: LayoutDashboard },
+    { id: 'dashboard', label: 'GradeBook Hub', icon: LayoutDashboard },
     { id: 'class-manager', label: 'Gradebook Workspace', icon: Flame },
+    { id: 'adviser', label: 'Adviser Portal', icon: GraduationCap },
     { id: 'settings', label: 'System Settings', icon: Settings },
     { id: 'about', label: 'System Manual', icon: Info }
   ] as const;
 
   return (
-    <aside 
-      id="app-sidebar" 
-      className={`${
-        sidebarCollapsed ? 'w-20' : 'w-64'
-      } bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex flex-col border-r border-slate-200 dark:border-slate-850 shrink-0 h-screen sticky top-0 transition-all duration-300 ease-in-out overflow-visible print:hidden no-print`}
+    <aside
+      id="app-sidebar"
+      className={`${sidebarCollapsed ? 'w-20' : 'w-64'
+        } bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex flex-col border-r border-slate-200 dark:border-slate-850 shrink-0 h-screen sticky top-0 transition-all duration-300 ease-in-out overflow-visible print:hidden no-print`}
     >
       {/* Brand Header */}
       <div className={`p-4 border-b border-slate-100 dark:border-slate-850 flex flex-col items-center shrink-0 ${sidebarCollapsed ? 'justify-center' : 'p-6'}`}>
@@ -57,12 +57,12 @@ export default function Sidebar() {
             </div>
             {!sidebarCollapsed && (
               <div>
-                <h1 className="font-sans font-black tracking-tight text-xs text-slate-900 dark:text-white leading-tight">SRPHS GRADER</h1>
+                <h1 className="font-sans font-black tracking-tight text-xs text-slate-900 dark:text-white leading-tight">SRPHS GRADE APP</h1>
                 <p className="text-[9px] text-slate-450 font-sans font-bold uppercase tracking-wider">Desktop Offline App</p>
               </div>
             )}
           </div>
-          
+
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
@@ -86,11 +86,11 @@ export default function Sidebar() {
               <Library className="h-3.5 w-3.5 text-slate-400" />
               <span>Curriculum Workspace</span>
             </div>
-            
+
             <div className="space-y-2.5 pl-1.5 relative">
               {/* Vertical connecting line */}
               <div className="absolute left-[11px] top-2 bottom-5 w-0.5 bg-slate-150 dark:bg-slate-800" />
-              
+
               {/* Junior High School Item */}
               <div className="relative flex items-center pl-6">
                 {/* Horizontal branch line */}
@@ -100,11 +100,10 @@ export default function Sidebar() {
                     setWorkspaceMode('JHS');
                     setActiveRoute('dashboard');
                   }}
-                  className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                    workspaceMode === 'JHS'
-                      ? 'bg-emerald-600 text-white font-black shadow-xs'
-                      : 'text-slate-650 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-850/60 hover:text-slate-900 dark:hover:text-slate-100'
-                  }`}
+                  className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 cursor-pointer ${workspaceMode === 'JHS'
+                    ? 'bg-emerald-600 text-white font-black shadow-xs'
+                    : 'text-slate-650 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-850/60 hover:text-slate-900 dark:hover:text-slate-100'
+                    }`}
                 >
                   <GraduationCap className={`h-3.5 w-3.5 ${workspaceMode === 'JHS' ? 'text-white' : 'text-slate-450'}`} />
                   <span>Junior High School</span>
@@ -121,11 +120,10 @@ export default function Sidebar() {
                     setWorkspaceMode('SHS');
                     setActiveRoute('dashboard');
                   }}
-                  className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                    workspaceMode === 'SHS'
-                      ? 'bg-emerald-600 text-white font-black shadow-xs'
-                      : 'text-slate-650 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-850/60 hover:text-slate-900 dark:hover:text-slate-100'
-                  }`}
+                  className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 cursor-pointer ${workspaceMode === 'SHS'
+                    ? 'bg-emerald-600 text-white font-black shadow-xs'
+                    : 'text-slate-650 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-850/60 hover:text-slate-900 dark:hover:text-slate-100'
+                    }`}
                 >
                   <Layers className={`h-3.5 w-3.5 ${workspaceMode === 'SHS' ? 'text-white' : 'text-slate-450'}`} />
                   <span>Senior High School</span>
@@ -142,11 +140,10 @@ export default function Sidebar() {
                   setWorkspaceMode('JHS');
                   setActiveRoute('dashboard');
                 }}
-                className={`p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer border ${
-                  workspaceMode === 'JHS'
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                    : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-slate-150 dark:border-slate-850 hover:bg-slate-100 dark:hover:bg-slate-850'
-                }`}
+                className={`p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer border ${workspaceMode === 'JHS'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-slate-150 dark:border-slate-850 hover:bg-slate-100 dark:hover:bg-slate-850'
+                  }`}
               >
                 <GraduationCap className="h-4.5 w-4.5" />
               </button>
@@ -162,11 +159,10 @@ export default function Sidebar() {
                   setWorkspaceMode('SHS');
                   setActiveRoute('dashboard');
                 }}
-                className={`p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer border ${
-                  workspaceMode === 'SHS'
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                    : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-slate-150 dark:border-slate-850 hover:bg-slate-100 dark:hover:bg-slate-850'
-                }`}
+                className={`p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer border ${workspaceMode === 'SHS'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-slate-150 dark:border-slate-850 hover:bg-slate-100 dark:hover:bg-slate-850'
+                  }`}
               >
                 <Layers className="h-4.5 w-4.5" />
               </button>
@@ -183,26 +179,30 @@ export default function Sidebar() {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeRoute === item.id;
+          const isAdviser = item.id === 'adviser';
+          const activeBg = isAdviser
+            ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40'
+            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40';
+          const activeIconColor = isAdviser ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
           return (
             <div key={item.id} className="relative group w-full flex justify-center">
               <button
                 id={`sidebar-link-${item.id}`}
                 onClick={() => setActiveRoute(item.id)}
-                className={`flex items-center rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  sidebarCollapsed 
-                    ? `p-3 justify-center ${isActive ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-150 dark:border-emerald-900/40' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850/40 hover:text-slate-900 dark:hover:text-slate-100'}`
-                    : `w-full justify-between px-3 py-2.5 ${isActive ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850/40 hover:text-slate-900 dark:hover:text-slate-100'}`
-                }`}
+                className={`flex items-center rounded-xl text-xs font-bold transition-all cursor-pointer ${sidebarCollapsed
+                  ? `p-3 justify-center ${isActive ? activeBg : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850/40 hover:text-slate-900 dark:hover:text-slate-100'}`
+                  : `w-full justify-between px-3 py-2.5 ${isActive ? activeBg : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850/40 hover:text-slate-900 dark:hover:text-slate-100'}`
+                  }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`} />
+                  <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? activeIconColor : 'text-slate-400'}`} />
                   {!sidebarCollapsed && <span>{item.label}</span>}
                 </div>
                 {!sidebarCollapsed && item.id === 'class-manager' && activeProject && (
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" title="Project Loaded" />
                 )}
               </button>
-              
+
               {/* Hover tooltip when collapsed */}
               {sidebarCollapsed && (
                 <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-slate-950 dark:bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 whitespace-nowrap border border-slate-800 dark:border-slate-700 pointer-events-none">
@@ -228,7 +228,7 @@ export default function Sidebar() {
                 {activeProject.subject} - {activeProject.section}
               </div>
               <div className="text-[9px] font-sans text-slate-400 dark:text-slate-500">
-                {activeProject.gradeLevel} | {activeProject.quarter}
+                {activeProject.gradeLevel} | {activeProject.lastActiveQuarter}
               </div>
             </div>
           </div>
@@ -238,9 +238,9 @@ export default function Sidebar() {
               <FolderOpen className="h-4.5 w-4.5" />
             </div>
             <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-slate-950 dark:bg-slate-800 text-white text-[11px] font-bold p-3 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 border border-slate-800 dark:border-slate-700 pointer-events-none space-y-1">
-              <div className="text-[10px] font-black uppercase text-emerald-400">Project Loaded</div>
+              <div className="text-[10px] font-black uppercase text-emerald-400">GradeBook Loaded</div>
               <div className="text-xs font-extrabold">{activeProject.subject} ({activeProject.section})</div>
-              <div className="text-[9px] text-slate-300">{activeProject.gradeLevel} | {activeProject.quarter}</div>
+              <div className="text-[9px] text-slate-300">{activeProject.gradeLevel} | {activeProject.lastActiveQuarter}</div>
             </div>
           </div>
         )
@@ -259,10 +259,10 @@ export default function Sidebar() {
         {!sidebarCollapsed ? (
           <>
             <div className="flex flex-col">
-              <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-sans font-bold">V1.0.0 Stable</span>
-              <span className="text-xs text-slate-700 dark:text-slate-300 font-black">S.Y. {activeProject?.schoolYear || '2026-2027'}</span>
+              <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-sans font-bold">V1.0.2 Stable</span>
+              <span className="text-[8px] text-slate-700 dark:text-slate-300 font-black">richmondjabla|AR-Tech Solutions 2025</span>
             </div>
-            
+
             <div className="flex items-center gap-1">
               <button
                 onClick={toggleDarkMode}
@@ -271,7 +271,7 @@ export default function Sidebar() {
               >
                 {darkMode ? <Sun className="h-4 w-4 text-amber-500" /> : <Moon className="h-4 w-4" />}
               </button>
-              
+
               <button
                 onClick={logout}
                 className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all cursor-pointer"

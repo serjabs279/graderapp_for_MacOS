@@ -6,6 +6,7 @@ import ClassManagerView from './components/ClassManagerView';
 import SettingsView from './components/SettingsView';
 import AboutView from './components/AboutView';
 import LoginView from './components/LoginView';
+import AdviserPortalView from './components/adviser/AdviserPortalView';
 import { X } from 'lucide-react';
 
 function AppContent() {
@@ -17,7 +18,7 @@ function AppContent() {
 
   // If the active route is 'class-manager', we keep rendering the dashboard
   // in the background, so the user sees it through the backdrop of our modal overlay.
-  const backgroundRoute = activeRoute === 'class-manager' ? 'dashboard' : activeRoute;
+  const backgroundRoute = (activeRoute === 'class-manager' || activeRoute === 'adviser') ? 'dashboard' : activeRoute;
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200 print:block print:h-auto print:min-h-0 print:bg-white print:text-black">
@@ -69,6 +70,37 @@ function AppContent() {
               <div className="max-w-7xl mx-auto">
                 <ClassManagerView />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Adviser Portal Modal Overlay */}
+      {activeRoute === 'adviser' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-5 md:p-8 animate-fade-in">
+          <div
+            className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs transition-opacity cursor-pointer"
+            onClick={() => setActiveRoute('dashboard')}
+          />
+          <div className="relative w-full h-full max-h-[96vh] max-w-[98%] xl:max-w-8xl bg-slate-50 dark:bg-slate-950 rounded-3xl border border-amber-200/30 dark:border-amber-900/20 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="bg-white dark:bg-slate-900 px-6 py-4.5 border-b border-amber-100 dark:border-amber-900/30 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-sans font-black px-2.5 py-1 rounded-md border border-amber-200 dark:border-amber-900/30">
+                  ADVISER PORTAL
+                </span>
+                <span className="text-slate-200 dark:text-slate-850">|</span>
+                <span className="text-[10px] text-slate-450 dark:text-slate-550 font-sans font-bold uppercase tracking-wider">
+                  Class Consolidation &amp; Report Management
+                </span>
+              </div>
+              <button
+                onClick={() => setActiveRoute('dashboard')}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-xs font-black rounded-xl transition-all cursor-pointer border border-amber-200/60 dark:border-amber-800/40 shadow-3xs"
+              >
+                <X className="h-4 w-4" /> Close Portal
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <AdviserPortalView />
             </div>
           </div>
         </div>
