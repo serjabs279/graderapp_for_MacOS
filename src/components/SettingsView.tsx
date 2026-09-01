@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { globalToast } from '../context/ToastContext';
 import { SubjectType, ArchiveFile, ArchiveValidationResult, ARCHIVE_VERSION } from '../types';
 import { 
   Building2, 
@@ -126,16 +127,22 @@ export default function SettingsView() {
 
   // Phase 9: Export backup as file download
   const handleBackupDownload = () => {
-    const jsonStr = backupData();
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(jsonStr);
-    
-    const exportFileDefaultName = `srphs_grading_backup_${new Date().toISOString().split('T')[0]}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-    setBackupDownloaded(true);
+    try {
+      const jsonStr = backupData();
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(jsonStr);
+      
+      const exportFileDefaultName = `srphs_grading_backup_${new Date().toISOString().split('T')[0]}.json`;
+      
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+      setBackupDownloaded(true);
+      globalToast.success(`Database backup downloaded as "${exportFileDefaultName}".`, 'Backup Export Complete');
+    } catch (err: any) {
+      console.error('Backup download error:', err);
+      globalToast.error('Failed to create backup: ' + (err.message || String(err)), 'Backup Export Failed');
+    }
   };
 
   // ─── Archive Validation ────────────────────────────────────────────────────
@@ -191,10 +198,14 @@ export default function SettingsView() {
       const result = validateArchive(text);
       if (!result.valid) {
         setArchiveError(result.error);
+        globalToast.error(result.error || 'Invalid archive format.', 'Archive Import Error');
         return;
       }
       setPendingArchive(result.archive);
       setShowRestoreModal(true);
+      if (result.archive) {
+        globalToast.info(`Archive verified: S.Y. ${result.archive.metadata.schoolYear} (${result.archive.projects.length} classes). Confirm to restore.`, 'Archive Ready');
+      }
     };
     reader.readAsText(file);
   };
@@ -206,9 +217,11 @@ export default function SettingsView() {
     if (success) {
       setRestoreSuccess(true);
       setShowRestoreModal(false);
+      globalToast.success('Archive successfully restored. Refreshing workspace...', 'Archive Restored');
       setTimeout(() => window.location.reload(), 1500);
     } else {
       setArchiveError('Restore failed unexpectedly. Please try again.');
+      globalToast.error('Restore failed unexpectedly. Please try again.', 'Restore Failed');
       setShowRestoreModal(false);
     }
   };
@@ -223,8 +236,10 @@ export default function SettingsView() {
         const success = restoreData(text);
         setRestored(success);
         if (success) {
+          globalToast.success('Database backup restored successfully. Refreshing...', 'Database Restored');
           setTimeout(() => { window.location.reload(); }, 1500);
         } else {
+          globalToast.error('Failed to restore backup. Invalid JSON file format.', 'Restore Failed');
           alert('Failed to restore backup. Invalid JSON file format.');
         }
       };

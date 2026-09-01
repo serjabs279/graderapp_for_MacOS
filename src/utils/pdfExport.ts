@@ -2,6 +2,7 @@ import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont, PDFImage } from 'pdf
 import { getCalendar, getFirstPeriod } from '../calendar/academicCalendar';
 import { Project, Student } from '../types';
 import { computeProjectStudentGrade } from '../utils';
+import { globalToast } from '../context/ToastContext';
 import { AlignRight } from 'lucide-react';
 
 // Brand & Layout Colors for pdf-lib
@@ -207,8 +208,10 @@ function drawClassRecordHeader(
   }
 
   // Draw Title (centered between logos)
-  page.drawText('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', {
-    x: pageWidth / 2 - fontBold.widthOfTextAtSize('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', 8) / 2,
+  const schoolTitle = (project.schoolName || 'SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED').toUpperCase();
+  const titleWidth = fontBold.widthOfTextAtSize(schoolTitle, 8);
+  page.drawText(schoolTitle, {
+    x: Math.max(margin + 36, pageWidth / 2 - titleWidth / 2),
     y,
     size: 8,
     font: fontBold,
@@ -216,8 +219,9 @@ function drawClassRecordHeader(
   });
   y -= 14;
 
-  page.drawText('OFFICIAL CLASS RECORD / ACADEMIC REPORT', {
-    x: pageWidth / 2 - fontBold.widthOfTextAtSize('OFFICIAL CLASS RECORD / ACADEMIC REPORT', 16) / 2,
+  const mainHeader = 'OFFICIAL CLASS RECORD / ACADEMIC REPORT';
+  page.drawText(mainHeader, {
+    x: pageWidth / 2 - fontBold.widthOfTextAtSize(mainHeader, 16) / 2,
     y,
     size: 16,
     font: fontBold,
@@ -236,19 +240,47 @@ function drawClassRecordHeader(
     borderWidth: 0.75,
   });
 
-  const colWidth = usableWidth / 4;
   const metaY1 = y - 12;
   const metaY2 = y - 28;
 
-  page.drawText(`School: ${project.schoolName || 'N/A'}`, { x: margin + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
-  page.drawText(`School Year: ${project.schoolYear}`, { x: margin + colWidth + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
-  page.drawText(`Grade & Section: ${project.gradeLevel} - ${project.section}`, { x: margin + colWidth * 2 + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
-  page.drawText(`Quarter: ${project.lastActiveQuarter || getFirstPeriod()}`, { x: margin + colWidth * 3 + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
+  // Helper to ensure text never overflows its assigned column
+  const fitText = (text: string, maxWidth: number, f: PDFFont, size: number): string => {
+    if (f.widthOfTextAtSize(text, size) <= maxWidth) return text;
+    let t = text;
+    while (t.length > 3 && f.widthOfTextAtSize(t + '...', size) > maxWidth) {
+      t = t.slice(0, -1);
+    }
+    return t + '...';
+  };
 
-  page.drawText(`Subject: ${project.subject}`, { x: margin + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
-  page.drawText(`Teacher: ${project.teacherName || 'N/A'}`, { x: margin + colWidth + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
-  page.drawText(`DepEd Policy: ${project.depedPolicy === '2015' ? 'DO 8 s. 2015' : 'MATATAG (2027)'}`, { x: margin + colWidth * 2 + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
-  page.drawText(`Passing Mark: ${project.passingGrade}%`, { x: margin + colWidth * 3 + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
+  // Row 1: School (42%), Grade & Section (32%), School Year (26%)
+  const r1Col1W = usableWidth * 0.42;
+  const r1Col2W = usableWidth * 0.32;
+  const r1Col3W = usableWidth * 0.26;
+
+  const schoolText = fitText(`School: ${project.schoolName || 'N/A'}`, r1Col1W - 12, fontBold, 8);
+  const gradeSecText = fitText(`Grade & Section: ${project.gradeLevel} - ${project.section}`, r1Col2W - 12, fontBold, 8);
+  const syText = fitText(`School Year: ${project.schoolYear}`, r1Col3W - 12, fontBold, 8);
+
+  page.drawText(schoolText, { x: margin + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(gradeSecText, { x: margin + r1Col1W + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
+  page.drawText(syText, { x: margin + r1Col1W + r1Col2W + 8, y: metaY1, size: 8, font: fontBold, color: COLOR_TEXT });
+
+  // Row 2: Subject (28%), Teacher (26%), DepEd Policy (24%), Quarter & Passing Mark (22%)
+  const r2Col1W = usableWidth * 0.28;
+  const r2Col2W = usableWidth * 0.26;
+  const r2Col3W = usableWidth * 0.24;
+  const r2Col4W = usableWidth * 0.22;
+
+  const subjectText = fitText(`Subject: ${project.subject}`, r2Col1W - 12, font, 8);
+  const teacherText = fitText(`Teacher: ${project.teacherName || 'N/A'}`, r2Col2W - 12, font, 8);
+  const policyText = fitText(`DepEd Policy: ${project.depedPolicy === '2015' ? 'DO 8 s. 2015' : 'MATATAG (2027)'}`, r2Col3W - 12, font, 8);
+  const quarterPassText = fitText(`Quarter: ${project.lastActiveQuarter || getFirstPeriod()} (${project.passingGrade}% Pass)`, r2Col4W - 8, font, 8);
+
+  page.drawText(subjectText, { x: margin + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(teacherText, { x: margin + r2Col1W + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(policyText, { x: margin + r2Col1W + r2Col2W + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
+  page.drawText(quarterPassText, { x: margin + r2Col1W + r2Col2W + r2Col3W + 8, y: metaY2, size: 8, font, color: COLOR_TEXT_MUTED });
 
   return y - (metaBoxHeight + 16);
 }
@@ -547,11 +579,14 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
     const pdfBytes = await pdfDoc.save();
     const safeSubjectName = (project.subject || 'Subject').replace(/[^a-zA-Z0-9_-]/g, '_');
     const safeSection = (project.section || 'Section').replace(/[^a-zA-Z0-9_-]/g, '_');
-    downloadPdfBuffer(pdfBytes, customFilename || `ClassRecord_${safeSubjectName}_${project.gradeLevel}_${safeSection}_${(project.lastActiveQuarter || getFirstPeriod()).replace(/\s/g, '')}.pdf`);
+    const finalFilename = customFilename || `ClassRecord_${safeSubjectName}_${project.gradeLevel}_${safeSection}_${(project.lastActiveQuarter || getFirstPeriod()).replace(/\s/g, '')}.pdf`;
+    downloadPdfBuffer(pdfBytes, finalFilename);
+    globalToast.success(`Class Record PDF generated and saved as "${finalFilename}".`, 'PDF Export Successful');
 
     return true;
   } catch (err) {
     console.error('Vector PDF generation error:', err);
+    globalToast.error('An error occurred while generating the vector PDF.', 'PDF Export Failed');
     alert('An error occurred while generating the vector PDF. Opening print dialog fallback.');
     window.print();
     return false;
@@ -963,11 +998,14 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
     // 5. Save & Download
     const pdfBytes = await pdfDoc.save();
     const defaultFilename = `Consolidated_Grades_${groupData?.gradeLevel || 'Class'}_${groupData?.section || 'Section'}.pdf`.replace(/\s+/g, '_');
-    downloadPdfBuffer(pdfBytes, customFilename || defaultFilename);
+    const finalFilename = customFilename || defaultFilename;
+    downloadPdfBuffer(pdfBytes, finalFilename);
+    globalToast.success(`Consolidated Report PDF generated and saved as "${finalFilename}".`, 'PDF Export Successful');
 
     return true;
   } catch (err) {
     console.error('Consolidated vector PDF export error:', err);
+    globalToast.error('An error occurred while generating the consolidated vector PDF.', 'PDF Export Failed');
     alert('An error occurred while generating the consolidated vector PDF. Fallback print triggered.');
     window.print();
     return false;

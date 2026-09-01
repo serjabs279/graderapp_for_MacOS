@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { AdviserClass } from '../../types';
 import { GradeMatrix, StudentGradeRow } from '../../utils/adviserUtils';
 import { generateSF9 } from '../../utils/adviser/sf9Export';
+import { globalToast } from '../../context/ToastContext';
 import { FileText, Download, CheckSquare, Square, Settings, Award, Eye, X } from 'lucide-react';
 import SF9RatingModal from './SF9RatingModal';
 
@@ -18,6 +19,13 @@ export default function SF9Generator({ adviserClass, gradeMatrix }: Props) {
 
   // PDF preview state
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // Default: select all
+  useEffect(() => {
+    if (gradeMatrix.length > 0) {
+      setSelectedLrns(new Set(gradeMatrix.map(s => s.lrn)));
+    }
+  }, [gradeMatrix]);
 
   // Revoke old blob URL when a new one is set or modal is closed
   useEffect(() => {
@@ -49,8 +57,10 @@ export default function SF9Generator({ adviserClass, gradeMatrix }: Props) {
         ? `SF9_${[...selectedLrns].map(lrn => gradeMatrix.find(s => s.lrn === lrn)?.name ?? lrn)[0].replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
         : `SF9_Bulk_${adviserClass.gradeLevel}_${adviserClass.section}.pdf`;
       doc.save(title);
+      globalToast.success(`SF-9 Report Cards generated for ${selectedLrns.size} learner(s) and saved as "${title}".`, 'SF-9 Export Complete');
     } catch (err: any) {
-      alert('Failed to generate SF9: ' + (err.message || String(err)));
+      console.error('SF9 download error:', err);
+      globalToast.error('Failed to generate SF9: ' + (err.message || String(err)), 'SF-9 Export Failed');
     }
   };
 
@@ -62,8 +72,10 @@ export default function SF9Generator({ adviserClass, gradeMatrix }: Props) {
       const url = URL.createObjectURL(blob);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(url);
+      globalToast.info(`SF-9 preview rendered for ${selectedLrns.size} learner(s).`, 'Preview Ready');
     } catch (err: any) {
-      alert('Failed to generate preview: ' + (err.message || String(err)));
+      console.error('SF9 preview error:', err);
+      globalToast.error('Failed to generate preview: ' + (err.message || String(err)), 'SF-9 Preview Failed');
     }
   };
 

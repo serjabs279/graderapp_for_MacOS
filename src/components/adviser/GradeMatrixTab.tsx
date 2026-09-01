@@ -101,7 +101,8 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
       editingCell.quarterKey,
       editingCell.lrn,
       val,
-      overrideReason.trim()
+      overrideReason.trim(),
+      editingCell.subjectName
     );
 
     setEditingCell(null);

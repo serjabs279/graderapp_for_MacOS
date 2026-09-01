@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AdviserClass, AdviserStudent } from '../../types';
 import { GradeMatrix } from '../../utils/adviserUtils';
+import { globalToast } from '../../context/ToastContext';
 import {
   Users, Plus, Pencil, Trash2, Check, X, AlertCircle,
   ClipboardList, Upload, CheckCircle2, ChevronDown, ChevronUp
@@ -117,6 +118,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
     addOverrideLogEntry(adviserClass.id, {
       adviserName: adviserClass.adviserName, studentLRN: lrn, studentName: name, action: 'Student Added', reason
     });
+    globalToast.success(`Added ${name} (${lrn}) to section masterlist.`, 'Student Added');
     resetForm();
   };
 
@@ -133,6 +135,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
       adviserName: adviserClass.adviserName, studentLRN: lrn, studentName: name,
       action: 'Student Edited', previousValue: JSON.stringify(oldStudent), newValue: JSON.stringify({ lrn, name, sex, age: parsedAge }), reason
     });
+    globalToast.info(`Updated learner record for ${name}.`, 'Student Updated');
     resetForm();
   };
 
@@ -148,6 +151,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
         adviserName: adviserClass.adviserName, studentLRN: sLrn, studentName: sName,
         action: 'Student Deleted', reason: delReason
       });
+      globalToast.warning(`Removed ${sName} from section masterlist.`, 'Student Removed');
     }
   };
 
@@ -171,6 +175,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
       action: 'Student Added',
       reason: `Bulk import — ${validRows.length} students added`
     });
+    globalToast.success(`Imported ${validRows.length} students into section masterlist.`, 'Masterlist Import Successful');
     setBulkImported(true);
     setTimeout(() => resetBulk(), 2000);
   };

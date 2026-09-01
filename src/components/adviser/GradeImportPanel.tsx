@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { AdviserClass, ImportedSubjectGrades } from '../../types';
 import { getQuarterKeys } from '../../utils/adviserUtils';
 import { parseGradeJSON } from '../../utils/subjectGradeExport';
+import { globalToast } from '../../context/ToastContext';
 import ImportedSubjectSummaryModal from './ImportedSubjectSummaryModal';
 import { Upload, FileSpreadsheet, FileCode, AlertCircle, CheckCircle2, Lock, Unlock } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -264,6 +265,7 @@ export default function GradeImportPanel({ adviserClass }: Props) {
           subjectUID: parsed.subjectUID, subjectName: resolvedName, quarterKey: otherQuarter,
           action: 'Subject Replaced', reason: 'Replaced uploaded excel file'
         });
+        globalToast.info(`Replaced grades for "${resolvedName}" (${otherQuarter}).`, 'Subject Grades Replaced');
       } else {
         importSubjectGrades(adviserClass.id, payload);
         addOverrideLogEntry(adviserClass.id, {
@@ -271,6 +273,7 @@ export default function GradeImportPanel({ adviserClass }: Props) {
           subjectUID: parsed.subjectUID, subjectName: resolvedName, quarterKey: otherQuarter,
           action: 'Subject Imported', reason: 'Initial excel file upload'
         });
+        globalToast.success(`Imported ${Object.keys(parsed.grades).length} student grades for "${resolvedName}" (${otherQuarter}).`, 'Grade Import Successful');
       }
 
       setSuccessMsg(`✅ Successfully imported ${Object.keys(parsed.grades).length} student grades for "${resolvedName}" (${otherQuarter}).`);
@@ -278,6 +281,7 @@ export default function GradeImportPanel({ adviserClass }: Props) {
     } catch (err: any) {
       console.error('[GradeImport] Import failed:', err);
       setErrorMsg(err.message || 'Failed to parse or import the Excel file.');
+      globalToast.error(err.message || 'Failed to parse or import the file.', 'Grade Import Failed');
     }
   };
 
@@ -344,14 +348,17 @@ export default function GradeImportPanel({ adviserClass }: Props) {
           return;
         }
         replaceSubjectGrades(adviserClass.id, existing.subjectUID, langQuarter, payload);
+        globalToast.info(`Replaced grades for composite group "${selectedLanguageGroup}" (${langQuarter}).`, 'Composite Grades Replaced');
       } else {
         importSubjectGrades(adviserClass.id, payload);
+        globalToast.success(`Successfully imported and merged grades for "${selectedLanguageGroup}" (${langQuarter}).`, 'Composite Import Successful');
       }
       
       setSuccessMsg(`Successfully imported and merged grades for ${selectedLanguageGroup}.`);
       resetForm();
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to parse Excel files.");
+      globalToast.error(err.message || "Failed to parse composite Excel files.", "Composite Import Failed");
     }
   };
 
@@ -362,6 +369,7 @@ export default function GradeImportPanel({ adviserClass }: Props) {
       subjectUID: g.subjectUID, subjectName: g.subjectName, quarterKey: g.quarterKey,
       action: !g.isLocked ? 'Subject Locked' : 'Subject Unlocked', reason: 'Adviser toggled lock state'
     });
+    globalToast.info(`Subject "${g.subjectName}" (${g.quarterKey}) is now ${!g.isLocked ? 'Locked' : 'Unlocked'}.`, !g.isLocked ? 'Subject Locked' : 'Subject Unlocked');
   };
 
   return (

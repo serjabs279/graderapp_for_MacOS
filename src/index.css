@@ -283,3 +283,12 @@ body.print-mode-active [class*="dark:"] {
     font-size: 9.5pt !important;
   }
 }
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}

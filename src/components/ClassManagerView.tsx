@@ -4,6 +4,7 @@ import { Student, Assessment, Project, SubjectType } from '../types';
 import { computeProjectStudentGrade, getSubjectWeights, getSubjectWeightsLabel, getEffectiveScore, getLearnerReassessmentStatus } from '../utils';
 import { getProjectPeriods } from '../calendar/academicCalendar';
 import { exportClassRecordPDF } from '../utils/pdfExport';
+import { globalToast } from '../context/ToastContext';
 import TeacherExcelExportModal from './TeacherExcelExportModal';
 import {
   Plus,
@@ -211,6 +212,7 @@ export default function ClassManagerView() {
   } | null>(null);
 
   const showCustomAlert = (message: string, title = "System Notification", type: 'success' | 'error' | 'info' = 'info') => {
+    globalToast.show(type, message, title);
     setCustomAlert({
       isOpen: true,
       title,
@@ -2207,12 +2209,11 @@ export default function ClassManagerView() {
               <div className="space-y-12 text-right">
                 <div>Verified & Approved By:</div>
                 <div className="text-slate-900 font-black uppercase border-b border-slate-900 pb-1 ml-auto max-w-[220px]">
-                  Prof. Clara Santos
+                  Mr. ASIANG M. CHIANG JR., MAEM
                 </div>
                 <div className="text-[10px] font-mono -mt-1 uppercase tracking-wider">School Principal / Head Teacher</div>
               </div>
             </div>
-
           </div>
         </div>
       )}
@@ -2339,68 +2340,68 @@ export default function ClassManagerView() {
                   Select Grading Component Category
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                    {(() => {
-                      const activeWeights = getSubjectWeights(
-                        activeProject.subject,
-                        globalSettings.subjects,
-                        activeProject.workspace,
-                        activeProject.assessmentProfileId
-                      );
-                      return (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleModalCategoryChange('WOW')}
-                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${modalAssCategory === 'WOW'
-                              ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-500 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/30'
-                              : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
-                              }`}
-                          >
-                            <div className="text-[11px] font-black flex items-center justify-between">
-                              <span>Written Work</span>
-                              <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">WW</span>
-                            </div>
-                            <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                              Quizzes & Exams ({Math.round(activeWeights.wow * 100)}%)
-                            </div>
-                          </button>
+                  {(() => {
+                    const activeWeights = getSubjectWeights(
+                      activeProject.subject,
+                      globalSettings.subjects,
+                      activeProject.workspace,
+                      activeProject.assessmentProfileId
+                    );
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleModalCategoryChange('WOW')}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${modalAssCategory === 'WOW'
+                            ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-500 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/30'
+                            : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
+                            }`}
+                        >
+                          <div className="text-[11px] font-black flex items-center justify-between">
+                            <span>Written Work</span>
+                            <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">WW</span>
+                          </div>
+                          <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
+                            Quizzes & Exams ({Math.round(activeWeights.wow * 100)}%)
+                          </div>
+                        </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleModalCategoryChange('PPT')}
-                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${modalAssCategory === 'PPT'
-                              ? 'bg-teal-50/80 dark:bg-teal-950/50 border-teal-500 text-teal-900 dark:text-teal-100 ring-2 ring-teal-500/30'
-                              : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
-                              }`}
-                          >
-                            <div className="text-[11px] font-black flex items-center justify-between">
-                              <span>Performance Task</span>
-                              <span className="text-[9px] font-mono font-extrabold bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 px-1.5 py-0.5 rounded">PT</span>
-                            </div>
-                            <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                              Projects & Hands-on ({Math.round(activeWeights.ppt * 100)}%)
-                            </div>
-                          </button>
+                        <button
+                          type="button"
+                          onClick={() => handleModalCategoryChange('PPT')}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${modalAssCategory === 'PPT'
+                            ? 'bg-teal-50/80 dark:bg-teal-950/50 border-teal-500 text-teal-900 dark:text-teal-100 ring-2 ring-teal-500/30'
+                            : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
+                            }`}
+                        >
+                          <div className="text-[11px] font-black flex items-center justify-between">
+                            <span>Performance Task</span>
+                            <span className="text-[9px] font-mono font-extrabold bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 px-1.5 py-0.5 rounded">PT</span>
+                          </div>
+                          <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
+                            Projects & Hands-on ({Math.round(activeWeights.ppt * 100)}%)
+                          </div>
+                        </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleModalCategoryChange('QSTE')}
-                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${modalAssCategory === 'QSTE'
-                              ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-500 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/30'
-                              : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
-                              }`}
-                          >
-                            <div className="text-[11px] font-black flex items-center justify-between">
-                              <span>Quarterly Exam</span>
-                              <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">QE</span>
-                            </div>
-                            <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                              Periodic Exam ({Math.round(activeWeights.qste * 100)}%)
-                            </div>
-                          </button>
-                        </>
-                      );
-                    })()}
+                        <button
+                          type="button"
+                          onClick={() => handleModalCategoryChange('QSTE')}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${modalAssCategory === 'QSTE'
+                            ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-500 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/30'
+                            : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
+                            }`}
+                        >
+                          <div className="text-[11px] font-black flex items-center justify-between">
+                            <span>Quarterly Exam</span>
+                            <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">QE</span>
+                          </div>
+                          <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
+                            Periodic Exam ({Math.round(activeWeights.qste * 100)}%)
+                          </div>
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 

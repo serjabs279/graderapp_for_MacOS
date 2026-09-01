@@ -56,6 +56,7 @@ interface AppContextType {
   clearReassessmentScoreInActive: (quarterId: string, studentId: string, assessmentId: string) => void;
   toggleReassessmentForAssessment: (quarterId: string, assessmentId: string, enabled: boolean) => void;
   updateReassessmentSettingsInActive: (settings: { enabled: boolean; masteryThreshold: number; interventionThreshold: number; policy: 'Average' | 'Highest' | 'Replacement' }) => void;
+  enableReassessmentModeForQuarter: (quarterId: string, settings: { enabled: boolean; masteryThreshold: number; interventionThreshold: number; policy: 'Average' | 'Highest' | 'Replacement' }) => void;
 
   // Settings & Db Operations
   updateGlobalSettings: (settings: Partial<GlobalSettings>) => void;
@@ -79,7 +80,7 @@ interface AppContextType {
   setObservedValue: (classId: string, lrn: string, quarter: string, field: 'responsible' | 'obedient' | 'compassionate' | 'kind' | 'serviceOriented', rating: ObservedValueRating) => void;
   setAttendance: (classId: string, lrn: string, month: string, daysAbsent: number) => void;
   addOverrideLogEntry: (classId: string, entry: Omit<OverrideLogEntry, 'id' | 'timestamp'>) => void;
-  overrideStudentGrade: (classId: string, subjectUID: string, quarterKey: string, lrn: string, newGrade: number, reason: string) => void;
+  overrideStudentGrade: (classId: string, subjectUID: string, quarterKey: string, lrn: string, newGrade: number, reason: string, componentSubjectName?: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -1009,54 +1010,108 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
-  const overrideStudentGrade = (classId: string, subjectUID: string, quarterKey: string, lrn: string, newGrade: number, reason: string) => {
+  const overrideStudentGrade = (
+    classId: string,
+    subjectUID: string,
+    quarterKey: string,
+    lrn: string,
+    newGrade: number,
+    reason: string,
+    componentSubjectName?: string
+  ) => {
     updateAdviserClass(classId, cls => {
-      const updatedGrades = cls.importedGrades.map(g => {
-        if (g.subjectUID === subjectUID && g.quarterKey === quarterKey) {
-          const prevGrade = g.grades[lrn];
-          const student = cls.students.find(s => s.lrn === lrn);
-          
-          // Log immediately inside this state transition
-          const logEntry: OverrideLogEntry = {
-            id: `log-${Date.now()}-${Math.random()}`,
-            timestamp: new Date().toISOString(),
-            adviserName: cls.adviserName,
-            studentLRN: lrn,
-            studentName: student ? student.name : 'Unknown',
-            subjectUID: g.subjectUID,
-            subjectName: g.subjectName,
-            quarterKey,
-            action: 'Grade Edited',
-            previousValue: prevGrade !== undefined ? String(prevGrade) : 'None',
-            newValue: String(newGrade),
-            reason
-          };
+      let loggedPrevValue = 'None';
+      let loggedSubjectName = '';
 
-          return {
-            ...g,
-            grades: {
-              ...g.grades,
-              [lrn]: newGrade
+      const updatedGrades = cls.importedGrades.map(g => {
+        const isTarget = (g.subjectUID === subjectUID || (componentSubjectName && g.subjectName === componentSubjectName)) && g.quarterKey === quarterKey;
+        if (!isTarget) return g;
+
+        loggedSubjectName = g.subjectName;
+
+        // If it's a composite language/MAPEH group
+        if (g.isLanguageGroup && g.languageRawGrades) {
+          const updatedRaw = { ...g.languageRawGrades };
+          let matchedKey: string | null = null;
+
+          if (componentSubjectName) {
+            if (updatedRaw[componentSubjectName] !== undefined) {
+              matchedKey = componentSubjectName;
+            } else {
+              const normalized = componentSubjectName.replace('/', ' & ');
+              const slashed = componentSubjectName.replace(' & ', '/');
+              if (updatedRaw[normalized] !== undefined) matchedKey = normalized;
+              else if (updatedRaw[slashed] !== undefined) matchedKey = slashed;
             }
-          };
+          }
+
+          if (matchedKey) {
+            loggedSubjectName = `${g.subjectName} (${matchedKey})`;
+            const prevCompGrade = updatedRaw[matchedKey]?.[lrn];
+            if (prevCompGrade !== undefined) loggedPrevValue = String(prevCompGrade);
+
+            updatedRaw[matchedKey] = {
+              ...updatedRaw[matchedKey],
+              [lrn]: newGrade
+            };
+
+            // Recompute composite final grade for this student
+            const keys = Object.keys(updatedRaw);
+            const compGrades = keys
+              .map(k => updatedRaw[k]?.[lrn])
+              .filter((v): v is number => v !== undefined && v !== null);
+
+            const newCompAvg = compGrades.length > 0
+              ? Math.round((compGrades.reduce((a, b) => a + b, 0) / compGrades.length) * 100) / 100
+              : newGrade;
+
+            return {
+              ...g,
+              languageRawGrades: updatedRaw,
+              grades: {
+                ...g.grades,
+                [lrn]: newCompAvg
+              }
+            };
+          } else {
+            // Overriding the composite subject overall
+            const prevGrade = g.grades[lrn];
+            if (prevGrade !== undefined) loggedPrevValue = String(prevGrade);
+            return {
+              ...g,
+              grades: {
+                ...g.grades,
+                [lrn]: newGrade
+              }
+            };
+          }
         }
-        return g;
+
+        // Regular non-composite subject
+        const prevGrade = g.grades[lrn];
+        if (prevGrade !== undefined) loggedPrevValue = String(prevGrade);
+
+        return {
+          ...g,
+          grades: {
+            ...g.grades,
+            [lrn]: newGrade
+          }
+        };
       });
 
-      // Also append the log entry to the log array
-      const targetSubj = cls.importedGrades.find(x => x.subjectUID === subjectUID && x.quarterKey === quarterKey);
       const student = cls.students.find(s => s.lrn === lrn);
       const finalLog = [{
-        id: `log-${Date.now()}`,
+        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         timestamp: new Date().toISOString(),
         adviserName: cls.adviserName,
         studentLRN: lrn,
         studentName: student ? student.name : 'Unknown',
         subjectUID,
-        subjectName: targetSubj ? targetSubj.subjectName : 'Unknown Subject',
+        subjectName: loggedSubjectName || 'Unknown Subject',
         quarterKey,
         action: 'Grade Edited' as const,
-        previousValue: targetSubj && targetSubj.grades[lrn] !== undefined ? String(targetSubj.grades[lrn]) : 'None',
+        previousValue: loggedPrevValue,
         newValue: String(newGrade),
         reason
       }, ...cls.overrideLog];

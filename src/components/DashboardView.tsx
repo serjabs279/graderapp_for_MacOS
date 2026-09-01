@@ -205,7 +205,6 @@ export default function DashboardView() {
     const newId = createProject({
       schoolName: globalSettings.schoolName,
       schoolYear,
-      quarter,
       gradeLevel,
       section: section.trim(),
       subject: subject.trim(),
@@ -243,8 +242,13 @@ export default function DashboardView() {
     let fairlySatisfactory = 0;// 75-79
     let didNotMeet = 0;        // < 75
 
+    const activeQuarterId = activeProject.lastActiveQuarter || '1st Quarter';
+    const activeQuarterData = activeProject.quarters?.[activeQuarterId] || { assessments: [], scores: {} };
+    const assessments = activeQuarterData.assessments || [];
+    const scores = activeQuarterData.scores || {};
+
     activeStudents.forEach(st => {
-      const g = computeProjectStudentGrade(activeProject, st.id, globalSettings.subjects);
+      const g = computeProjectStudentGrade(activeProject, st.id, globalSettings.subjects, activeQuarterId);
       if (g.hasScores) {
         sumGrades += g.finalGrade;
         gradedCount++;
@@ -265,11 +269,6 @@ export default function DashboardView() {
     const averageGrade = gradedCount > 0 ? Math.round(sumGrades / gradedCount) : 0;
     const passingRate = gradedCount > 0 ? Math.round((passingCount / gradedCount) * 100) : 0;
     const failingRate = gradedCount > 0 ? 100 - passingRate : 0;
-
-    const activeQuarterId = activeProject.activeQuarterId || 'Q1';
-    const activeQuarterData = activeProject.quarters[activeQuarterId] || { assessments: [], scores: {} };
-    const assessments = activeQuarterData.assessments || [];
-    const scores = activeQuarterData.scores || {};
 
     // Assessment Completion Rate
     // Total possible scores cell matrix size = total students * total assessments
@@ -336,7 +335,7 @@ export default function DashboardView() {
             <p className="text-xs text-slate-450 dark:text-slate-400 font-semibold flex items-center gap-2.5">
               <span>Teacher: {activeProject.teacherName}</span>
               <span>•</span>
-              <span>Quarter: {activeProject.quarter}</span>
+              <span>Quarter: {activeQuarterId}</span>
               <span>•</span>
               <span>S.Y. {activeProject.schoolYear}</span>
             </p>
@@ -484,7 +483,7 @@ export default function DashboardView() {
                     {/* Tiny Progress bar */}
                     <div className="h-1 w-full bg-slate-55 dark:bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${ass.category === 'WW' ? 'bg-emerald-600' : ass.category === 'PT' ? 'bg-emerald-400' : 'bg-teal-500'
+                        className={`h-full rounded-full ${ass.category === 'WOW' ? 'bg-emerald-600' : ass.category === 'PPT' ? 'bg-emerald-400' : 'bg-teal-500'
                           }`}
                         style={{ width: `${ass.averagePercentage}%` }}
                       />
@@ -527,10 +526,10 @@ export default function DashboardView() {
       const duration = activeGroup.projects[0]?.projectDuration;
       const semester = activeGroup.projects[0]?.semester;
 
-      const q1Proj = activeGroup.projects.find(p => p.quarter.toLowerCase().includes('1st'));
-      const q2Proj = activeGroup.projects.find(p => p.quarter.toLowerCase().includes('2nd'));
-      const q3Proj = activeGroup.projects.find(p => p.quarter.toLowerCase().includes('3rd'));
-      const q4Proj = activeGroup.projects.find(p => p.quarter.toLowerCase().includes('4th'));
+      const q1Proj = activeGroup.projects.find(p => (p.lastActiveQuarter || '').toLowerCase().includes('1st'));
+      const q2Proj = activeGroup.projects.find(p => (p.lastActiveQuarter || '').toLowerCase().includes('2nd'));
+      const q3Proj = activeGroup.projects.find(p => (p.lastActiveQuarter || '').toLowerCase().includes('3rd'));
+      const q4Proj = activeGroup.projects.find(p => (p.lastActiveQuarter || '').toLowerCase().includes('4th'));
 
       // Decide which quarters are active in this group
       let showQ1 = true;
@@ -1524,8 +1523,8 @@ export default function DashboardView() {
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400 dark:text-slate-550 leading-relaxed font-semibold">
-                        Quarter: {proj.quarter} | S.Y. {proj.schoolYear} | Learners: {proj.students.length}
+                      <div className="text-[10px] text-slate-400 dark:text-slate-555 leading-relaxed font-semibold">
+                        Quarter: {proj.lastActiveQuarter || '1st Quarter'} | S.Y. {proj.schoolYear} | Learners: {proj.students.length}
                       </div>
                       <div className="text-[9px] font-mono text-slate-400 flex items-center gap-1.5">
                         <Clock className="h-3 w-3" /> Updated {new Date(proj.updatedAt).toLocaleDateString()}

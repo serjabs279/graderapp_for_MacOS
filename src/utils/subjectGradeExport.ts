@@ -49,39 +49,48 @@ export function generateSubjectGradeJSON(project: Project, selectedQuarters: str
   };
 }
 
+import { globalToast } from '../context/ToastContext';
+
 /**
  * Triggers a browser file download of the Subject Grade JSON file.
  */
 export function exportTeacherGradebookJSON(project: Project, selectedQuarters: string[]) {
-  const exportData = generateSubjectGradeJSON(project, selectedQuarters);
-  const jsonStr = JSON.stringify(exportData, null, 2);
+  try {
+    const exportData = generateSubjectGradeJSON(project, selectedQuarters);
+    const jsonStr = JSON.stringify(exportData, null, 2);
 
-  const isConsolidated =
-    selectedQuarters.length === Object.keys(project.quarters || {}).length &&
-    selectedQuarters.length > 0;
-  const qStr = isConsolidated
-    ? 'Consolidated'
-    : selectedQuarters.map(q => q.replace(/\s+/g, '')).join('_');
+    const isConsolidated =
+      selectedQuarters.length === Object.keys(project.quarters || {}).length &&
+      selectedQuarters.length > 0;
+    const qStr = isConsolidated
+      ? 'Consolidated'
+      : selectedQuarters.map(q => q.replace(/\s+/g, '')).join('_');
 
-  const filename = [
-    project.subject,
-    project.gradeLevel,
-    project.section,
-    qStr,
-  ]
-    .join('_')
-    .replace(/\s+/g, '_')
-    .replace(/[^a-zA-Z0-9_\-]/g, '') + '.json';
+    const filename = [
+      project.subject,
+      project.gradeLevel,
+      project.section,
+      qStr,
+    ]
+      .join('_')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_\-]/g, '') + '.json';
 
-  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const linkElement = document.createElement('a');
-  linkElement.setAttribute('href', url);
-  linkElement.setAttribute('download', filename);
-  document.body.appendChild(linkElement);
-  linkElement.click();
-  document.body.removeChild(linkElement);
-  URL.revokeObjectURL(url);
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', url);
+    linkElement.setAttribute('download', filename);
+    document.body.appendChild(linkElement);
+    linkElement.click();
+    document.body.removeChild(linkElement);
+    URL.revokeObjectURL(url);
+
+    globalToast.success(`Official Subject Grades JSON downloaded as "${filename}".`, 'JSON Export Successful');
+  } catch (err: any) {
+    console.error('Teacher JSON export error:', err);
+    globalToast.error(err.message || 'Failed to export JSON file.', 'JSON Export Failed');
+  }
 }
 
 /**
