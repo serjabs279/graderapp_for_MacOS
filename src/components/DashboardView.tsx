@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { SubjectType, Project, Student } from '../types';
-import { computeProjectStudentGrade, transmuteGrade, getSubjectWeightsLabel, SHS_PROFILES } from '../utils';
+import { computeProjectStudentGrade, transmuteGrade, getSubjectWeightsLabel, SHS_PROFILES, SHS_OLD_PROFILES } from '../utils';
 import { exportConsolidatedGradesPDF } from '../utils/pdfExport';
 import {
   Users,
@@ -71,9 +71,14 @@ export default function DashboardView() {
   const [depedPolicy, setDepedPolicy] = useState<'2015' | '2027'>(globalSettings.depedPolicy);
 
   // SHS specific states
-  const [shsProfileId, setShsProfileId] = useState('profile-1');
+  const [shsProfileId, setShsProfileId] = useState('old-core');
   const [shsDuration, setShsDuration] = useState<'Whole Year' | 'One Semester'>('One Semester');
   const [shsSemester, setShsSemester] = useState<'Semester 1' | 'Semester 2'>('Semester 1');
+  // Custom weight inputs (only active when shsProfileId === 'custom')
+  const [customWW, setCustomWW] = useState(30);
+  const [customPT, setCustomPT] = useState(50);
+  const [customQA, setCustomQA] = useState(20);
+  const customTotal = customWW + customPT + customQA;
 
   // Reactively sync defaults when workspace changes
   React.useEffect(() => {
@@ -200,6 +205,10 @@ export default function DashboardView() {
       showCustomAlert("Please enter a subject name (e.g. Pre-Calculus).", "Missing Subject Name", "error");
       return;
     }
+    if (workspaceMode === 'SHS' && shsProfileId === 'custom' && customTotal !== 100) {
+      showCustomAlert(`Custom weights must total exactly 100%. Currently: ${customTotal}%.`, "Invalid Custom Weights", "error");
+      return;
+    }
 
     const isSHS = workspaceMode === 'SHS';
     const newId = createProject({
@@ -214,7 +223,8 @@ export default function DashboardView() {
       workspace: workspaceMode,
       semester: isSHS && shsDuration === 'One Semester' ? shsSemester : undefined,
       projectDuration: isSHS ? shsDuration : undefined,
-      assessmentProfileId: isSHS ? shsProfileId : undefined
+      assessmentProfileId: isSHS ? shsProfileId : undefined,
+      customWeights: isSHS && shsProfileId === 'custom' ? { wow: customWW / 100, ppt: customPT / 100, qste: customQA / 100 } : undefined
     });
     setSection('');
     // Auto shift view to Class Manager so the teacher can edit right away
@@ -1624,19 +1634,60 @@ export default function DashboardView() {
 
               {/* Assessment Profile (Only for SHS) */}
               {workspaceMode === 'SHS' && (
-                <div>
+                <div className="space-y-2">
                   <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Assessment Profile</label>
                   <select
                     value={shsProfileId}
                     onChange={(e) => setShsProfileId(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-bold"
                   >
-                    {SHS_PROFILES.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
+                    <optgroup label="—— DepEd Order No. 8, s. 2015 (Old Curriculum) ——">
+                      {SHS_OLD_PROFILES.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="—— MATATAG Profiles ——">
+                      {SHS_PROFILES.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="—— Custom ——">
+                      <option value="custom">Custom (Manual Weights %)</option>
+                    </optgroup>
                   </select>
+
+                  {/* Custom weight inputs (visible only when 'custom' is selected) */}
+                  {shsProfileId === 'custom' && (
+                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-3 space-y-2 animate-fade-in">
+                      <div className="text-[9px] font-mono font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">Manual Weight Entry (must total 100%)</div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-[8px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">WW %</label>
+                          <input type="number" min={0} max={100} value={customWW}
+                            onChange={e => setCustomWW(parseInt(e.target.value) || 0)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2 text-xs font-mono font-bold text-center focus:outline-hidden focus:ring-1.5 focus:ring-amber-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">PT %</label>
+                          <input type="number" min={0} max={100} value={customPT}
+                            onChange={e => setCustomPT(parseInt(e.target.value) || 0)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2 text-xs font-mono font-bold text-center focus:outline-hidden focus:ring-1.5 focus:ring-amber-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">QA %</label>
+                          <input type="number" min={0} max={100} value={customQA}
+                            onChange={e => setCustomQA(parseInt(e.target.value) || 0)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2 text-xs font-mono font-bold text-center focus:outline-hidden focus:ring-1.5 focus:ring-amber-400"
+                          />
+                        </div>
+                      </div>
+                      <div className={`text-[10px] font-mono font-black text-center py-1 rounded-lg ${customTotal === 100 ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20' : 'text-rose-600 bg-rose-50 dark:bg-rose-950/20'}`}>
+                        Total: {customTotal}% {customTotal === 100 ? '✓ Valid' : `— Need ${100 - customTotal > 0 ? '+' : ''}${100 - customTotal}% to reach 100%`}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

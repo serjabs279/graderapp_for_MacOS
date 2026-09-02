@@ -112,6 +112,19 @@ export const SHS_PROFILES: SHSProfile[] = [
   { id: 'profile-6', name: 'Profile 6: Work Immersion (WOW: 20%, PPT: 80%, Exam: 0%)', wow: 0.20, ppt: 0.80, qste: 0.00 }
 ];
 
+// DepEd Order No. 8, s. 2015 — SHS Old Curriculum Presets
+export const SHS_OLD_PROFILES: SHSProfile[] = [
+  { id: 'old-core',         name: 'Core Subjects (WW: 25%, PT: 50%, QA: 25%)',                             wow: 0.25, ppt: 0.50, qste: 0.25 },
+  { id: 'old-acad',         name: 'Academic Track — All Subjects (WW: 25%, PT: 45%, QA: 30%)',             wow: 0.25, ppt: 0.45, qste: 0.30 },
+  { id: 'old-acad-immerse', name: 'Academic Track — Work Immersion/Research (WW: 20%, PT: 70%, QA: 10%)',  wow: 0.20, ppt: 0.70, qste: 0.10 },
+  { id: 'old-tvl',          name: 'TVL/Sports/Arts & Design — All Subjects (WW: 20%, PT: 60%, QA: 20%)',   wow: 0.20, ppt: 0.60, qste: 0.20 },
+  { id: 'old-tvl-immerse',  name: 'TVL/Sports/Arts & Design — Work Immersion (WW: 10%, PT: 80%, QA: 10%)', wow: 0.10, ppt: 0.80, qste: 0.10 },
+];
+
+// Flat list combining old + MATATAG profiles for utility lookups
+export const ALL_SHS_PRESET_PROFILES: SHSProfile[] = [...SHS_OLD_PROFILES, ...SHS_PROFILES];
+
+
 export const SUBJECT_DEFAULTS: Record<SubjectType, { wow: number; ppt: number; qste: number }> = {
   English: { wow: 0.30, ppt: 0.50, qste: 0.20 },
   Filipino: { wow: 0.30, ppt: 0.50, qste: 0.20 },
@@ -128,10 +141,16 @@ export function getSubjectWeights(
   subject: string,
   customWeights?: Record<string, { wow: number; ppt: number; qste: number }>,
   workspace?: 'JHS' | 'SHS',
-  assessmentProfileId?: string
+  assessmentProfileId?: string,
+  projectCustomWeights?: { wow: number; ppt: number; qste: number }
 ): { wow: number; ppt: number; qste: number } {
   if (workspace === 'SHS') {
-    const shsProfile = SHS_PROFILES.find(p => p.id === assessmentProfileId);
+    // Custom manual weights take priority when profile is 'custom'
+    if (assessmentProfileId === 'custom' && projectCustomWeights) {
+      return projectCustomWeights;
+    }
+    // Try ALL presets (old curriculum + MATATAG)
+    const shsProfile = ALL_SHS_PRESET_PROFILES.find(p => p.id === assessmentProfileId);
     if (shsProfile) {
       return { wow: shsProfile.wow, ppt: shsProfile.ppt, qste: shsProfile.qste };
     }
@@ -200,9 +219,10 @@ export function getSubjectWeightsLabel(
   type: string,
   customWeights?: Record<string, { wow: number; ppt: number; qste: number }>,
   workspace?: 'JHS' | 'SHS',
-  assessmentProfileId?: string
+  assessmentProfileId?: string,
+  projectCustomWeights?: { wow: number; ppt: number; qste: number }
 ) {
-  const w = getSubjectWeights(type, customWeights, workspace, assessmentProfileId);
+  const w = getSubjectWeights(type, customWeights, workspace, assessmentProfileId, projectCustomWeights);
   return `Written/Oral Works (${Math.round(w.wow * 100)}%) / Performance/ Product tasks (${Math.round(w.ppt * 100)}%) / Quarterly/Term Exams (${Math.round(w.qste * 100)}%)`;
 }
 
@@ -330,7 +350,8 @@ export function computeProjectStudentGrade(
     project.subject,
     customWeights,
     project.workspace,
-    project.assessmentProfileId
+    project.assessmentProfileId,
+    project.customWeights
   );
 
   const weightedWOW = wowPercentage * weights.wow;

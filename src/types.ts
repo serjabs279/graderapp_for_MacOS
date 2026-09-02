@@ -195,7 +195,8 @@ export interface Project {
   workspace?: 'JHS' | 'SHS';
   semester?: 'Semester 1' | 'Semester 2';
   projectDuration?: 'Whole Year' | 'One Semester';
-  assessmentProfileId?: string; // e.g. 'profile-1', 'profile-2', etc.
+  assessmentProfileId?: string; // e.g. 'profile-1', 'old-core', 'custom', etc.
+  customWeights?: { wow: number; ppt: number; qste: number }; // used when assessmentProfileId === 'custom'
   subjectUID?: string;           // e.g. 'SUB-2026-000145' — auto-generated, immutable
 }
 

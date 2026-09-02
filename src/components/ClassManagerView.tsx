@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Student, Assessment, Project, SubjectType } from '../types';
-import { computeProjectStudentGrade, getSubjectWeights, getSubjectWeightsLabel, getEffectiveScore, getLearnerReassessmentStatus } from '../utils';
+import { computeProjectStudentGrade, getSubjectWeights, getSubjectWeightsLabel, getEffectiveScore, getLearnerReassessmentStatus, SHS_PROFILES, SHS_OLD_PROFILES } from '../utils';
 import { getProjectPeriods } from '../calendar/academicCalendar';
 import { exportClassRecordPDF } from '../utils/pdfExport';
 import { globalToast } from '../context/ToastContext';
@@ -99,6 +99,26 @@ export default function ClassManagerView() {
   // Search/Sort roster states
   const [studentSearch, setStudentSearch] = useState('');
   const [studentSort, setStudentSort] = useState<'name-asc' | 'name-desc' | 'lrn' | 'sex'>('name-asc');
+
+  // SHS Custom Weights Modal State
+  const [shsCustomModalOpen, setShsCustomModalOpen] = useState(false);
+  const [shsCustomWW, setShsCustomWW] = useState(
+    Math.round((activeProject?.customWeights?.wow ?? 0.30) * 100)
+  );
+  const [shsCustomPT, setShsCustomPT] = useState(
+    Math.round((activeProject?.customWeights?.ppt ?? 0.50) * 100)
+  );
+  const [shsCustomQA, setShsCustomQA] = useState(
+    Math.round((activeProject?.customWeights?.qste ?? 0.20) * 100)
+  );
+
+  useEffect(() => {
+    if (activeProject?.customWeights) {
+      setShsCustomWW(Math.round(activeProject.customWeights.wow * 100));
+      setShsCustomPT(Math.round(activeProject.customWeights.ppt * 100));
+      setShsCustomQA(Math.round(activeProject.customWeights.qste * 100));
+    }
+  }, [activeProject?.id, activeProject?.customWeights]);
 
   // CSV batch import states
   const [csvPasteMode, setCsvPasteMode] = useState(false);
@@ -798,8 +818,59 @@ export default function ClassManagerView() {
           {/* Quick Stats & Controls row */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-slate-100/40 dark:bg-slate-950/30 p-3.5 rounded-2xl border border-slate-150 dark:border-slate-850/85">
             <div className="flex flex-wrap items-center gap-3 text-xs">
-              <div className="flex items-center gap-1.5 bg-indigo-50/50 dark:bg-indigo-950/25 text-indigo-700 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-100/40 dark:border-indigo-900/10 font-sans text-[10px] font-bold">
-                WEIGHTS: {getSubjectWeightsLabel(activeProject.subject, globalSettings.subjects, activeProject.workspace, activeProject.assessmentProfileId)}
+              {activeProject.workspace === 'SHS' && (
+                <div className="flex items-center gap-1.5 bg-indigo-50/50 dark:bg-indigo-950/25 text-indigo-700 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-100/40 dark:border-indigo-900/10 font-sans text-[10px] font-bold">
+                  <span className="shrink-0 font-extrabold">PROFILE:</span>
+                  <select
+                    value={activeProject.assessmentProfileId || 'old-core'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'custom') {
+                        saveProject({
+                          ...activeProject,
+                          assessmentProfileId: 'custom',
+                          customWeights: activeProject.customWeights || { wow: shsCustomWW / 100, ppt: shsCustomPT / 100, qste: shsCustomQA / 100 }
+                        });
+                        setShsCustomModalOpen(true);
+                      } else {
+                        saveProject({
+                          ...activeProject,
+                          assessmentProfileId: val
+                        });
+                      }
+                    }}
+                    className="bg-transparent border-none text-indigo-700 dark:text-indigo-400 font-bold focus:outline-hidden py-0 cursor-pointer text-[10px] max-w-[190px] truncate"
+                  >
+                    <optgroup label="—— DepEd Order No. 8, s. 2015 (Old Curriculum) ——">
+                      {SHS_OLD_PROFILES.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="—— MATATAG Profiles ——">
+                      {SHS_PROFILES.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="—— Custom ——">
+                      <option value="custom">Custom (Manual Weights %)</option>
+                    </optgroup>
+                  </select>
+
+                  {activeProject.assessmentProfileId === 'custom' && (
+                    <button
+                      type="button"
+                      onClick={() => setShsCustomModalOpen(true)}
+                      className="ml-1 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 rounded text-[9px] font-black hover:bg-amber-200 transition-colors cursor-pointer"
+                      title="Edit Custom Percentages"
+                    >
+                      Edit %
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5 bg-indigo-50/50 dark:bg-indigo-950/25 text-indigo-700 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-100/40 dark:border-indigo-900/10 font-sans text-[10px] font-bold" title={getSubjectWeightsLabel(activeProject.subject, globalSettings.subjects, activeProject.workspace, activeProject.assessmentProfileId, activeProject.customWeights)}>
+                WEIGHTS: {getSubjectWeightsLabel(activeProject.subject, globalSettings.subjects, activeProject.workspace, activeProject.assessmentProfileId, activeProject.customWeights)}
               </div>
               <div className="flex items-center gap-1.5 bg-emerald-50/50 dark:bg-emerald-950/25 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-100/40 dark:border-emerald-900/10 font-sans text-[10px] font-bold">
                 PASSING: {activeProject.passingGrade}
@@ -2345,7 +2416,8 @@ export default function ClassManagerView() {
                       activeProject.subject,
                       globalSettings.subjects,
                       activeProject.workspace,
-                      activeProject.assessmentProfileId
+                      activeProject.assessmentProfileId,
+                      activeProject.customWeights
                     );
                     return (
                       <>
@@ -2757,6 +2829,114 @@ export default function ClassManagerView() {
                   className="px-5 py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-black rounded-xl cursor-pointer"
                 >
                   Done
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ─── SHS Custom Weights Modal ─── */}
+      {shsCustomModalOpen && activeProject && (() => {
+        const customTotal = shsCustomWW + shsCustomPT + shsCustomQA;
+        const isValid = customTotal === 100;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm space-y-4 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">Custom SHS Weights</h3>
+                    <p className="text-[10px] text-slate-400 font-medium">Manual WW %, PT %, and QA % Setup</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShsCustomModalOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-950 rounded-xl p-3.5 border border-slate-150 dark:border-slate-850 space-y-3">
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="text-[9px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">WW %</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={shsCustomWW}
+                      onChange={(e) => setShsCustomWW(parseInt(e.target.value) || 0)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2 text-xs font-mono font-bold text-center focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500"
+                    />
+                    <span className="text-[8px] text-slate-400 block text-center mt-0.5">Written Work</span>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">PT %</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={shsCustomPT}
+                      onChange={(e) => setShsCustomPT(parseInt(e.target.value) || 0)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2 text-xs font-mono font-bold text-center focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500"
+                    />
+                    <span className="text-[8px] text-slate-400 block text-center mt-0.5">Performance</span>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">QA %</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={shsCustomQA}
+                      onChange={(e) => setShsCustomQA(parseInt(e.target.value) || 0)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2 text-xs font-mono font-bold text-center focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500"
+                    />
+                    <span className="text-[8px] text-slate-400 block text-center mt-0.5">Quarter Exam</span>
+                  </div>
+                </div>
+
+                <div className={`text-[10px] font-mono font-black text-center py-1.5 rounded-lg border ${isValid ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30' : 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/30'}`}>
+                  Total: {customTotal}% {isValid ? '✓ Valid (100%)' : `— Must equal 100% (${100 - customTotal > 0 ? '+' : ''}${100 - customTotal}%)`}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={!isValid}
+                  onClick={() => {
+                    if (!isValid) return;
+                    saveProject({
+                      ...activeProject,
+                      assessmentProfileId: 'custom',
+                      customWeights: {
+                        wow: shsCustomWW / 100,
+                        ppt: shsCustomPT / 100,
+                        qste: shsCustomQA / 100
+                      }
+                    });
+                    globalToast.show('success', `Custom weights applied (${shsCustomWW}% WW / ${shsCustomPT}% PT / ${shsCustomQA}% QA)!`, 'Weights Updated');
+                    setShsCustomModalOpen(false);
+                  }}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-black rounded-xl cursor-pointer shadow-4xs transition-all"
+                >
+                  Save & Apply Weights
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShsCustomModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
                 </button>
               </div>
             </div>
