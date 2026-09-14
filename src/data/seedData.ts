@@ -8,12 +8,12 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   language: "English",
   depedPolicy: "2027",
   subjects: {
-    English: { wow: 0.30, ppt: 0.50, qste: 0.20 },
-    Filipino: { wow: 0.30, ppt: 0.50, qste: 0.20 },
-    Mathematics: { wow: 0.40, ppt: 0.40, qste: 0.20 },
-    Science: { wow: 0.40, ppt: 0.40, qste: 0.20 },
-    AP: { wow: 0.30, ppt: 0.50, qste: 0.20 },
-    'Values Education': { wow: 0.30, ppt: 0.50, qste: 0.20 },
+    English: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+    Filipino: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+    Mathematics: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+    Science: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+    AP: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+    'Values Education': { wow: 0.20, ppt: 0.50, qste: 0.30 },
     'Music & Arts': { wow: 0.20, ppt: 0.60, qste: 0.20 },
     'PE & Health': { wow: 0.20, ppt: 0.60, qste: 0.20 },
     TLE: { wow: 0.20, ppt: 0.60, qste: 0.20 }

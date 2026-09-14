@@ -1,7 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useApp } from '../../context/AppContext';
 import { AdviserClass, HonorsLabel } from '../../types';
 import { GradeMatrix } from '../../utils/adviserUtils';
-import { Star, Printer, Medal } from 'lucide-react';
+import { generateAcademicAchieverCertificates, getDefaultCertificateDate } from '../../utils/adviser/certificateGenerator';
+import { globalToast } from '../../context/ToastContext';
+import { Star, Printer, Medal, Award, Eye } from 'lucide-react';
+import CertificatePreviewModal from './CertificatePreviewModal';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -9,10 +13,17 @@ interface Props {
 }
 
 export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
+  const { globalSettings } = useApp();
+  const [periodLabel, setPeriodLabel] = useState<string>('1st Quarter');
+  const [givenDate, setGivenDate] = useState<string>(() => {
+    return getDefaultCertificateDate(globalSettings.schoolName || (adviserClass as any).schoolName || 'SAN ROQUE PARISH HIGH SCHOOL, INC.');
+  });
+  const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
+
   const awardees = useMemo(() => {
     return gradeMatrix
-      .filter(s => s.honorsLabel !== null)
-      .sort((a, b) => {
+      .filter((s: import('../../utils/adviserUtils').StudentGradeRow) => s.honorsLabel !== null)
+      .sort((a: import('../../utils/adviserUtils').StudentGradeRow, b: import('../../utils/adviserUtils').StudentGradeRow) => {
         const honorWeight = (h: HonorsLabel | null | undefined) => {
           if (h === 'With Highest Honors') return 3;
           if (h === 'With High Honors') return 2;
@@ -29,6 +40,25 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
   const highestHonors = awardees.filter(a => a.honorsLabel === 'With Highest Honors');
   const highHonors = awardees.filter(a => a.honorsLabel === 'With High Honors');
   const honors = awardees.filter(a => a.honorsLabel === 'With Honors');
+
+  const handleGenerateCertificates = () => {
+    if (awardees.length === 0) {
+      globalToast.error('No academic achievers found to generate certificates for.', 'No Achievers');
+      return;
+    }
+    try {
+      const doc = generateAcademicAchieverCertificates(adviserClass, awardees, globalSettings, {
+        periodLabel,
+        givenDate
+      });
+      const filename = `Certificates_${adviserClass.gradeLevel}_${adviserClass.section}_${periodLabel.replace(/\s+/g, '_')}.pdf`;
+      doc.save(filename);
+      globalToast.success(`Generated ${awardees.length} Academic Excellence Certificate(s) (A4 Portrait, 2 per page) saved as "${filename}".`, 'Certificates Generated');
+    } catch (err: any) {
+      console.error('Certificate generation error:', err);
+      globalToast.error('Failed to generate certificates: ' + (err.message || String(err)), 'Generation Error');
+    }
+  };
 
   const Section = ({ title, data, iconColor, bgHeader }: { title: string; data: typeof awardees; iconColor: string; bgHeader: string }) => {
     if (data.length === 0) return null;
@@ -77,8 +107,25 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">End of school year honors and recognition.</p>
         </div>
-        <div className="flex gap-2">
-           <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 cursor-pointer">
+        <div className="flex flex-wrap items-center gap-2">
+           <button 
+             onClick={() => setShowPreviewModal(true)}
+             disabled={awardees.length === 0}
+             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 disabled:opacity-50 rounded-xl shadow-sm cursor-pointer transition-all"
+           >
+              <Eye className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Preview & Edit Settings
+           </button>
+           <button 
+             onClick={handleGenerateCertificates}
+             disabled={awardees.length === 0}
+             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl shadow-sm cursor-pointer transition-all"
+           >
+              <Award className="h-4 w-4 text-amber-200" /> Generate Certificates (A4)
+           </button>
+           <button 
+             onClick={() => window.print()}
+             className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 cursor-pointer"
+           >
               <Printer className="h-4 w-4 text-slate-500" /> Print List
            </button>
         </div>
@@ -98,6 +145,21 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
           <Section title="With High Honors" data={highHonors} iconColor="text-slate-400" bgHeader="bg-slate-100 dark:bg-slate-800/50" />
           <Section title="With Honors" data={honors} iconColor="text-amber-700" bgHeader="bg-amber-50 dark:bg-amber-900/10" />
         </>
+      )}
+
+      {/* Certificate HTML Preview & Settings Modal */}
+      {showPreviewModal && (
+        <CertificatePreviewModal
+          isOpen={showPreviewModal}
+          onClose={() => setShowPreviewModal(false)}
+          adviserClass={adviserClass}
+          awardees={awardees}
+          globalSettings={globalSettings}
+          periodLabel={periodLabel}
+          onPeriodChange={setPeriodLabel}
+          givenDate={givenDate}
+          onGivenDateChange={setGivenDate}
+        />
       )}
     </div>
   );

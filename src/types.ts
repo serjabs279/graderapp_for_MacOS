@@ -55,6 +55,8 @@ export interface ImportedSubjectGrades {
   isLocked: boolean;
   lockedAt?: string;
   importedAt: string;
+  isDirectEntry?: boolean;          // true when created by Adviser Direct Grade Entry
+  directEntryTeacher?: string;       // Optional name of part-time teacher
 }
 
 export interface SubjectGradeExportJSON {
@@ -74,6 +76,7 @@ export interface SubjectGradeExportJSON {
       lrn: string;
       studentName: string;
       grade: number;
+      status?: 'Active' | 'Transferred' | 'Dropped';
     }[];
   }[];
 }
@@ -96,7 +99,10 @@ export interface OverrideLogEntry {
     | 'Subject Imported'
     | 'Subject Replaced'
     | 'Subject Locked'
-    | 'Subject Unlocked';
+    | 'Subject Unlocked'
+    | 'Direct Grade Entry Created'
+    | 'Direct Grade Saved'
+    | 'Direct Grade Edited';
   previousValue?: string;
   newValue?: string;
   reason: string;
@@ -167,10 +173,27 @@ export interface ReassessmentSettings {
   policy: 'Average' | 'Highest' | 'Replacement';
 }
 
+export interface GradeAdjustmentEntry {
+  studentId: string;
+  studentName?: string;
+  originalGrade: number;
+  adjustedGrade: number;
+  difference: number;
+  wwAdjustment: number;
+  ptAdjustment: number;
+  qeAdjustment: number;
+  reason: string;
+  teacherName: string;
+  subject: string;
+  timestamp: string;
+}
+
 export interface QuarterData {
   assessments: Assessment[];
   scores: Record<string, Record<string, number>>; // studentId -> assessmentId -> score
   reassessmentScores?: Record<string, Record<string, number>>; // studentId -> assessmentId -> reassessmentScore
+  adjustmentModeEnabled?: boolean;
+  adjustments?: Record<string, GradeAdjustmentEntry>; // studentId -> GradeAdjustmentEntry
 }
 
 export interface Project {

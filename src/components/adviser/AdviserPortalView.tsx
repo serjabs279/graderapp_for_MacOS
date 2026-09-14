@@ -14,8 +14,10 @@ import PerformanceDashboard from './PerformanceDashboard';
 import SF9Generator from './SF9Generator';
 import AdviserStudentManager from './AdviserStudentManager';
 import OverrideLogTab from './OverrideLogTab';
+import DirectGradeEntryTab from './directGradeEntry/DirectGradeEntryTab';
+import { PenTool } from 'lucide-react';
 
-type PortalTab = 'masterlist' | 'matrix' | 'import' | 'rankings' | 'awardees' | 'performance' | 'sf9' | 'settings' | 'logs';
+type PortalTab = 'masterlist' | 'matrix' | 'import' | 'direct-entry' | 'rankings' | 'awardees' | 'performance' | 'sf9' | 'settings' | 'logs';
 
 export default function AdviserPortalView() {
   const { adviserClasses, saveAdviserClass, globalSettings, setActiveAdviserClass } = useApp();
@@ -74,6 +76,7 @@ export default function AdviserPortalView() {
   const tabs: { id: PortalTab; label: string; icon: React.ReactNode; description: string }[] = [
     { id: 'masterlist', label: 'Masterlist', icon: <Users className="h-4 w-4" />, description: 'Manage students' },
     { id: 'import', label: 'Import Grades', icon: <BookOpen className="h-4 w-4" />, description: 'Upload subject grade files' },
+    { id: 'direct-entry', label: 'Direct Grade Entry', icon: <PenTool className="h-4 w-4 text-purple-500" />, description: 'Enter grades for part-time teachers' },
     { id: 'matrix', label: 'Grade Matrix', icon: <TableProperties className="h-4 w-4" />, description: 'Consolidated grades per subject' },
     { id: 'rankings', label: 'Rankings', icon: <Trophy className="h-4 w-4" />, description: 'Quarterly & EOSY rankings' },
     { id: 'awardees', label: 'Awardees', icon: <Star className="h-4 w-4" />, description: 'Honors & recognition' },
@@ -204,6 +207,7 @@ export default function AdviserPortalView() {
             {activeTab === 'masterlist' && <AdviserStudentManager adviserClass={activeAdviserClass} gradeMatrix={gradeMatrix} />}
             {activeTab === 'matrix' && <GradeMatrixTab adviserClass={activeAdviserClass} gradeMatrix={gradeMatrix} />}
             {activeTab === 'import' && <GradeImportPanel adviserClass={activeAdviserClass} />}
+            {activeTab === 'direct-entry' && <DirectGradeEntryTab adviserClass={activeAdviserClass} />}
             {activeTab === 'rankings' && <RankingsTab adviserClass={activeAdviserClass} gradeMatrix={gradeMatrix} />}
             {activeTab === 'awardees' && <AwardeesTab adviserClass={activeAdviserClass} gradeMatrix={gradeMatrix} />}
             {activeTab === 'performance' && <PerformanceDashboard adviserClass={activeAdviserClass} gradeMatrix={gradeMatrix} />}

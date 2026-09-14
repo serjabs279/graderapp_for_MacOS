@@ -126,12 +126,14 @@ export const ALL_SHS_PRESET_PROFILES: SHSProfile[] = [...SHS_OLD_PROFILES, ...SH
 
 
 export const SUBJECT_DEFAULTS: Record<SubjectType, { wow: number; ppt: number; qste: number }> = {
-  English: { wow: 0.30, ppt: 0.50, qste: 0.20 },
-  Filipino: { wow: 0.30, ppt: 0.50, qste: 0.20 },
-  Mathematics: { wow: 0.40, ppt: 0.40, qste: 0.20 },
-  Science: { wow: 0.40, ppt: 0.40, qste: 0.20 },
-  AP: { wow: 0.30, ppt: 0.50, qste: 0.20 },
-  'Values Education': { wow: 0.30, ppt: 0.50, qste: 0.20 },
+  // Core Subjects (AP, English, Filipino, Math, Science, Values Ed / GMRC): WW 20%, PT 50%, QE/ST 30%
+  English: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+  Filipino: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+  Mathematics: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+  Science: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+  AP: { wow: 0.20, ppt: 0.50, qste: 0.30 },
+  'Values Education': { wow: 0.20, ppt: 0.50, qste: 0.30 },
+  // EPP / TLE and MAPEH: WW 20%, PT 60%, QE/ST 20%
   'Music & Arts': { wow: 0.20, ppt: 0.60, qste: 0.20 },
   'PE & Health': { wow: 0.20, ppt: 0.60, qste: 0.20 },
   TLE: { wow: 0.20, ppt: 0.60, qste: 0.20 }
@@ -144,11 +146,12 @@ export function getSubjectWeights(
   assessmentProfileId?: string,
   projectCustomWeights?: { wow: number; ppt: number; qste: number }
 ): { wow: number; ppt: number; qste: number } {
+  // If project has explicit customWeights set, honor them for any workspace (JHS or SHS)
+  if (projectCustomWeights && projectCustomWeights.wow !== undefined && projectCustomWeights.ppt !== undefined && projectCustomWeights.qste !== undefined) {
+    return projectCustomWeights;
+  }
+
   if (workspace === 'SHS') {
-    // Custom manual weights take priority when profile is 'custom'
-    if (assessmentProfileId === 'custom' && projectCustomWeights) {
-      return projectCustomWeights;
-    }
     // Try ALL presets (old curriculum + MATATAG)
     const shsProfile = ALL_SHS_PRESET_PROFILES.find(p => p.id === assessmentProfileId);
     if (shsProfile) {
@@ -183,12 +186,27 @@ export function getSubjectWeights(
 
   // Common DepEd subject mappings & case-insensitive matching
   const lower = s.toLowerCase();
+  // Core Subjects: 20% WW / 50% PT / 30% ST&TE
   if (lower.includes('math') || lower.includes('algebra') || lower.includes('geom') || lower.includes('trig') || lower.includes('stat') || lower.includes('calc')) {
-    return SUBJECT_DEFAULTS.Mathematics; // 40, 40, 20
+    return SUBJECT_DEFAULTS.Mathematics; // 20, 50, 30
   }
   if (lower.includes('sci') || lower.includes('bio') || lower.includes('chem') || lower.includes('phys')) {
-    return SUBJECT_DEFAULTS.Science; // 40, 40, 20
+    return SUBJECT_DEFAULTS.Science; // 20, 50, 30
   }
+  if (lower.includes('english') || lower.includes('eng')) {
+    return SUBJECT_DEFAULTS.English; // 20, 50, 30
+  }
+  if (lower.includes('filipino') || lower.includes('fil') || lower.includes('tagalog')) {
+    return SUBJECT_DEFAULTS.Filipino; // 20, 50, 30
+  }
+  if (lower.includes('ap') || lower.includes('araling') || lower.includes('soc') || lower.includes('history')) {
+    return SUBJECT_DEFAULTS.AP; // 20, 50, 30
+  }
+  if (lower.includes('value') || lower.includes('esp') || lower.includes('gmrc') || lower.includes('edukasyon') || lower.includes('conduct')) {
+    return SUBJECT_DEFAULTS['Values Education']; // 20, 50, 30
+  }
+
+  // EPP / TLE and MAPEH: 20% WW / 60% PT / 20% ST&TE
   if (lower.includes('mapeh') || lower.includes('music') || lower.includes('art')) {
     return SUBJECT_DEFAULTS['Music & Arts']; // 20, 60, 20
   }
@@ -198,21 +216,9 @@ export function getSubjectWeights(
   if (lower.includes('tle') || lower.includes('epp') || lower.includes('tvl') || lower.includes('tech') || lower.includes('agri') || lower.includes('ict')) {
     return SUBJECT_DEFAULTS.TLE; // 20, 60, 20
   }
-  if (lower.includes('english') || lower.includes('eng')) {
-    return SUBJECT_DEFAULTS.English; // 30, 50, 20
-  }
-  if (lower.includes('filipino') || lower.includes('fil') || lower.includes('tagalog')) {
-    return SUBJECT_DEFAULTS.Filipino; // 30, 50, 20
-  }
-  if (lower.includes('ap') || lower.includes('araling') || lower.includes('soc') || lower.includes('history')) {
-    return SUBJECT_DEFAULTS.AP; // 30, 50, 20
-  }
-  if (lower.includes('value') || lower.includes('esp') || lower.includes('edukasyon') || lower.includes('conduct')) {
-    return SUBJECT_DEFAULTS['Values Education']; // 30, 50, 20
-  }
 
-  // Default DepEd Order No. 8 fallback (30% WW / 50% PT / 20% QA)
-  return { wow: 0.30, ppt: 0.50, qste: 0.20 };
+  // Fallback default: Core 20% WW / 50% PT / 30% ST&TE
+  return { wow: 0.20, ppt: 0.50, qste: 0.30 };
 }
 
 export function getSubjectWeightsLabel(
@@ -361,9 +367,18 @@ export function computeProjectStudentGrade(
   const initialGrade = weightedWOW + weightedPPT + weightedQSTE;
   
   // 0-Based vs Adjusted Transmutation Grade depending on active project depedPolicy
-  const finalGrade = project.depedPolicy === '2015'
+  const rawFinalGrade = project.depedPolicy === '2015'
     ? Math.round(initialGrade)
     : transmuteGrade2027(initialGrade);
+
+  // Check for active grade adjustment
+  const adjustmentEntry = qData?.adjustmentModeEnabled && qData?.adjustments
+    ? qData.adjustments[studentId]
+    : undefined;
+
+  const finalGrade = adjustmentEntry !== undefined
+    ? adjustmentEntry.adjustedGrade
+    : rawFinalGrade;
 
   const isPassing = finalGrade >= project.passingGrade;
   const remarks = isPassing ? "Passed" : "Needs Intervention";
@@ -388,9 +403,31 @@ export function computeProjectStudentGrade(
     weightedQSTE: Math.round(weightedQSTE * 100) / 100,
 
     initialGrade: Math.round(initialGrade * 100) / 100,
+    rawFinalGrade,
     finalGrade,
+    adjustmentEntry,
     remarks,
     isPassing,
     hasScores
   };
 }
+
+/**
+ * Distributes grade adjustment point difference across WW, PT, and QSTE according to component weights.
+ */
+export function computeGradeAdjustmentDistribution(
+  difference: number,
+  weights: { wow: number; ppt: number; qste: number }
+): { wwAdjustment: number; ptAdjustment: number; qeAdjustment: number } {
+  const sumWeights = weights.wow + weights.ppt + weights.qste || 1;
+  const wwAdjustment = Math.round((difference * (weights.wow / sumWeights)) * 100) / 100;
+  const ptAdjustment = Math.round((difference * (weights.ppt / sumWeights)) * 100) / 100;
+  const qeAdjustment = Math.round((difference - wwAdjustment - ptAdjustment) * 100) / 100;
+
+  return {
+    wwAdjustment,
+    ptAdjustment,
+    qeAdjustment
+  };
+}
+

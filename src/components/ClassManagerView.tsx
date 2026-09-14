@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Student, Assessment, Project, SubjectType } from '../types';
-import { computeProjectStudentGrade, getSubjectWeights, getSubjectWeightsLabel, getEffectiveScore, getLearnerReassessmentStatus, SHS_PROFILES, SHS_OLD_PROFILES } from '../utils';
+import { Student, Assessment, Project, SubjectType, GradeAdjustmentEntry } from '../types';
+import { computeProjectStudentGrade, computeGradeAdjustmentDistribution, getSubjectWeights, getSubjectWeightsLabel, getEffectiveScore, getLearnerReassessmentStatus, SHS_PROFILES, SHS_OLD_PROFILES } from '../utils';
 import { getProjectPeriods } from '../calendar/academicCalendar';
 import { exportClassRecordPDF } from '../utils/pdfExport';
 import { globalToast } from '../context/ToastContext';
 import TeacherExcelExportModal from './TeacherExcelExportModal';
+import { parseTeacherExcelRecords } from '../utils/excelImportParser';
 import {
   Plus,
   Trash2,
@@ -31,6 +32,9 @@ import {
   Sparkles,
   HelpCircle,
   Award,
+  Sliders,
+  CheckCircle2,
+  FileUp,
   X
 } from 'lucide-react';
 
@@ -65,10 +69,47 @@ export default function ClassManagerView() {
     toggleReassessmentForAssessment,
     updateReassessmentSettingsInActive,
     enableReassessmentModeForQuarter,
-    updateActiveProjectQuarter
+    updateActiveProjectQuarter,
+
+    toggleGradeAdjustmentMode,
+    setGradeAdjustmentForStudent,
+    removeGradeAdjustmentForStudent,
+    updateProjectTeacherInfo
   } = useApp();
 
   const activeProject = projects.find(p => p.id === activeProjectId);
+
+  // Teacher Info Editing Modal state
+  const [showTeacherInfoModal, setShowTeacherInfoModal] = useState(false);
+  const [editTeacherName, setEditTeacherName] = useState('');
+  const [editSchoolName, setEditSchoolName] = useState('');
+  const [editSubjectName, setEditSubjectName] = useState('');
+  const [editSectionName, setEditSectionName] = useState('');
+  const [editGradeLevel, setEditGradeLevel] = useState('');
+  const [editPassingGrade, setEditPassingGrade] = useState(75);
+  const [editDepedPolicy, setEditDepedPolicy] = useState<'2015' | '2027'>('2015');
+  const [editWeightWW, setEditWeightWW] = useState<number>(30);
+  const [editWeightPT, setEditWeightPT] = useState<number>(50);
+  const [editWeightQE, setEditWeightQE] = useState<number>(20);
+
+  // Teacher-Only Grade Adjustment states
+  const [showAdjustmentLogModal, setShowAdjustmentLogModal] = useState(false);
+  const [editingAdjustmentStudent, setEditingAdjustmentStudent] = useState<{
+    id: string;
+    name: string;
+    computedGrade: number;
+    currentAdjusted: number;
+    currentReason: string;
+  } | null>(null);
+  const [targetAdjustedGrade, setTargetAdjustedGrade] = useState<number>(75);
+  const [adjustmentReason, setAdjustmentReason] = useState<string>('Performance merit and remediation');
+
+  // Smart Excel Class Record Import Modal State
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
+  const [parsedExcelData, setParsedExcelData] = useState<import('../utils/excelImportParser').ParsedExcelGradebook | null>(null);
+  const [excelImportFile, setExcelImportFile] = useState<File | null>(null);
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
+  const [excelImportError, setExcelImportError] = useState<string | null>(null);
 
   // Mastery-Based Component Reassessment framework states
   const [reassessmentMode, setReassessmentMode] = useState(false);
@@ -77,6 +118,7 @@ export default function ClassManagerView() {
   // Derive active quarter state from project (calendar-driven)
   const activeQuarterId = activeProject?.lastActiveQuarter || '1st Quarter';
   const activeQuarterData = activeProject?.quarters?.[activeQuarterId];
+  const isAdjustmentModeOn = Boolean(activeQuarterData?.adjustmentModeEnabled);
 
   // Compute the list of periods this project supports (1 or 4 quarters, 3 terms, etc.)
   const projectPeriods: string[] = activeProject
@@ -699,6 +741,37 @@ export default function ClassManagerView() {
               {activeProject.gradeLevel} • {activeQuarterId} • S.Y. {activeProject.schoolYear}
             </span>
 
+            {/* Teacher Info / School Info Quick Edit */}
+            <button
+              onClick={() => {
+                setEditTeacherName(activeProject.teacherName || '');
+                setEditSchoolName(activeProject.schoolName || '');
+                setEditSubjectName(activeProject.subject || '');
+                setEditSectionName(activeProject.section || '');
+                setEditGradeLevel(activeProject.gradeLevel || '');
+                setEditPassingGrade(activeProject.passingGrade || 75);
+                setEditDepedPolicy(activeProject.depedPolicy || '2015');
+
+                const curWeights = getSubjectWeights(
+                  activeProject.subject,
+                  globalSettings.subjects,
+                  activeProject.workspace,
+                  activeProject.assessmentProfileId,
+                  activeProject.customWeights
+                );
+                setEditWeightWW(Math.round(curWeights.wow * 100));
+                setEditWeightPT(Math.round(curWeights.ppt * 100));
+                setEditWeightQE(Math.round(curWeights.qste * 100));
+
+                setShowTeacherInfoModal(true);
+              }}
+              className="text-[8.5px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider transition-all cursor-pointer border flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100"
+              title="Click to edit Teacher, Subject, Section, and School details"
+            >
+              <Edit3 className="h-3 w-3" />
+              <span>Teacher: {activeProject.teacherName || 'Not Set'}</span>
+            </button>
+
             {/* Completed/In-Progress Badge Trigger */}
             <button
               onClick={() => {
@@ -992,6 +1065,43 @@ export default function ClassManagerView() {
                 </button>
               </div>
 
+              {/* ── Grade Adjustment Feature (Teacher-Only) ── */}
+              <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-800 pl-2">
+                <button
+                  onClick={() => toggleGradeAdjustmentMode(activeQuarterId, !isAdjustmentModeOn)}
+                  className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1.5 border ${
+                    isAdjustmentModeOn
+                      ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-700 shadow-sm'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                  }`}
+                  title={isAdjustmentModeOn ? 'Turn OFF Grade Adjustment' : 'Turn ON Grade Adjustment'}
+                >
+                  <Sliders className="h-3.5 w-3.5" />
+                  <span>Grade Adjustment {isAdjustmentModeOn ? 'ON' : 'OFF'}</span>
+                </button>
+                {isAdjustmentModeOn && (
+                  <button
+                    onClick={() => setShowAdjustmentLogModal(true)}
+                    className="px-2 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[10px] font-black rounded-lg transition-all cursor-pointer shadow-3xs"
+                    title="View Grade Adjustment Audit Log"
+                  >
+                    Log ({Object.keys(activeQuarterData?.adjustments || {}).length})
+                  </button>
+                )}
+              </div>
+
+              {/* ── Smart Excel Class Record Import Button ── */}
+              <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-800 pl-2">
+                <button
+                  onClick={() => setShowExcelImportModal(true)}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 text-[10px] font-black rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1.5"
+                  title="Import scores & records directly from Excel file"
+                >
+                  <FileUp className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Import Excel Record</span>
+                </button>
+              </div>
+
               {/* Export Buttons */}
               <div className="flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-2">
                 <button
@@ -1183,18 +1293,38 @@ export default function ClassManagerView() {
                     {activeStudents.map((st, sIdx) => {
                       const computed = computeProjectStudentGrade(activeProject, st.id, globalSettings.subjects, activeQuarterId);
                       const scores = (activeQuarterData?.scores || {})[st.id] || {};
+                      const isInactive = st.status === 'Transferred' || st.status === 'Dropped';
 
                       return (
-                        <tr
-                          key={st.id}
-                          className="group hover:bg-slate-50/50 dark:hover:bg-slate-850/10 text-xs text-slate-700 dark:text-slate-300 font-medium transition-colors"
-                        >
+                        <React.Fragment key={st.id}>
+                          <tr
+                            className={`group text-xs font-medium transition-colors ${
+                              isInactive
+                                ? 'bg-rose-50/50 dark:bg-rose-950/20 hover:bg-rose-100/60 dark:hover:bg-rose-950/40 text-rose-900 dark:text-rose-200'
+                                : 'hover:bg-slate-50/50 dark:hover:bg-slate-850/10 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
                           {/* Frozen student details with distinct right shadow/border */}
-                          <td className="py-3 px-4 font-bold sticky left-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50/80 dark:group-hover:bg-slate-850/20 group-even:bg-slate-50/30 dark:group-even:bg-slate-950/20 z-10 transition-colors border-r border-slate-150 dark:border-slate-800 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.06)] min-w-[220px]">
-                            <div className="font-extrabold text-slate-850 dark:text-slate-100 tracking-tight">{st.name}</div>
-                            <div className="text-[9px] text-slate-400 dark:text-slate-500 font-sans font-medium mt-0.5">LRN: {st.lrn}</div>
+                          <td className={`py-3 px-4 font-bold sticky left-0 z-10 transition-colors border-r shadow-[3px_0_6px_-2px_rgba(0,0,0,0.06)] min-w-[220px] ${
+                            isInactive
+                              ? 'bg-rose-50 dark:bg-rose-950/90 group-hover:bg-rose-100 dark:group-hover:bg-rose-900/60 border-rose-200 dark:border-rose-900/50'
+                              : 'bg-white dark:bg-slate-900 group-hover:bg-slate-50/80 dark:group-hover:bg-slate-850/20 group-even:bg-slate-50/30 dark:group-even:bg-slate-950/20 border-slate-150 dark:border-slate-800'
+                          }`}>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`tracking-tight ${isInactive ? 'font-black text-rose-800 dark:text-rose-300' : 'font-extrabold text-slate-850 dark:text-slate-100'}`}>
+                                {st.name}
+                              </span>
+                              {isInactive && (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-100 border border-rose-300 dark:border-rose-800 shadow-2xs">
+                                  {st.status}
+                                </span>
+                              )}
+                            </div>
+                            <div className={`text-[9px] font-sans font-medium mt-0.5 ${isInactive ? 'text-rose-500/80 dark:text-rose-400/80' : 'text-slate-400 dark:text-slate-500'}`}>
+                              LRN: {st.lrn}
+                            </div>
                           </td>
-                          <td className="py-3 px-2.5 text-center border-r border-slate-150 dark:border-slate-800 shrink-0">
+                          <td className={`py-3 px-2.5 text-center border-r shrink-0 ${isInactive ? 'border-rose-200 dark:border-rose-900/50' : 'border-slate-150 dark:border-slate-800'}`}>
                             {st.sex === 'Female' ? (
                               <span className="inline-block px-1.5 py-0.5 text-[9px] font-sans font-black rounded-md bg-pink-50 text-pink-600 dark:bg-pink-950/20 dark:text-pink-400 border border-pink-100/40 dark:border-pink-900/10">F</span>
                             ) : (
@@ -1479,8 +1609,130 @@ export default function ClassManagerView() {
                             )}
                           </td>
                         </tr>
-                      );
-                    })}
+                        {isAdjustmentModeOn && (
+                          <tr
+                            key={`adj-${st.id}`}
+                            className="bg-purple-50/80 dark:bg-purple-950/40 border-b border-purple-200/70 dark:border-purple-800/50 text-xs font-mono transition-colors"
+                          >
+                            <td
+                              className="py-2.5 px-4 font-bold sticky left-0 bg-purple-100/90 dark:bg-purple-950/90 z-10 border-r border-purple-200 dark:border-purple-800 min-w-[220px]"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 text-purple-900 dark:text-purple-200">
+                                  <Sliders className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                                  <span className="text-[10px] font-black uppercase tracking-wider">Adjustment</span>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const raw = computed.rawFinalGrade ?? computed.finalGrade;
+                                    setEditingAdjustmentStudent({
+                                      id: st.id,
+                                      name: st.name,
+                                      computedGrade: raw,
+                                      currentAdjusted: computed.adjustmentEntry ? computed.adjustmentEntry.adjustedGrade : raw,
+                                      currentReason: computed.adjustmentEntry?.reason || 'Performance merit and remediation'
+                                    });
+                                    setTargetAdjustedGrade(computed.adjustmentEntry ? computed.adjustmentEntry.adjustedGrade : raw);
+                                    setAdjustmentReason(computed.adjustmentEntry?.reason || 'Performance merit and remediation');
+                                  }}
+                                  className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-[9px] font-black tracking-wider uppercase cursor-pointer shadow-3xs transition-all"
+                                >
+                                  {computed.adjustmentEntry ? 'Edit Adj' : '+ Adjust'}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-2.5 text-center border-r border-purple-200 dark:border-purple-800 text-purple-400 font-bold text-[10px]">
+                              Δ
+                            </td>
+
+                            {/* WW Adjustment distribution */}
+                            {wwAssessments.length > 0 && (
+                              <td
+                                colSpan={wwAssessments.length + 3}
+                                className="py-2.5 px-3 text-center border-r border-purple-200 dark:border-purple-800 bg-purple-100/40 dark:bg-purple-950/20"
+                              >
+                                <div className="flex items-center justify-center gap-1 text-[11px] font-black text-purple-800 dark:text-purple-300">
+                                  <span>WW Adj:</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-purple-200/70 dark:bg-purple-900/60 font-mono">
+                                    {computed.adjustmentEntry
+                                      ? ((computed.adjustmentEntry.wwAdjustment ?? 0) >= 0
+                                          ? `+${(computed.adjustmentEntry.wwAdjustment ?? 0).toFixed(2)}`
+                                          : `${(computed.adjustmentEntry.wwAdjustment ?? 0).toFixed(2)}`)
+                                      : '+0.00'} pts
+                                  </span>
+                                </div>
+                              </td>
+                            )}
+
+                            {/* PT Adjustment distribution */}
+                            {ptAssessments.length > 0 && (
+                              <td
+                                colSpan={ptAssessments.length + 3}
+                                className="py-2.5 px-3 text-center border-r border-purple-200 dark:border-purple-800 bg-purple-100/40 dark:bg-purple-950/20"
+                              >
+                                <div className="flex items-center justify-center gap-1 text-[11px] font-black text-purple-800 dark:text-purple-300">
+                                  <span>PT Adj:</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-purple-200/70 dark:bg-purple-900/60 font-mono">
+                                    {computed.adjustmentEntry
+                                      ? ((computed.adjustmentEntry.ptAdjustment ?? 0) >= 0
+                                          ? `+${(computed.adjustmentEntry.ptAdjustment ?? 0).toFixed(2)}`
+                                          : `${(computed.adjustmentEntry.ptAdjustment ?? 0).toFixed(2)}`)
+                                      : '+0.00'} pts
+                                  </span>
+                                </div>
+                              </td>
+                            )}
+
+                            {/* QE Adjustment distribution */}
+                            {qeAssessments.length > 0 && (
+                              <td
+                                colSpan={qeAssessments.length + 2}
+                                className="py-2.5 px-3 text-center border-r border-purple-200 dark:border-purple-800 bg-purple-100/40 dark:bg-purple-950/20"
+                              >
+                                <div className="flex items-center justify-center gap-1 text-[11px] font-black text-purple-800 dark:text-purple-300">
+                                  <span>QE Adj:</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-purple-200/70 dark:bg-purple-900/60 font-mono">
+                                    {computed.adjustmentEntry
+                                      ? ((computed.adjustmentEntry.qeAdjustment ?? 0) >= 0
+                                          ? `+${(computed.adjustmentEntry.qeAdjustment ?? 0).toFixed(2)}`
+                                          : `${(computed.adjustmentEntry.qeAdjustment ?? 0).toFixed(2)}`)
+                                      : '+0.00'} pts
+                                  </span>
+                                </div>
+                              </td>
+                            )}
+
+                            {/* Initial (Raw) Grade */}
+                            <td className="py-2.5 px-2 text-center text-[10px] text-purple-600 dark:text-purple-400 font-bold">
+                              {computed.rawFinalGrade ?? computed.finalGrade} (Raw)
+                            </td>
+
+                            {/* Adjusted Quarterly Grade */}
+                            <td className="py-2.5 px-2 text-center">
+                              <span className="inline-block px-2 py-0.5 bg-purple-700 text-white font-black rounded-lg text-xs shadow-3xs">
+                                {computed.finalGrade}
+                              </span>
+                            </td>
+
+                            {/* Action / Status */}
+                            <td className="py-2.5 px-3 text-center">
+                              {computed.adjustmentEntry ? (
+                                <button
+                                  onClick={() => removeGradeAdjustmentForStudent(activeQuarterId, st.id)}
+                                  className="text-[9px] font-bold text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:underline cursor-pointer"
+                                  title="Remove grade adjustment"
+                                >
+                                  Reset Orig ({computed.rawFinalGrade})
+                                </button>
+                              ) : (
+                                <span className="text-[9px] text-purple-400 dark:text-purple-500 font-bold">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                   </tbody>
                 </table>
               </div>
@@ -2943,6 +3195,691 @@ export default function ClassManagerView() {
           </div>
         );
       })()}
+
+      {/* ─── 1. Teacher & Class Info Edit Modal ─── */}
+      {showTeacherInfoModal && activeProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md space-y-4 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+                  <Edit3 className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">Edit Teacher & Class Info</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">Update instructor and subject credentials inside gradebook</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTeacherInfoModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">Teacher / Instructor Name</label>
+                <input
+                  type="text"
+                  value={editTeacherName}
+                  onChange={(e) => setEditTeacherName(e.target.value)}
+                  placeholder="e.g. Maria Santos, LPT"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">School Name</label>
+                <input
+                  type="text"
+                  value={editSchoolName}
+                  onChange={(e) => setEditSchoolName(e.target.value)}
+                  placeholder="e.g. San Roque National High School"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">Subject Name</label>
+                  <input
+                    type="text"
+                    value={editSubjectName}
+                    onChange={(e) => setEditSubjectName(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">Section</label>
+                  <input
+                    type="text"
+                    value={editSectionName}
+                    onChange={(e) => setEditSectionName(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">Grade Level</label>
+                  <input
+                    type="text"
+                    value={editGradeLevel}
+                    onChange={(e) => setEditGradeLevel(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">Passing Grade</label>
+                  <input
+                    type="number"
+                    value={editPassingGrade}
+                    onChange={(e) => setEditPassingGrade(parseInt(e.target.value) || 75)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">DepEd Transmutation Policy</label>
+                <select
+                  value={editDepedPolicy}
+                  onChange={(e) => setEditDepedPolicy(e.target.value as '2015' | '2027')}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1.5 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value="2015">DepEd Order No. 8, s. 2015 (Standard Transmutation)</option>
+                  <option value="2027">MATATAG Transmutation (DepEd Order 2027/2028)</option>
+                </select>
+              </div>
+
+              {/* Subject Component Weights Edit */}
+              <div className="pt-2 border-t border-slate-150 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[10px] font-mono font-bold text-slate-500 uppercase">
+                    Subject Component Weights (%)
+                  </label>
+                  <span
+                    className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-md ${
+                      editWeightWW + editWeightPT + editWeightQE === 100
+                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                        : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'
+                    }`}
+                  >
+                    Total: {editWeightWW + editWeightPT + editWeightQE}%
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[9px] font-mono text-slate-400 block mb-0.5">WW (%)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={editWeightWW}
+                      onChange={(e) => setEditWeightWW(parseInt(e.target.value) || 0)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-1.5 px-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 text-center focus:ring-1.5 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-mono text-slate-400 block mb-0.5">PT (%)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={editWeightPT}
+                      onChange={(e) => setEditWeightPT(parseInt(e.target.value) || 0)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-1.5 px-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 text-center focus:ring-1.5 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-mono text-slate-400 block mb-0.5">QE (%)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={editWeightQE}
+                      onChange={(e) => setEditWeightQE(parseInt(e.target.value) || 0)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-1.5 px-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 text-center focus:ring-1.5 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Preset buttons */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[9px] text-slate-400 font-bold self-center">Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => { setEditWeightWW(20); setEditWeightPT(50); setEditWeightQE(30); }}
+                    className="text-[9px] font-bold px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition"
+                  >
+                    20-50-30 (Core: Math/Sci/Eng/Fil/AP/EsP)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditWeightWW(20); setEditWeightPT(60); setEditWeightQE(20); }}
+                    className="text-[9px] font-bold px-2 py-0.5 rounded bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300 border border-teal-200 dark:border-teal-800 transition"
+                  >
+                    20-60-20 (EPP/TLE/MAPEH)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const totalWeight = editWeightWW + editWeightPT + editWeightQE;
+                  if (totalWeight !== 100) {
+                    globalToast.show('error', `Component weights must add up to exactly 100% (currently ${totalWeight}%).`, 'Invalid Weights');
+                    return;
+                  }
+
+                  updateProjectTeacherInfo({
+                    teacherName: editTeacherName.trim(),
+                    schoolName: editSchoolName.trim(),
+                    subject: editSubjectName.trim(),
+                    section: editSectionName.trim(),
+                    gradeLevel: editGradeLevel.trim(),
+                    passingGrade: editPassingGrade,
+                    depedPolicy: editDepedPolicy,
+                    customWeights: {
+                      wow: editWeightWW / 100,
+                      ppt: editWeightPT / 100,
+                      qste: editWeightQE / 100
+                    }
+                  });
+                  globalToast.show('success', 'Teacher credentials and subject weights updated successfully!', 'Saved');
+                  setShowTeacherInfoModal(false);
+                }}
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-4xs transition-all"
+              >
+                Save Teacher Details
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowTeacherInfoModal(false)}
+                className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 2. Teacher-Only Grade Adjustment Input Dialog ─── */}
+      {editingAdjustmentStudent && activeProject && (() => {
+        const rawGrade = editingAdjustmentStudent.computedGrade;
+        const diff = targetAdjustedGrade - rawGrade;
+        const weights = getSubjectWeights(
+          activeProject.subject,
+          globalSettings.subjects,
+          activeProject.workspace,
+          activeProject.assessmentProfileId,
+          activeProject.customWeights
+        );
+        const dist = computeGradeAdjustmentDistribution(diff, weights);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800/80 rounded-2xl shadow-2xl w-full max-w-md space-y-4 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-xl">
+                    <Sliders className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">Teacher Grade Adjustment</h3>
+                    <p className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">{editingAdjustmentStudent.name}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingAdjustmentStudent(null)}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-150 dark:border-slate-850 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-semibold">Original Computed Grade:</span>
+                  <span className="font-mono font-black text-slate-800 dark:text-slate-200 text-sm bg-slate-200/60 dark:bg-slate-800 px-2.5 py-0.5 rounded-lg">
+                    {rawGrade}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400 uppercase block">
+                    Desired Adjusted Quarterly Grade (e.g., {rawGrade} → {rawGrade + 1})
+                  </label>
+                  <input
+                    type="number"
+                    min={60}
+                    max={100}
+                    value={targetAdjustedGrade}
+                    onChange={(e) => setTargetAdjustedGrade(parseInt(e.target.value) || 0)}
+                    className="w-full bg-white dark:bg-slate-900 border-2 border-purple-400 dark:border-purple-600 rounded-xl py-2 px-3 text-base font-mono font-black text-purple-700 dark:text-purple-300 text-center focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                {/* Live Distribution Breakdown */}
+                <div className="p-3 bg-purple-50/70 dark:bg-purple-950/30 rounded-xl border border-purple-200/60 dark:border-purple-800/40 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-black text-purple-900 dark:text-purple-200">
+                    <span>Grade Difference:</span>
+                    <span className="font-mono text-sm px-2 py-0.5 rounded bg-purple-200/80 dark:bg-purple-900/60">
+                      {diff >= 0 ? `+${diff}` : diff}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono font-bold pt-1 border-t border-purple-200/50 dark:border-purple-800/40">
+                    <div className="p-1.5 bg-purple-100/50 dark:bg-purple-900/40 rounded-lg">
+                      <span className="block text-[8px] text-purple-600 uppercase">WW (+{Math.round(weights.wow * 100)}%)</span>
+                      <span className="text-purple-900 dark:text-purple-200 font-black">{(dist?.wwAdjustment ?? 0) >= 0 ? `+${(dist?.wwAdjustment ?? 0).toFixed(2)}` : (dist?.wwAdjustment ?? 0).toFixed(2)} pts</span>
+                    </div>
+                    <div className="p-1.5 bg-purple-100/50 dark:bg-purple-900/40 rounded-lg">
+                      <span className="block text-[8px] text-purple-600 uppercase">PT (+{Math.round(weights.ppt * 100)}%)</span>
+                      <span className="text-purple-900 dark:text-purple-200 font-black">{(dist?.ptAdjustment ?? 0) >= 0 ? `+${(dist?.ptAdjustment ?? 0).toFixed(2)}` : (dist?.ptAdjustment ?? 0).toFixed(2)} pts</span>
+                    </div>
+                    <div className="p-1.5 bg-purple-100/50 dark:bg-purple-900/40 rounded-lg">
+                      <span className="block text-[8px] text-purple-600 uppercase">QE (+{Math.round(weights.qste * 100)}%)</span>
+                      <span className="text-purple-900 dark:text-purple-200 font-black">{(dist?.qeAdjustment ?? 0) >= 0 ? `+${(dist?.qeAdjustment ?? 0).toFixed(2)}` : (dist?.qeAdjustment ?? 0).toFixed(2)} pts</span>
+                    </div>
+                  </div>
+                  <p className="text-[8.5px] text-purple-500 leading-tight">
+                    * Raw score entries are 100% preserved. Additional points are distributed proportionally according to component weights and logged for DepEd auditing.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">Audit Log Reason</label>
+                  <input
+                    type="text"
+                    value={adjustmentReason}
+                    onChange={(e) => setAdjustmentReason(e.target.value)}
+                    placeholder="e.g. Remediation activity & special merit"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1.5 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rawGrade = editingAdjustmentStudent.computedGrade;
+                    const diff = targetAdjustedGrade - rawGrade;
+                    const weights = getSubjectWeights(
+                      activeProject.subject,
+                      globalSettings.subjects,
+                      activeProject.workspace,
+                      activeProject.assessmentProfileId,
+                      activeProject.customWeights
+                    );
+                    const dist = computeGradeAdjustmentDistribution(diff, weights);
+                    const reason = adjustmentReason.trim() || 'Performance merit and remediation';
+                    const now = new Date();
+                    const entry: import('../types').GradeAdjustmentEntry = {
+                      studentId: editingAdjustmentStudent.id,
+                      studentName: editingAdjustmentStudent.name,
+                      originalGrade: rawGrade,
+                      adjustedGrade: targetAdjustedGrade,
+                      difference: diff,
+                      wwAdjustment: dist.wwAdjustment,
+                      ptAdjustment: dist.ptAdjustment,
+                      qeAdjustment: dist.qeAdjustment,
+                      reason,
+                      teacherName: activeProject.teacherName || 'Teacher',
+                      subject: activeProject.subject || '',
+                      timestamp: now.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' })
+                        + ' ' + now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })
+                    };
+                    setGradeAdjustmentForStudent(activeQuarterId, editingAdjustmentStudent.id, entry);
+                    setEditingAdjustmentStudent(null);
+                  }}
+                  className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-4xs transition-all"
+                >
+                  Apply Grade Adjustment
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingAdjustmentStudent(null)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ─── 3. Grade Adjustment Audit Log Modal ─── */}
+      {showAdjustmentLogModal && activeProject && (() => {
+        const adjustments = Object.values(activeQuarterData?.adjustments || {});
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800 rounded-2xl shadow-2xl w-full max-w-2xl space-y-4 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-xl">
+                    <Sliders className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">Grade Adjustment Audit Log</h3>
+                    <p className="text-[10px] text-slate-400 font-medium">{activeProject.subject} • {activeQuarterId} ({adjustments.length} records)</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdjustmentLogModal(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {adjustments.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 text-xs font-semibold">
+                  No grade adjustments have been recorded for {activeQuarterId}.
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto border border-slate-150 dark:border-slate-800 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-purple-50/70 dark:bg-purple-950/40 border-b border-purple-100 dark:border-purple-900/30 text-[9px] font-mono uppercase text-purple-800 dark:text-purple-300 font-black">
+                      <tr>
+                        <th className="py-2.5 px-3">Student</th>
+                        <th className="py-2.5 px-2 text-center">Orig</th>
+                        <th className="py-2.5 px-2 text-center">Adjusted</th>
+                        <th className="py-2.5 px-2 text-center">Δ</th>
+                        <th className="py-2.5 px-2">WW/PT/QE Added</th>
+                        <th className="py-2.5 px-3">Reason</th>
+                        <th className="py-2.5 px-3 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                      {adjustments.map((entry) => {
+                        const st = activeProject.students.find(s => s.id === entry.studentId);
+                        return (
+                          <tr key={entry.studentId} className="hover:bg-slate-50 dark:hover:bg-slate-850/40 text-xs">
+                            <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-200">
+                              {st?.name || 'Unknown Student'}
+                              <div className="text-[8px] text-slate-400 font-mono">{entry.timestamp}</div>
+                            </td>
+                            <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-500">
+                              {entry.originalGrade}
+                            </td>
+                            <td className="py-2.5 px-2 text-center font-mono font-black text-purple-700 dark:text-purple-400">
+                              {entry.adjustedGrade}
+                            </td>
+                            <td className="py-2.5 px-2 text-center font-mono font-bold text-purple-600">
+                              {entry.difference >= 0 ? `+${entry.difference}` : entry.difference}
+                            </td>
+                            <td className="py-2.5 px-2 font-mono text-[10px] text-slate-600 dark:text-slate-400">
+                              +{entry.wwAdjustment} / +{entry.ptAdjustment} / +{entry.qeAdjustment}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 text-[11px] max-w-[140px] truncate" title={entry.reason}>
+                              {entry.reason}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <button
+                                onClick={() => removeGradeAdjustmentForStudent(activeQuarterId, entry.studentId)}
+                                className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 rounded text-[9px] font-bold cursor-pointer transition-colors"
+                              >
+                                Revert
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAdjustmentLogModal(false)}
+                  className="px-5 py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-black rounded-xl cursor-pointer"
+                >
+                  Close Log
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ─── 4. Smart Excel Class Record Import Modal ─── */}
+      {showExcelImportModal && activeProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-2xl shadow-2xl w-full max-w-xl space-y-4 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                  <FileUp className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">Smart Excel Class Record Import</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">Auto-detect Written Works, Performance Tasks, and Exam columns from Excel</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExcelImportModal(false);
+                  setParsedExcelData(null);
+                  setExcelImportFile(null);
+                  setExcelImportError(null);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {!parsedExcelData ? (
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-emerald-200 dark:border-emerald-800/80 rounded-2xl p-8 text-center bg-emerald-50/20 dark:bg-emerald-950/10 space-y-3">
+                  <FileSpreadsheet className="h-10 w-10 text-emerald-600 dark:text-emerald-400 mx-auto" />
+                  <div>
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Select teacher class record spreadsheet</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Supports .xlsx, .xls DepEd Electronic Class Records</p>
+                  </div>
+                  <label className="inline-block px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-3xs transition-all">
+                    Choose Excel File
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setExcelImportFile(file);
+                        setIsParsingExcel(true);
+                        setExcelImportError(null);
+                        try {
+                          const result = await parseTeacherExcelRecords(file);
+                          setParsedExcelData(result);
+                        } catch (err: any) {
+                          setExcelImportError(err.message || 'Failed to parse Excel file');
+                        } finally {
+                          setIsParsingExcel(false);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {isParsingExcel && (
+                  <div className="text-center py-4 text-xs font-bold text-emerald-600 animate-pulse">
+                    Scanning sheet structure, recognizing assessment headers, and parsing scores...
+                  </div>
+                )}
+
+                {excelImportError && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 text-rose-700 dark:text-rose-400 text-xs rounded-xl font-bold">
+                    {excelImportError}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-150 dark:border-slate-850 space-y-3 text-xs">
+                  <div className="flex items-center justify-between font-black text-emerald-700 dark:text-emerald-400">
+                    <span>✓ File Analyzed Successfully</span>
+                    <span className="font-mono text-[10px] bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded">{excelImportFile?.name}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono">
+                    <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-150 dark:border-slate-800">
+                      <span className="text-[9px] text-slate-400 uppercase block">Learners</span>
+                      <span className="text-sm font-black text-slate-800 dark:text-slate-100">{parsedExcelData.students.length}</span>
+                    </div>
+                    <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-150 dark:border-slate-800">
+                      <span className="text-[9px] text-indigo-500 uppercase block">WW Columns</span>
+                      <span className="text-sm font-black text-indigo-600">{parsedExcelData.assessments.filter(a => a.category === 'WOW').length}</span>
+                    </div>
+                    <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-150 dark:border-slate-800">
+                      <span className="text-[9px] text-teal-500 uppercase block">PT Columns</span>
+                      <span className="text-sm font-black text-teal-600">{parsedExcelData.assessments.filter(a => a.category === 'PPT').length}</span>
+                    </div>
+                    <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-150 dark:border-slate-800">
+                      <span className="text-[9px] text-emerald-500 uppercase block">QE Column</span>
+                      <span className="text-sm font-black text-emerald-600">{parsedExcelData.assessments.filter(a => a.category === 'QSTE').length}</span>
+                    </div>
+                  </div>
+
+                  {parsedExcelData.subject && (
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                      Detected Subject: <strong>{parsedExcelData.subject}</strong> | Grade Level: <strong>{parsedExcelData.gradeLevel || 'N/A'}</strong> | Section: <strong>{parsedExcelData.section || 'N/A'}</strong>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Atomically merge imported students and quarter data
+                      const currentStudents = [...activeProject.students];
+                      const newStudents = [...currentStudents];
+
+                      // Map each imported student to real Student object with id
+                      const lrnToStudentId: Record<string, string> = {};
+                      parsedExcelData.students.forEach(importedSt => {
+                        const existingIdx = newStudents.findIndex(s => s.lrn === importedSt.lrn || s.name.toLowerCase() === importedSt.name.toLowerCase());
+                        if (existingIdx === -1) {
+                          const newId = `std-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                          const fullStudent: Student = {
+                            id: newId,
+                            lrn: importedSt.lrn,
+                            name: importedSt.name,
+                            sex: importedSt.sex,
+                            studentNumber: importedSt.studentNumber,
+                            status: importedSt.status || 'Active'
+                          };
+                          newStudents.push(fullStudent);
+                          lrnToStudentId[importedSt.lrn] = newId;
+                        } else {
+                          const existing = newStudents[existingIdx];
+                          lrnToStudentId[importedSt.lrn] = existing.id;
+                        }
+                      });
+
+                      const existingQuarter = activeProject.quarters?.[activeQuarterId] || {
+                        assessments: [],
+                        scores: {},
+                        reassessmentScores: {}
+                      };
+
+                      // Map parsed assessments to full Assessment objects with id and order
+                      const assessmentTempToId: Record<string, string> = {};
+                      const mappedAssessments: Assessment[] = parsedExcelData.assessments.map((a, idx) => {
+                        const assId = `ass-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`;
+                        assessmentTempToId[`temp-${idx}`] = assId;
+                        return {
+                          id: assId,
+                          name: a.name,
+                          category: a.category,
+                          perfectScore: a.perfectScore,
+                          order: idx + 1
+                        };
+                      });
+
+                      const mergedAssessments = mappedAssessments.length > 0
+                        ? mappedAssessments
+                        : existingQuarter.assessments;
+
+                      // Map parsed scores from LRN + tempId to studentId + assId
+                      const mappedScores: Record<string, Record<string, number>> = { ...existingQuarter.scores };
+                      Object.entries(parsedExcelData.scores).forEach(([lrn, scoreMap]) => {
+                        const studentId = lrnToStudentId[lrn];
+                        if (studentId) {
+                          if (!mappedScores[studentId]) {
+                            mappedScores[studentId] = {};
+                          }
+                          Object.entries(scoreMap).forEach(([tempKey, val]) => {
+                            const realAssId = assessmentTempToId[tempKey];
+                            if (realAssId) {
+                              mappedScores[studentId][realAssId] = val;
+                            }
+                          });
+                        }
+                      });
+
+                      saveProject({
+                        ...activeProject,
+                        students: newStudents,
+                        teacherName: parsedExcelData.teacherName || activeProject.teacherName,
+                        schoolName: parsedExcelData.schoolName || activeProject.schoolName,
+                        quarters: {
+                          ...activeProject.quarters,
+                          [activeQuarterId]: {
+                            ...existingQuarter,
+                            assessments: mergedAssessments,
+                            scores: mappedScores
+                          }
+                        }
+                      });
+
+                      globalToast.show('success', `Imported ${parsedExcelData.students.length} students and ${parsedExcelData.assessments.length} assessment columns!`, 'Excel Record Loaded');
+                      setShowExcelImportModal(false);
+                      setParsedExcelData(null);
+                      setExcelImportFile(null);
+                    }}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-4xs transition-all"
+                  >
+                    Apply Record to Gradebook
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setParsedExcelData(null);
+                      setExcelImportFile(null);
+                    }}
+                    className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+                  >
+                    Reselect
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -4,18 +4,84 @@ import { computeProjectStudentGrade } from '../utils';
 /**
  * Generates a structured JSON object containing subject grade data per quarter for active students.
  */
+export interface ExportStudentSummary {
+  lrn: string;
+  name: string;
+  sex: 'Male' | 'Female';
+  status: 'Active' | 'Transferred' | 'Dropped';
+  quarterGrades: Record<string, number | null>;
+}
+
+export interface ExportSummaryData {
+  totalStudents: number;
+  activeCount: number;
+  transferredCount: number;
+  droppedCount: number;
+  students: ExportStudentSummary[];
+}
+
+/**
+ * Computes preview summary data for all enrolled students to review before export.
+ */
+export function getExportSummary(project: Project, selectedQuarters: string[]): ExportSummaryData {
+  let activeCount = 0;
+  let transferredCount = 0;
+  let droppedCount = 0;
+
+  const studentsSummary: ExportStudentSummary[] = project.students.map(student => {
+    const status = student.status || 'Active';
+    if (status === 'Active') activeCount++;
+    else if (status === 'Transferred') transferredCount++;
+    else if (status === 'Dropped') droppedCount++;
+
+    const quarterGrades: Record<string, number | null> = {};
+    selectedQuarters.forEach(qKey => {
+      const qData = project.quarters?.[qKey];
+      const hasAnyScore = qData ? Object.keys(qData.scores[student.id] ?? {}).length > 0 : false;
+      if (hasAnyScore) {
+        const computed = computeProjectStudentGrade(project, student.id, undefined, qKey);
+        quarterGrades[qKey] = typeof computed.finalGrade === 'number' && !isNaN(computed.finalGrade)
+          ? computed.finalGrade
+          : null;
+      } else {
+        quarterGrades[qKey] = null;
+      }
+    });
+
+    return {
+      lrn: student.lrn,
+      name: student.name,
+      sex: student.sex,
+      status,
+      quarterGrades,
+    };
+  });
+
+  return {
+    totalStudents: project.students.length,
+    activeCount,
+    transferredCount,
+    droppedCount,
+    students: studentsSummary,
+  };
+}
+
+/**
+ * Generates a structured JSON object containing subject grade data per quarter for all enrolled students.
+ */
 export function generateSubjectGradeJSON(project: Project, selectedQuarters: string[]): SubjectGradeExportJSON {
-  const activeStudents = project.students.filter(s => s.status === 'Active');
+  const allStudents = project.students;
 
   const quartersData = selectedQuarters.map(qKey => {
-    const gradesList: { lrn: string; studentName: string; grade: number }[] = [];
+    const gradesList: { lrn: string; studentName: string; grade: number; status?: 'Active' | 'Transferred' | 'Dropped' }[] = [];
 
-    activeStudents.forEach(student => {
+    allStudents.forEach(student => {
       const qData = project.quarters?.[qKey];
       const hasAnyScore = qData
         ? Object.keys(qData.scores[student.id] ?? {}).length > 0
         : false;
 
+      // Include grade if calculated, or if enrolled
       if (hasAnyScore) {
         const computed = computeProjectStudentGrade(project, student.id, undefined, qKey);
         if (typeof computed.finalGrade === 'number' && !isNaN(computed.finalGrade)) {
@@ -23,8 +89,17 @@ export function generateSubjectGradeJSON(project: Project, selectedQuarters: str
             lrn: student.lrn,
             studentName: student.name,
             grade: computed.finalGrade,
+            status: student.status || 'Active',
           });
         }
+      } else if (student.status && student.status !== 'Active') {
+        // Also include non-active students with fallback grade 0 or mark so adviser sees them
+        gradesList.push({
+          lrn: student.lrn,
+          studentName: student.name,
+          grade: 0,
+          status: student.status,
+        });
       }
     });
 

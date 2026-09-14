@@ -3,6 +3,7 @@ import { Project, GlobalSettings, Student, Assessment, SubjectType, QuarterData,
 import { DEFAULT_GLOBAL_SETTINGS, SEED_PROJECTS } from '../data/seedData';
 import { SHS_PROFILES } from '../utils';
 import { getCalendar, getProjectPeriods, getFirstPeriod } from '../calendar/academicCalendar';
+import { persistLoad, persistSave, bootstrapAppDataBackup } from '../utils/tauriPersistence';
 
 interface AppContextType {
   projects: Project[];
@@ -58,6 +59,15 @@ interface AppContextType {
   updateReassessmentSettingsInActive: (settings: { enabled: boolean; masteryThreshold: number; interventionThreshold: number; policy: 'Average' | 'Highest' | 'Replacement' }) => void;
   enableReassessmentModeForQuarter: (quarterId: string, settings: { enabled: boolean; masteryThreshold: number; interventionThreshold: number; policy: 'Average' | 'Highest' | 'Replacement' }) => void;
 
+  // Grade Adjustment Feature in Active Project
+  toggleGradeAdjustmentMode: (quarterId: string, enabled: boolean) => void;
+  setGradeAdjustmentForStudent: (quarterId: string, studentId: string, entry: import('../types').GradeAdjustmentEntry) => void;
+  removeGradeAdjustmentForStudent: (quarterId: string, studentId: string) => void;
+  updateProjectTeacherInfo: (
+    projectIdOrInfo: string | { teacherName?: string; schoolName?: string; passingGrade?: number; section?: string; gradeLevel?: string; subject?: string; depedPolicy?: '2015' | '2027'; customWeights?: { wow: number; ppt: number; qste: number } },
+    info?: { teacherName?: string; schoolName?: string; passingGrade?: number; section?: string; gradeLevel?: string; subject?: string; depedPolicy?: '2015' | '2027'; customWeights?: { wow: number; ppt: number; qste: number } }
+  ) => void;
+
   // Settings & Db Operations
   updateGlobalSettings: (settings: Partial<GlobalSettings>) => void;
   toggleDarkMode: () => void;
@@ -102,126 +112,114 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [authUsername, setAuthUsername] = useState<string>('admin');
   const [authPassword, setAuthPassword] = useState<string>('admin123');
 
-  // Load from local storage
+  // Load from local storage (with AppData fallback for Tauri reinstall safety)
   useEffect(() => {
-    const localProjects = localStorage.getItem('srphs_projects_p2');
-    const localActiveId = localStorage.getItem('srphs_active_id_p2');
-    const localSettings = localStorage.getItem('srphs_settings_p2');
-    const localDarkMode = localStorage.getItem('srphs_dark_mode');
-    const localWorkspace = localStorage.getItem('srphs_workspace_mode');
-    
-    const localSidebar = localStorage.getItem('srphs_sidebar_collapsed');
-    const localLoggedIn = localStorage.getItem('srphs_logged_in');
-    const localUsername = localStorage.getItem('srphs_auth_username');
-    const localPassword = localStorage.getItem('srphs_auth_password');
+    const initAsync = async () => {
+      // ── Simple keys (localStorage only, no big data) ─────────────────
+      const localActiveId  = localStorage.getItem('srphs_active_id_p2');
+      const localDarkMode  = localStorage.getItem('srphs_dark_mode');
+      const localWorkspace = localStorage.getItem('srphs_workspace_mode');
+      const localSidebar   = localStorage.getItem('srphs_sidebar_collapsed');
+      const localLoggedIn  = localStorage.getItem('srphs_logged_in');
+      const localUsername  = localStorage.getItem('srphs_auth_username');
+      const localPassword  = localStorage.getItem('srphs_auth_password');
 
-    if (localSidebar) {
-      setSidebarCollapsedState(JSON.parse(localSidebar));
-    }
-    if (localLoggedIn) {
-      setIsLoggedIn(JSON.parse(localLoggedIn));
-    }
-    if (localUsername) {
-      setAuthUsername(localUsername);
-    }
-    if (localPassword) {
-      setAuthPassword(localPassword);
-    }
+      if (localSidebar)  setSidebarCollapsedState(JSON.parse(localSidebar));
+      if (localLoggedIn) setIsLoggedIn(JSON.parse(localLoggedIn));
+      if (localUsername) setAuthUsername(localUsername);
+      if (localPassword) setAuthPassword(localPassword);
 
-    if (localProjects) {
-      try {
-        const parsed = JSON.parse(localProjects) as Project[];
-        let migratedAny = false;
-        const migrated = parsed.map(p => {
-          // ── Migration 1: quarters schema ──────────────────────────────
-          if (!p.quarters) {
-            migratedAny = true;
-            const oldQuarter = (p as any).quarter || getFirstPeriod();
-            const quarters: Record<string, QuarterData> = {};
-            const qs = getProjectPeriods(p, 'Quarter');
-            qs.forEach(q => {
-              quarters[q] = { assessments: [], scores: {} };
-            });
-            quarters[oldQuarter] = {
-              assessments: (p as any).assessments || [],
-              scores: (p as any).scores || {}
-            };
-            p = {
-              ...p,
-              quarters,
-              lastActiveQuarter: oldQuarter
-            };
+      // ── Projects: try localStorage → AppData backup → seeds ──────────
+      const localProjects = await persistLoad('srphs_projects_p2');
+      if (localProjects) {
+        try {
+          const parsed = JSON.parse(localProjects) as Project[];
+          let migratedAny = false;
+          const migrated = parsed.map(p => {
+            // Migration 1: quarters schema
+            if (!p.quarters) {
+              migratedAny = true;
+              const oldQuarter = (p as any).quarter || getFirstPeriod();
+              const quarters: Record<string, QuarterData> = {};
+              const qs = getProjectPeriods(p, 'Quarter');
+              qs.forEach(q => { quarters[q] = { assessments: [], scores: {} }; });
+              quarters[oldQuarter] = {
+                assessments: (p as any).assessments || [],
+                scores: (p as any).scores || {}
+              };
+              p = { ...p, quarters, lastActiveQuarter: oldQuarter };
+            }
+            // Migration 2: subjectUID
+            if (!p.subjectUID) {
+              migratedAny = true;
+              const year = new Date(p.createdAt || Date.now()).getFullYear();
+              const cleanGrade = (p.gradeLevel || '0').replace(/\D/g, '') || '0';
+              const subjPrefix = (p.subject || 'SUB').substring(0, 3).toUpperCase();
+              const randomNum = Math.floor(10000 + Math.random() * 90000);
+              p = { ...p, subjectUID: `${cleanGrade}_${subjPrefix}_${randomNum}_${year}` };
+            }
+            return p;
+          });
+          setProjects(migrated);
+          if (migratedAny) {
+            await persistSave('srphs_projects_p2', JSON.stringify(migrated));
           }
-
-          // ── Migration 2: subjectUID for old projects ──────────────────
-          if (!p.subjectUID) {
-            migratedAny = true;
-            const year = new Date(p.createdAt || Date.now()).getFullYear();
-            const cleanGrade = (p.gradeLevel || '0').replace(/\D/g, '') || '0';
-            const subjPrefix = (p.subject || 'SUB').substring(0, 3).toUpperCase();
-            const randomNum = Math.floor(10000 + Math.random() * 90000);
-            p = { ...p, subjectUID: `${cleanGrade}_${subjPrefix}_${randomNum}_${year}` };
-          }
-
-          return p;
-        });
-        setProjects(migrated);
-        if (migratedAny) {
-          localStorage.setItem('srphs_projects_p2', JSON.stringify(migrated));
+        } catch (e) {
+          console.error('Failed to parse or migrate local projects', e);
+          // Parse error on existing data — keep empty rather than overwriting with seeds
+          setProjects([]);
         }
-      } catch (e) {
-        console.error("Failed to parse or migrate local projects", e);
+      } else {
+        // Genuine first install: no data anywhere → load seeds
         setProjects(SEED_PROJECTS);
-        localStorage.setItem('srphs_projects_p2', JSON.stringify(SEED_PROJECTS));
+        await persistSave('srphs_projects_p2', JSON.stringify(SEED_PROJECTS));
       }
-    } else {
-      setProjects(SEED_PROJECTS);
-      localStorage.setItem('srphs_projects_p2', JSON.stringify(SEED_PROJECTS));
-    }
 
-    // Commented out to ensure the general Landing Dashboard (Project Hub) always shows on startup
-    // if (localActiveId) {
-    //   setActiveProjectId(localActiveId);
-    // }
+      // ── Settings: try localStorage → AppData backup → defaults ───────
+      const localSettings = await persistLoad('srphs_settings_p2');
+      if (localSettings) {
+        setGlobalSettings(JSON.parse(localSettings));
+      } else {
+        setGlobalSettings(DEFAULT_GLOBAL_SETTINGS);
+        await persistSave('srphs_settings_p2', JSON.stringify(DEFAULT_GLOBAL_SETTINGS));
+      }
 
-    if (localSettings) {
-      setGlobalSettings(JSON.parse(localSettings));
-    } else {
-      setGlobalSettings(DEFAULT_GLOBAL_SETTINGS);
-      localStorage.setItem('srphs_settings_p2', JSON.stringify(DEFAULT_GLOBAL_SETTINGS));
-    }
+      if (localDarkMode) {
+        setDarkMode(JSON.parse(localDarkMode));
+      }
 
-    if (localDarkMode) {
-      const isDark = JSON.parse(localDarkMode);
-      setDarkMode(isDark);
-    }
+      if (localWorkspace === 'SHS') {
+        setWorkspaceModeState('SHS');
+      } else {
+        setWorkspaceModeState('JHS');
+      }
 
-    if (localWorkspace === 'SHS') {
-      setWorkspaceModeState('SHS');
-    } else {
-      setWorkspaceModeState('JHS');
-    }
+      // ── Adviser classes: try localStorage → AppData backup ────────────
+      const localAdviserClasses = await persistLoad('srphs_adviser_classes');
+      if (localAdviserClasses) {
+        try {
+          const parsed = JSON.parse(localAdviserClasses) as AdviserClass[];
+          const migrated = parsed.map(cls => {
+            if (cls.workspace === 'JHS' && (!cls.languageGroups || !cls.languageGroups.some(g => g.label === 'MAPEH'))) {
+              return {
+                ...cls,
+                languageGroups: [
+                  ...(cls.languageGroups || []),
+                  { label: 'MAPEH', subjects: ['Music & Arts', 'PE & Health'] }
+                ]
+              };
+            }
+            return cls;
+          });
+          setAdviserClasses(migrated);
+        } catch {}
+      }
 
-    // Load adviser classes with migration for MAPEH composite groups
-    const localAdviserClasses = localStorage.getItem('srphs_adviser_classes');
-    if (localAdviserClasses) {
-      try {
-        const parsed = JSON.parse(localAdviserClasses) as AdviserClass[];
-        const migrated = parsed.map(cls => {
-          if (cls.workspace === 'JHS' && (!cls.languageGroups || !cls.languageGroups.some(g => g.label === 'MAPEH'))) {
-            return {
-              ...cls,
-              languageGroups: [
-                ...(cls.languageGroups || []),
-                { label: 'MAPEH', subjects: ['Music & Arts', 'PE & Health'] }
-              ]
-            };
-          }
-          return cls;
-        });
-        setAdviserClasses(migrated);
-      } catch {}
-    }
+      // ── One-time: create AppData backups for existing users upgrading ─
+      bootstrapAppDataBackup();
+    };
+
+    initAsync();
   }, []);
 
   useEffect(() => {
@@ -278,7 +276,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const saveProjectsToStorage = (updatedProjects: Project[]) => {
     setProjects(updatedProjects);
-    localStorage.setItem('srphs_projects_p2', JSON.stringify(updatedProjects));
+    const serialized = JSON.stringify(updatedProjects);
+    localStorage.setItem('srphs_projects_p2', serialized);
+    // Fire-and-forget: also backup to AppData so reinstalls can't lose data
+    persistSave('srphs_projects_p2', serialized);
   };
 
   const syncRosterToSectionGroup = (schoolYear: string, gradeLevel: string, section: string, sourceStudents: Student[]) => {
@@ -757,11 +758,129 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     updateActiveProject(updatedProj);
   };
 
+  const toggleGradeAdjustmentMode = (quarterId: string, enabled: boolean) => {
+    const active = getActiveProject();
+    if (!active) return;
+    const qData = active.quarters[quarterId];
+    if (!qData) return;
+    const updatedProj: Project = {
+      ...active,
+      quarters: {
+        ...active.quarters,
+        [quarterId]: {
+          ...qData,
+          adjustmentModeEnabled: enabled
+        }
+      }
+    };
+    updateActiveProject(updatedProj);
+  };
+
+  const setGradeAdjustmentForStudent = (quarterId: string, studentId: string, entry: import('../types').GradeAdjustmentEntry) => {
+    const active = getActiveProject();
+    if (!active) return;
+    const qData = active.quarters[quarterId];
+    if (!qData) return;
+    const currentAdjustments = qData.adjustments || {};
+    const updatedProj: Project = {
+      ...active,
+      quarters: {
+        ...active.quarters,
+        [quarterId]: {
+          ...qData,
+          adjustmentModeEnabled: true,
+          adjustments: {
+            ...currentAdjustments,
+            [studentId]: entry
+          }
+        }
+      }
+    };
+    updateActiveProject(updatedProj);
+  };
+
+  const removeGradeAdjustmentForStudent = (quarterId: string, studentId: string) => {
+    const active = getActiveProject();
+    if (!active) return;
+    const qData = active.quarters[quarterId];
+    if (!qData || !qData.adjustments) return;
+    const currentAdjustments = { ...qData.adjustments };
+    delete currentAdjustments[studentId];
+    const updatedProj: Project = {
+      ...active,
+      quarters: {
+        ...active.quarters,
+        [quarterId]: {
+          ...qData,
+          adjustments: currentAdjustments
+        }
+      }
+    };
+    updateActiveProject(updatedProj);
+  };
+
+  const updateProjectTeacherInfo = (
+    projectIdOrInfo: string | { teacherName?: string; schoolName?: string; passingGrade?: number; section?: string; gradeLevel?: string; subject?: string; depedPolicy?: '2015' | '2027'; customWeights?: { wow: number; ppt: number; qste: number } },
+    maybeInfo?: { teacherName?: string; schoolName?: string; passingGrade?: number; section?: string; gradeLevel?: string; subject?: string; depedPolicy?: '2015' | '2027'; customWeights?: { wow: number; ppt: number; qste: number } }
+  ) => {
+    let targetProjectId = activeProjectId;
+    let info = maybeInfo;
+
+    if (typeof projectIdOrInfo === 'string') {
+      targetProjectId = projectIdOrInfo;
+    } else if (projectIdOrInfo && typeof projectIdOrInfo === 'object') {
+      info = projectIdOrInfo;
+    }
+
+    if (!info || !targetProjectId) return;
+
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id === targetProjectId) {
+          return {
+            ...p,
+            ...(info!.teacherName !== undefined ? { teacherName: info!.teacherName } : {}),
+            ...(info!.schoolName !== undefined ? { schoolName: info!.schoolName } : {}),
+            ...(info!.passingGrade !== undefined ? { passingGrade: info!.passingGrade } : {}),
+            ...(info!.section !== undefined ? { section: info!.section } : {}),
+            ...(info!.gradeLevel !== undefined ? { gradeLevel: info!.gradeLevel } : {}),
+            ...(info!.subject !== undefined ? { subject: info!.subject } : {}),
+            ...(info!.depedPolicy !== undefined ? { depedPolicy: info!.depedPolicy } : {}),
+            ...(info!.customWeights !== undefined ? { customWeights: info!.customWeights } : {}),
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return p;
+      });
+      const serialized = JSON.stringify(updated);
+      localStorage.setItem('srphs_projects_p2', serialized);
+      persistSave('srphs_projects_p2', serialized);
+      return updated;
+    });
+
+    // Also update global default teacher/school name if updated
+    if (info.teacherName || info.schoolName) {
+      setGlobalSettings(curr => {
+        const next = {
+          ...curr,
+          ...(info!.teacherName ? { teacherName: info!.teacherName } : {}),
+          ...(info!.schoolName ? { schoolName: info!.schoolName } : {})
+        };
+        const serialized = JSON.stringify(next);
+        localStorage.setItem('srphs_settings_p2', serialized);
+        persistSave('srphs_settings_p2', serialized);
+        return next;
+      });
+    }
+  };
+
   // Settings & DB Management
   const updateGlobalSettings = (settings: Partial<GlobalSettings>) => {
     const updated = { ...globalSettings, ...settings } as GlobalSettings;
     setGlobalSettings(updated);
-    localStorage.setItem('srphs_settings_p2', JSON.stringify(updated));
+    const serialized = JSON.stringify(updated);
+    localStorage.setItem('srphs_settings_p2', serialized);
+    persistSave('srphs_settings_p2', serialized);
   };
 
   const toggleDarkMode = () => {
@@ -772,8 +891,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProjects(SEED_PROJECTS);
     setGlobalSettings(DEFAULT_GLOBAL_SETTINGS);
     setActiveProjectId(null);
-    localStorage.setItem('srphs_projects_p2', JSON.stringify(SEED_PROJECTS));
-    localStorage.setItem('srphs_settings_p2', JSON.stringify(DEFAULT_GLOBAL_SETTINGS));
+    const projSerialized = JSON.stringify(SEED_PROJECTS);
+    const setSerialized = JSON.stringify(DEFAULT_GLOBAL_SETTINGS);
+    localStorage.setItem('srphs_projects_p2', projSerialized);
+    localStorage.setItem('srphs_settings_p2', setSerialized);
+    persistSave('srphs_projects_p2', projSerialized);
+    persistSave('srphs_settings_p2', setSerialized);
     localStorage.removeItem('srphs_active_id_p2');
     alert("Offline Database successfully reset to system defaults.");
   };
@@ -840,7 +963,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Restore adviser classes
       const adviser = Array.isArray(archive.adviserClasses) ? archive.adviserClasses : [];
       setAdviserClasses(adviser);
-      localStorage.setItem('srphs_adviser_classes', JSON.stringify(adviser));
+      const advSerialized = JSON.stringify(adviser);
+      localStorage.setItem('srphs_adviser_classes', advSerialized);
+      persistSave('srphs_adviser_classes', advSerialized);
 
       // Restore global settings (strip transient active-selection fields)
       const settings: GlobalSettings = {
@@ -848,7 +973,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         activeAdviserClassId: undefined,
       };
       setGlobalSettings(settings);
-      localStorage.setItem('srphs_settings_p2', JSON.stringify(settings));
+      const setSerialized = JSON.stringify(settings);
+      localStorage.setItem('srphs_settings_p2', setSerialized);
+      persistSave('srphs_settings_p2', setSerialized);
 
       // Clear active project selection
       setActiveProjectId(null);
@@ -866,10 +993,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Clear Projects
       setProjects([]);
       localStorage.setItem('srphs_projects_p2', JSON.stringify([]));
+      persistSave('srphs_projects_p2', JSON.stringify([]));
       
       // Clear Adviser Classes
       setAdviserClasses([]);
       localStorage.setItem('srphs_adviser_classes', JSON.stringify([]));
+      persistSave('srphs_adviser_classes', JSON.stringify([]));
 
       // Reset active selections
       setActiveProjectId(null);
@@ -878,7 +1007,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Update Settings
       const newSettings = { ...globalSettings, activeSchoolYear: newYear, calendarType, activeAdviserClassId: undefined };
       setGlobalSettings(newSettings);
-      localStorage.setItem('srphs_settings_p2', JSON.stringify(newSettings));
+      const setSerialized = JSON.stringify(newSettings);
+      localStorage.setItem('srphs_settings_p2', setSerialized);
+      persistSave('srphs_settings_p2', setSerialized);
       
       return true;
     } catch (e) {
@@ -904,14 +1035,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Persist helper (used by saveAdviserClass / deleteAdviserClass only)
   const persistAdviserClasses = (cls: AdviserClass[]) => {
     setAdviserClasses(cls);
-    localStorage.setItem('srphs_adviser_classes', JSON.stringify(cls));
+    const serialized = JSON.stringify(cls);
+    localStorage.setItem('srphs_adviser_classes', serialized);
+    persistSave('srphs_adviser_classes', serialized);
   };
 
   // Uses functional updater so back-to-back calls don't overwrite each other
   const updateAdviserClass = (classId: string, updater: (cls: AdviserClass) => AdviserClass) => {
     setAdviserClasses(prev => {
       const updated = prev.map(c => c.id === classId ? updater(c) : c);
-      localStorage.setItem('srphs_adviser_classes', JSON.stringify(updated));
+      const serialized = JSON.stringify(updated);
+      localStorage.setItem('srphs_adviser_classes', serialized);
+      persistSave('srphs_adviser_classes', serialized);
       return updated;
     });
   };
@@ -1169,6 +1304,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       toggleReassessmentForAssessment,
       updateReassessmentSettingsInActive,
       enableReassessmentModeForQuarter,
+      
+      toggleGradeAdjustmentMode,
+      setGradeAdjustmentForStudent,
+      removeGradeAdjustmentForStudent,
+      updateProjectTeacherInfo,
       
       updateGlobalSettings,
       toggleDarkMode,
