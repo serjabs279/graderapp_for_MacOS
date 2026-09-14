@@ -4,26 +4,26 @@ import { StudentGradeRow } from '../adviserUtils';
 
 export interface CertificateOptions {
   periodLabel?: string; // e.g. "1st Quarter" or "Academic Year"
-  givenDate?: string;   // e.g. "13th of September 2026 at San Roque Parish High School Incorporated's Campus."
+  givenDate?: string;   // e.g. "13th of September 2026 at San Roque Parish High School Incorporated."
 }
 
 export function getOrdinalSuffix(day: number): string {
   if (day > 3 && day < 21) return 'th';
   switch (day % 10) {
-    case 1:  return 'st';
-    case 2:  return 'nd';
-    case 3:  return 'rd';
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
     default: return 'th';
   }
 }
 
-export function getDefaultCertificateDate(schoolName: string = 'SAN ROQUE PARISH HIGH SCHOOL, INC.'): string {
+export function getDefaultCertificateDate(schoolName: string = 'San Roque Parish High School Incorporated'): string {
   const d = new Date();
   const day = d.getDate();
   const suffix = getOrdinalSuffix(day);
   const month = d.toLocaleString('en-US', { month: 'long' });
   const year = d.getFullYear();
-  return `${day}${suffix} of ${month} ${year} at ${schoolName}.`;
+  return `${day}${suffix} of ${month} ${year} at ${schoolName}`;
 }
 
 /**
@@ -47,12 +47,12 @@ export function generateAcademicAchieverCertificates(
   const pageHeight = 297;
   const certHeight = 148.5; // Exactly half of 297mm
 
-  const schoolName = globalSettings.schoolName || 'SAN ROQUE PARISH HIGH SCHOOL, INC.';
+  const schoolName = globalSettings.schoolName || 'SAN ROQUE PARISH HIGH SCHOOL INCORPORATED';
   const schoolYear = adviserClass.schoolYear || '2026-2027';
   const sectionName = `${adviserClass.gradeLevel} - ${adviserClass.section}`;
   const adviserName = adviserClass.adviserName || 'Class Adviser';
   const principalName = adviserClass.principalName || 'School Principal';
-
+  ``
   // Render certificates 2 per page
   achievers.forEach((student, index) => {
     const pageIndex = Math.floor(index / 2);
