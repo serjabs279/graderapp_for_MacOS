@@ -69,21 +69,29 @@ export function getExportSummary(project: Project, selectedQuarters: string[]): 
 /**
  * Generates a structured JSON object containing subject grade data per quarter for all enrolled students.
  */
-export function generateSubjectGradeJSON(project: Project, selectedQuarters: string[]): SubjectGradeExportJSON {
+export function generateSubjectGradeJSON(
+  project: Project,
+  selectedQuarters: string[],
+  customWeights?: Record<string, { wow: number; ppt: number; qste: number }>
+): SubjectGradeExportJSON {
   const allStudents = project.students;
 
   const quartersData = selectedQuarters.map(qKey => {
     const gradesList: { lrn: string; studentName: string; grade: number; status?: 'Active' | 'Transferred' | 'Dropped' }[] = [];
 
+    const qData = project.quarters?.[qKey];
+
     allStudents.forEach(student => {
-      const qData = project.quarters?.[qKey];
-      const hasAnyScore = qData
+      // A student should be included if they have any raw scores OR a manual grade adjustment
+      const hasRawScores = qData
         ? Object.keys(qData.scores[student.id] ?? {}).length > 0
         : false;
+      const hasAdjustment = qData?.adjustmentModeEnabled
+        ? qData.adjustments?.[student.id] !== undefined
+        : false;
 
-      // Include grade if calculated, or if enrolled
-      if (hasAnyScore) {
-        const computed = computeProjectStudentGrade(project, student.id, undefined, qKey);
+      if (hasRawScores || hasAdjustment) {
+        const computed = computeProjectStudentGrade(project, student.id, customWeights, qKey);
         if (typeof computed.finalGrade === 'number' && !isNaN(computed.finalGrade)) {
           gradesList.push({
             lrn: student.lrn,
@@ -93,7 +101,8 @@ export function generateSubjectGradeJSON(project: Project, selectedQuarters: str
           });
         }
       } else if (student.status && student.status !== 'Active') {
-        // Also include non-active students with fallback grade 0 or mark so adviser sees them
+        // Non-active students with no recorded grades: include with grade 0 so adviser
+        // can see them on the roster and verify enrollment status.
         gradesList.push({
           lrn: student.lrn,
           studentName: student.name,
@@ -129,9 +138,13 @@ import { globalToast } from '../context/ToastContext';
 /**
  * Triggers a browser file download of the Subject Grade JSON file.
  */
-export function exportTeacherGradebookJSON(project: Project, selectedQuarters: string[]) {
+export function exportTeacherGradebookJSON(
+  project: Project,
+  selectedQuarters: string[],
+  customWeights?: Record<string, { wow: number; ppt: number; qste: number }>
+) {
   try {
-    const exportData = generateSubjectGradeJSON(project, selectedQuarters);
+    const exportData = generateSubjectGradeJSON(project, selectedQuarters, customWeights);
     const jsonStr = JSON.stringify(exportData, null, 2);
 
     const isConsolidated =

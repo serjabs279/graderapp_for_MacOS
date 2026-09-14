@@ -35,6 +35,8 @@ import {
   Sliders,
   CheckCircle2,
   FileUp,
+  ArrowRightLeft,
+  RefreshCw,
   X
 } from 'lucide-react';
 
@@ -74,7 +76,8 @@ export default function ClassManagerView() {
     toggleGradeAdjustmentMode,
     setGradeAdjustmentForStudent,
     removeGradeAdjustmentForStudent,
-    updateProjectTeacherInfo
+    updateProjectTeacherInfo,
+    migrateQuarterData
   } = useApp();
 
   const activeProject = projects.find(p => p.id === activeProjectId);
@@ -91,6 +94,12 @@ export default function ClassManagerView() {
   const [editWeightWW, setEditWeightWW] = useState<number>(30);
   const [editWeightPT, setEditWeightPT] = useState<number>(50);
   const [editWeightQE, setEditWeightQE] = useState<number>(20);
+
+  // Quarter Migration States inside Teacher Info Modal
+  const [migrateSourceQuarter, setMigrateSourceQuarter] = useState<string>('4th Quarter');
+  const [migrateTargetQuarter, setMigrateTargetQuarter] = useState<string>('1st Quarter');
+  const [migrateClearSource, setMigrateClearSource] = useState<boolean>(true);
+  const [showMigrateConfirm, setShowMigrateConfirm] = useState<boolean>(false);
 
   // Teacher-Only Grade Adjustment states
   const [showAdjustmentLogModal, setShowAdjustmentLogModal] = useState(false);
@@ -640,22 +649,85 @@ export default function ClassManagerView() {
     setAssDescription('');
   };
 
-  // CSV report generation download
+  // CSV report generation download with all raw assessment scores
   const handleExportCSVReport = () => {
     if (!activeProject) return;
-    const activeStudents = activeProject.students.filter(s => s.status === 'Active');
+    const activeStudents = activeProject.students.filter(s => s.status === 'Active' || !s.status);
+    const qData = activeProject.quarters?.[activeQuarterId];
+
+    const wwList = qData?.assessments.filter(a => a.category === 'WOW') || [];
+    const ptList = qData?.assessments.filter(a => a.category === 'PPT') || [];
+    const qeList = qData?.assessments.filter(a => a.category === 'QSTE') || [];
+
+    // Header Row 1: Column Names
+    const headerCols: string[] = ['Student Name', 'LRN', 'Sex'];
+    wwList.forEach((a, i) => headerCols.push(`"WW ${i + 1} (${a.perfectScore})"`));
+    if (wwList.length > 0) {
+      headerCols.push('WW Total', 'WW Pct', 'WW Weighted');
+    }
+
+    ptList.forEach((a, i) => headerCols.push(`"PT ${i + 1} (${a.perfectScore})"`));
+    if (ptList.length > 0) {
+      headerCols.push('PT Total', 'PT Pct', 'PT Weighted');
+    }
+
+    qeList.forEach((a, i) => headerCols.push(`"Exam ${i + 1} (${a.perfectScore})"`));
+    if (qeList.length > 0) {
+      headerCols.push('Exam Total', 'Exam Pct', 'Exam Weighted');
+    }
+
+    headerCols.push('Initial Grade', 'Quarterly Grade', 'Remarks');
+
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Student Name,LRN,Sex,WW_Pct,PT_Pct,QE_Pct,Initial_Grade,Final_Grade,Remarks\n";
+    csvContent += headerCols.join(',') + '\n';
 
     activeStudents.forEach(s => {
-      const g = computeProjectStudentGrade(activeProject, s.id, globalSettings.subjects);
-      csvContent += `"${s.name}",${s.lrn},${s.sex},${g.wowPercentage}%,${g.pptPercentage}%,${g.qstePercentage}%,${g.initialGrade},${g.finalGrade},${g.remarks}\n`;
+      const g = computeProjectStudentGrade(activeProject, s.id, globalSettings.subjects, activeQuarterId);
+      const scores = qData?.scores?.[s.id] || {};
+      const reassess = qData?.reassessmentScores?.[s.id] || {};
+      const rowCols: (string | number)[] = [`"${s.name}"`, s.lrn, s.sex || ''];
+
+      // WW raw scores
+      wwList.forEach(a => {
+        const sc = scores[a.id];
+        const rsc = reassess[a.id];
+        const val = rsc !== undefined ? rsc : sc;
+        rowCols.push(val !== undefined ? val : '');
+      });
+      if (wwList.length > 0) {
+        rowCols.push(g.wowRawSum, `"${g.wowPercentage}%"`, g.weightedWOW);
+      }
+
+      // PT raw scores
+      ptList.forEach(a => {
+        const sc = scores[a.id];
+        const rsc = reassess[a.id];
+        const val = rsc !== undefined ? rsc : sc;
+        rowCols.push(val !== undefined ? val : '');
+      });
+      if (ptList.length > 0) {
+        rowCols.push(g.pptRawSum, `"${g.pptPercentage}%"`, g.weightedPPT);
+      }
+
+      // Exam raw scores
+      qeList.forEach(a => {
+        const sc = scores[a.id];
+        const rsc = reassess[a.id];
+        const val = rsc !== undefined ? rsc : sc;
+        rowCols.push(val !== undefined ? val : '');
+      });
+      if (qeList.length > 0) {
+        rowCols.push(g.qsteRawSum, `"${g.qstePercentage}%"`, g.weightedQSTE);
+      }
+
+      rowCols.push(g.initialGrade, g.finalGrade, g.remarks);
+      csvContent += rowCols.join(',') + '\n';
     });
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `ClassRecord_${activeProject.subject}_${activeProject.gradeLevel}_${activeProject.section}.csv`);
+    link.setAttribute("download", `ClassRecord_${activeProject.subject}_${activeProject.gradeLevel}_${activeProject.section}_${activeQuarterId.replace(/\s+/g, '')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -762,6 +834,13 @@ export default function ClassManagerView() {
                 setEditWeightWW(Math.round(curWeights.wow * 100));
                 setEditWeightPT(Math.round(curWeights.ppt * 100));
                 setEditWeightQE(Math.round(curWeights.qste * 100));
+
+                const quartersList = Object.keys(activeProject.quarters || {});
+                if (quartersList.length > 0) {
+                  setMigrateSourceQuarter(quartersList.includes('4th Quarter') ? '4th Quarter' : quartersList[quartersList.length - 1]);
+                  setMigrateTargetQuarter(quartersList[0]);
+                }
+                setShowMigrateConfirm(false);
 
                 setShowTeacherInfoModal(true);
               }}
@@ -3199,7 +3278,7 @@ export default function ClassManagerView() {
       {/* ─── 1. Teacher & Class Info Edit Modal ─── */}
       {showTeacherInfoModal && activeProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md space-y-4 p-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg space-y-4 p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
@@ -3372,9 +3451,161 @@ export default function ClassManagerView() {
                   </button>
                 </div>
               </div>
+
+              {/* Quarter Grade & Assessment Migration Tool */}
+              <div className="pt-3 border-t border-slate-150 dark:border-slate-800">
+                <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50 rounded-2xl space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-amber-500 text-white rounded-lg shadow-xs">
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-[11px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1.5">
+                        Migrate Quarter Scores & Grades
+                        <span className="text-[9px] font-normal lowercase bg-amber-200/60 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 px-1.5 py-0.2 rounded font-mono">
+                          recovery tool
+                        </span>
+                      </h4>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        Accidentally entered grades in the wrong quarter? Move all assessments and student scores seamlessly.
+                      </p>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const allQKeys = Object.keys(activeProject.quarters || {});
+                    const srcData = activeProject.quarters[migrateSourceQuarter];
+                    const srcAssessmentsCount = srcData?.assessments?.length || 0;
+                    const srcScoresCount = Object.values(srcData?.scores || {}).reduce((acc, sc) => acc + Object.keys(sc || {}).length, 0);
+                    const tgtData = activeProject.quarters[migrateTargetQuarter];
+                    const tgtAssessmentsCount = tgtData?.assessments?.length || 0;
+
+                    return (
+                      <div className="space-y-2 pt-1">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-mono font-bold text-slate-500 uppercase block mb-0.5">
+                              From (Source Quarter)
+                            </label>
+                            <select
+                              value={migrateSourceQuarter}
+                              onChange={(e) => {
+                                setMigrateSourceQuarter(e.target.value);
+                                setShowMigrateConfirm(false);
+                              }}
+                              className="w-full bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/60 rounded-xl py-1.5 px-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden"
+                            >
+                              {allQKeys.map(q => {
+                                const qAssCount = activeProject.quarters[q]?.assessments?.length || 0;
+                                return (
+                                  <option key={`src-${q}`} value={q}>
+                                    {q} ({qAssCount} col{qAssCount !== 1 ? 's' : ''})
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-mono font-bold text-slate-500 uppercase block mb-0.5">
+                              To (Destination Quarter)
+                            </label>
+                            <select
+                              value={migrateTargetQuarter}
+                              onChange={(e) => {
+                                setMigrateTargetQuarter(e.target.value);
+                                setShowMigrateConfirm(false);
+                              }}
+                              className="w-full bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700/60 rounded-xl py-1.5 px-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden"
+                            >
+                              {allQKeys.map(q => (
+                                <option key={`tgt-${q}`} value={q}>
+                                  {q}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Source Status & Warning */}
+                        <div className="text-[10px] text-slate-600 dark:text-slate-400 bg-white/70 dark:bg-slate-900/60 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                          <div className="flex justify-between items-center font-mono text-[9px]">
+                            <span>Found in <strong className="text-amber-700 dark:text-amber-400">{migrateSourceQuarter}</strong>:</span>
+                            <span className="font-bold">{srcAssessmentsCount} columns · {srcScoresCount} recorded scores</span>
+                          </div>
+                          {tgtAssessmentsCount > 0 && (
+                            <div className="text-rose-600 dark:text-rose-400 font-bold text-[9px] mt-1">
+                              ⚠️ Warning: {migrateTargetQuarter} currently has {tgtAssessmentsCount} assessment column(s). Moving will overwrite them.
+                            </div>
+                          )}
+                        </div>
+
+                        <label className="flex items-center gap-2 cursor-pointer pt-0.5">
+                          <input
+                            type="checkbox"
+                            checked={migrateClearSource}
+                            onChange={(e) => setMigrateClearSource(e.target.checked)}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                          />
+                          <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">
+                            Clear <strong className="text-slate-800 dark:text-slate-200">{migrateSourceQuarter}</strong> after migration (Move instead of Copy)
+                          </span>
+                        </label>
+
+                        {showMigrateConfirm ? (
+                          <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 rounded-xl space-y-2 animate-in fade-in">
+                            <p className="text-[10px] font-bold text-rose-800 dark:text-rose-300">
+                              Confirm: Transfer all scores from {migrateSourceQuarter} into {migrateTargetQuarter}?
+                            </p>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (migrateSourceQuarter === migrateTargetQuarter) {
+                                    globalToast.show('error', 'Source and target quarter cannot be the same.', 'Migration Error');
+                                    return;
+                                  }
+                                  const success = migrateQuarterData(migrateSourceQuarter, migrateTargetQuarter, migrateClearSource);
+                                  if (success) {
+                                    globalToast.show('success', `Successfully transferred grades from ${migrateSourceQuarter} to ${migrateTargetQuarter}!`, 'Quarters Migrated');
+                                    setShowTeacherInfoModal(false);
+                                  } else {
+                                    globalToast.show('error', 'Failed to migrate quarter data. Please verify the quarters.', 'Migration Failed');
+                                  }
+                                }}
+                                className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-lg cursor-pointer transition shadow-xs flex items-center justify-center gap-1.5"
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                Yes, Transfer Now
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowMigrateConfirm(false)}
+                                className="px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={migrateSourceQuarter === migrateTargetQuarter || srcAssessmentsCount === 0}
+                            onClick={() => setShowMigrateConfirm(true)}
+                            className="w-full py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl transition cursor-pointer shadow-3xs flex items-center justify-center gap-1.5"
+                          >
+                            <ArrowRightLeft className="h-3.5 w-3.5" />
+                            Transfer Scores ({migrateSourceQuarter} → {migrateTargetQuarter})
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-2 pt-2 border-t border-slate-150 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => {

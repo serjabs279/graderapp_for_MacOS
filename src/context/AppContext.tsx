@@ -36,6 +36,7 @@ interface AppContextType {
   toggleProjectCompleted: (id: string, completed: boolean) => void;
   deleteProject: (id: string) => void;
   updateActiveProjectQuarter: (quarterId: string) => void;
+  migrateQuarterData: (sourceQuarter: string, targetQuarter: string, clearSource?: boolean) => boolean;
   
   // Roster / Student operations within active project
   addStudentToActive: (student: Omit<Student, 'id'>) => void;
@@ -874,6 +875,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const migrateQuarterData = (sourceQuarter: string, targetQuarter: string, clearSource: boolean = true): boolean => {
+    const active = getActiveProject();
+    if (!active || !active.quarters[sourceQuarter]) return false;
+    if (sourceQuarter === targetQuarter) return false;
+
+    const sourceData = active.quarters[sourceQuarter];
+    const clonedSourceData: QuarterData = JSON.parse(JSON.stringify(sourceData));
+
+    const updatedQuarters: Record<string, QuarterData> = {
+      ...active.quarters,
+      [targetQuarter]: clonedSourceData
+    };
+
+    if (clearSource) {
+      updatedQuarters[sourceQuarter] = {
+        assessments: [],
+        scores: {},
+        reassessmentScores: {},
+        adjustmentModeEnabled: false,
+        adjustments: {}
+      };
+    }
+
+    const updatedProj: Project = {
+      ...active,
+      quarters: updatedQuarters,
+      lastActiveQuarter: targetQuarter,
+      updatedAt: new Date().toISOString()
+    };
+
+    updateActiveProject(updatedProj);
+    return true;
+  };
+
   // Settings & DB Management
   const updateGlobalSettings = (settings: Partial<GlobalSettings>) => {
     const updated = { ...globalSettings, ...settings } as GlobalSettings;
@@ -1309,6 +1344,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setGradeAdjustmentForStudent,
       removeGradeAdjustmentForStudent,
       updateProjectTeacherInfo,
+      migrateQuarterData,
       
       updateGlobalSettings,
       toggleDarkMode,
