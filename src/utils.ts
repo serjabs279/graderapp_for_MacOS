@@ -47,50 +47,50 @@ export function transmuteGrade(initialGrade: number): number {
   return 60;
 }
 
-// DepEd MATATAG SY 2027-2028 Adjusted Transmutation Table (Table 4)
+// DepEd MATATAG SY 2027-2028 Adjusted Transmutation Table (Table 4. Adjusted Transmutation Table)
 export function transmuteGrade2027(initialGrade: number): number {
   const rounded = Math.round(initialGrade * 100) / 100;
   
   if (rounded >= 99.50) return 100;
-  if (rounded >= 97.50) return 99;
-  if (rounded >= 96.00) return 98;
-  if (rounded >= 95.00) return 97;
-  if (rounded >= 94.00) return 96;
-  if (rounded >= 93.00) return 95;
-  if (rounded >= 92.00) return 94;
-  if (rounded >= 91.00) return 93;
-  if (rounded >= 90.00) return 92;
-  if (rounded >= 89.00) return 91;
-  if (rounded >= 88.00) return 90;
-  if (rounded >= 87.00) return 89;
-  if (rounded >= 86.00) return 88;
-  if (rounded >= 85.00) return 87;
-  if (rounded >= 84.00) return 86;
-  if (rounded >= 83.00) return 85;
-  if (rounded >= 82.00) return 84;
-  if (rounded >= 81.00) return 83;
-  if (rounded >= 80.00) return 82;
-  if (rounded >= 79.00) return 81;
-  if (rounded >= 78.00) return 80;
-  if (rounded >= 77.00) return 79;
-  if (rounded >= 76.00) return 78;
-  if (rounded >= 75.00) return 77;
-  if (rounded >= 73.00) return 76;
+  if (rounded >= 98.32) return 99;
+  if (rounded >= 97.14) return 98;
+  if (rounded >= 95.96) return 97;
+  if (rounded >= 94.78) return 96;
+  if (rounded >= 93.60) return 95;
+  if (rounded >= 92.42) return 94;
+  if (rounded >= 91.24) return 93;
+  if (rounded >= 90.06) return 92;
+  if (rounded >= 88.88) return 91;
+  if (rounded >= 87.70) return 90;
+  if (rounded >= 86.52) return 89;
+  if (rounded >= 85.34) return 88;
+  if (rounded >= 84.16) return 87;
+  if (rounded >= 82.98) return 86;
+  if (rounded >= 81.80) return 85;
+  if (rounded >= 80.62) return 84;
+  if (rounded >= 79.44) return 83;
+  if (rounded >= 78.26) return 82;
+  if (rounded >= 77.08) return 81;
+  if (rounded >= 75.90) return 80;
+  if (rounded >= 74.72) return 79;
+  if (rounded >= 73.54) return 78;
+  if (rounded >= 72.36) return 77;
+  if (rounded >= 71.18) return 76;
   if (rounded >= 70.00) return 75;
-  if (rounded >= 68.00) return 74;
-  if (rounded >= 66.00) return 73;
-  if (rounded >= 64.00) return 72;
-  if (rounded >= 62.00) return 71;
-  if (rounded >= 60.00) return 70;
-  if (rounded >= 58.00) return 69;
-  if (rounded >= 56.00) return 68;
-  if (rounded >= 54.00) return 67;
-  if (rounded >= 52.00) return 66;
-  if (rounded >= 50.00) return 65;
-  if (rounded >= 48.00) return 64;
-  if (rounded >= 46.00) return 63;
-  if (rounded >= 43.00) return 62;
-  if (rounded >= 40.00) return 61;
+  if (rounded >= 65.34) return 74;
+  if (rounded >= 60.67) return 73;
+  if (rounded >= 56.01) return 72;
+  if (rounded >= 51.34) return 71;
+  if (rounded >= 46.67) return 70;
+  if (rounded >= 42.01) return 69;
+  if (rounded >= 37.34) return 68;
+  if (rounded >= 32.68) return 67;
+  if (rounded >= 28.01) return 66;
+  if (rounded >= 23.35) return 65;
+  if (rounded >= 18.68) return 64;
+  if (rounded >= 14.01) return 63;
+  if (rounded >= 9.35) return 62;
+  if (rounded >= 4.68) return 61;
   return 60;
 }
 

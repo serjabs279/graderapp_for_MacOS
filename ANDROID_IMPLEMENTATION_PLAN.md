@@ -37,10 +37,16 @@ This document is a comprehensive, line-by-line synthesis of **every single promp
 ---
 
 ### 3. Grade Computation & Transmutation Parity (Teacher vs Adviser Matrix)
-- **User Prompt**: *"grade computation review, grade in the imported json sometimes do not calculate well in the adviser portal, example: 75 in the generated json from the teacher but in the adviser grade matrix its 74"*
+- **User Prompt**: 
+  - *"grade computation review, grade in the imported json sometimes do not calculate well in the adviser portal, example: 75 in the generated json from the teacher but in the adviser grade matrix its 74"*
+  - *"review the transmutation table it seems off follow the image provided (Table 4. Adjusted Transmutation Table)"*
 - **Implementation**:
   - Audited grade calculation pipeline between teacher gradebook calculation (`computeProjectStudentGrade`) and exported JSON values.
-  - Resolved rounding discrepancies by strictly passing final transmuted integer grades (`Math.round(...)`) into the exported JSON and ensuring the Adviser Grade Matrix does not re-transmute already transmuted subject grades.
+  - Resolved rounding discrepancies by strictly passing final transmuted integer grades into the exported JSON and ensuring the Adviser Grade Matrix does not re-transmute already transmuted subject grades.
+  - **Calibrated `transmuteGrade2027` with 100% fidelity to DepEd *Table 4. Adjusted Transmutation Table***:
+    - Upper brackets: `99.50-100.00` → `100`, `98.32-99.49` → `99`, `97.14-98.31` → `98`, `95.96-97.13` → `97`, down to `75.90-77.07` → `80`.
+    - Passing boundary: `70.00-71.17` → `75`.
+    - Lower brackets: `65.34-69.99` → `74`, `60.67-65.33` → `73`, down to `0.00-4.67` → `60`.
 
 ---
 
