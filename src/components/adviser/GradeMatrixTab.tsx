@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { AdviserClass } from '../../types';
 import { GradeMatrix, getQuarterKeys, computeAttendanceSummary } from '../../utils/adviserUtils';
 import { TableProperties, Printer, Edit3, Check, X, AlertCircle } from 'lucide-react';
+import { globalToast } from '../../context/ToastContext';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -45,7 +46,7 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
 
   const handleCellClick = (lrn: string, studentName: string, subjectName: string, currentGrade: number | null) => {
     if (activeQuarter === 'Final') {
-      alert("To edit grades, please select a specific Quarter / Semester from the tabs above instead of the consolidated Final view.");
+      globalToast.info("To edit grades, please select a specific Quarter / Semester from the tabs above instead of the consolidated Final view.", "Edit Grades");
       return;
     }
 
@@ -61,12 +62,12 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
     );
 
     if (!imported) {
-      alert(`No imported grade records found for "${targetSubjName}" in ${activeQuarter}. Please import grades first.`);
+      globalToast.error(`No imported grade records found for "${targetSubjName}" in ${activeQuarter}. Please import grades first.`, "Grades Not Found");
       return;
     }
 
     if (imported.isLocked) {
-      alert("This subject's grades are locked. Please unlock them in the Grade Import tab first.");
+      globalToast.warning("This subject's grades are locked. Please unlock them in the Grade Import tab first.", "Grades Locked");
       return;
     }
 

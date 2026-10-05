@@ -35,6 +35,9 @@ export default function GradeImportPanel({ adviserClass }: Props) {
   const fileOneRef = useRef<HTMLInputElement>(null);
   const fileTwoRef = useRef<HTMLInputElement>(null);
 
+  // Inline confirm state (replaces window.confirm — blocked in macOS Tauri)
+  const [pendingConfirm, setPendingConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
+
 
   const resetForm = () => {
     setSubjectName('');
@@ -252,29 +255,34 @@ export default function GradeImportPanel({ adviserClass }: Props) {
         importedAt: new Date().toISOString()
       };
 
-      if (existing) {
+        if (existing) {
         if (existing.isLocked) {
           throw new Error('This subject has already been uploaded and is locked. Unlock it first before replacing.');
         }
-        if (!window.confirm(`"${resolvedName}" has already been uploaded for ${otherQuarter}. Replace existing grades?`)) {
-          return;
-        }
-        replaceSubjectGrades(adviserClass.id, parsed.subjectUID, otherQuarter, payload);
-        addOverrideLogEntry(adviserClass.id, {
-          adviserName: adviserClass.adviserName, studentLRN: 'ALL', studentName: 'ALL',
-          subjectUID: parsed.subjectUID, subjectName: resolvedName, quarterKey: otherQuarter,
-          action: 'Subject Replaced', reason: 'Replaced uploaded excel file'
+        setPendingConfirm({
+          message: `"${resolvedName}" has already been uploaded for ${otherQuarter}. Replace existing grades?`,
+          onConfirm: () => {
+            replaceSubjectGrades(adviserClass.id, parsed.subjectUID, otherQuarter, payload);
+            addOverrideLogEntry(adviserClass.id, {
+              adviserName: adviserClass.adviserName, studentLRN: 'ALL', studentName: 'ALL',
+              subjectUID: parsed.subjectUID, subjectName: resolvedName, quarterKey: otherQuarter,
+              action: 'Subject Replaced', reason: 'Replaced uploaded excel file'
+            });
+            globalToast.info(`Replaced grades for "${resolvedName}" (${otherQuarter}).`, 'Subject Grades Replaced');
+            setSuccessMsg(`✅ Successfully replaced grades for "${resolvedName}" (${otherQuarter}).`);
+            resetForm();
+          }
         });
-        globalToast.info(`Replaced grades for "${resolvedName}" (${otherQuarter}).`, 'Subject Grades Replaced');
-      } else {
-        importSubjectGrades(adviserClass.id, payload);
-        addOverrideLogEntry(adviserClass.id, {
-          adviserName: adviserClass.adviserName, studentLRN: 'ALL', studentName: 'ALL',
-          subjectUID: parsed.subjectUID, subjectName: resolvedName, quarterKey: otherQuarter,
-          action: 'Subject Imported', reason: 'Initial excel file upload'
-        });
-        globalToast.success(`Imported ${Object.keys(parsed.grades).length} student grades for "${resolvedName}" (${otherQuarter}).`, 'Grade Import Successful');
+        return;
       }
+
+      importSubjectGrades(adviserClass.id, payload);
+      addOverrideLogEntry(adviserClass.id, {
+        adviserName: adviserClass.adviserName, studentLRN: 'ALL', studentName: 'ALL',
+        subjectUID: parsed.subjectUID, subjectName: resolvedName, quarterKey: otherQuarter,
+        action: 'Subject Imported', reason: 'Initial excel file upload'
+      });
+      globalToast.success(`Imported ${Object.keys(parsed.grades).length} student grades for "${resolvedName}" (${otherQuarter}).`, 'Grade Import Successful');
 
       setSuccessMsg(`✅ Successfully imported ${Object.keys(parsed.grades).length} student grades for "${resolvedName}" (${otherQuarter}).`);
       resetForm();
@@ -291,8 +299,9 @@ export default function GradeImportPanel({ adviserClass }: Props) {
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
-      const parsedOne = await parseImportFile(fileOne);
-      const parsedTwo = await parseImportFile(fileTwo);
+      // BUG FIX: pass langQuarter so JSON parser selects the correct quarter
+      const parsedOne = await parseImportFile(fileOne, langQuarter);
+      const parsedTwo = await parseImportFile(fileTwo, langQuarter);
       
       const lg = adviserClass.languageGroups.find(g => g.label === selectedLanguageGroup);
       if (!lg) throw new Error("Composite group not found");
@@ -344,11 +353,16 @@ export default function GradeImportPanel({ adviserClass }: Props) {
         if (existing.isLocked) {
           throw new Error("This composite subject group has already been uploaded and is locked.");
         }
-        if (!window.confirm(`This composite group (${selectedLanguageGroup}) has already been uploaded for this quarter. Replace existing grades?`)) {
-          return;
-        }
-        replaceSubjectGrades(adviserClass.id, existing.subjectUID, langQuarter, payload);
-        globalToast.info(`Replaced grades for composite group "${selectedLanguageGroup}" (${langQuarter}).`, 'Composite Grades Replaced');
+        setPendingConfirm({
+          message: `This composite group (${selectedLanguageGroup}) has already been uploaded for this quarter. Replace existing grades?`,
+          onConfirm: () => {
+            replaceSubjectGrades(adviserClass.id, existing.subjectUID, langQuarter, payload);
+            globalToast.info(`Replaced grades for composite group "${selectedLanguageGroup}" (${langQuarter}).`, 'Composite Grades Replaced');
+            setSuccessMsg(`Successfully imported and merged grades for ${selectedLanguageGroup}.`);
+            resetForm();
+          }
+        });
+        return;
       } else {
         importSubjectGrades(adviserClass.id, payload);
         globalToast.success(`Successfully imported and merged grades for "${selectedLanguageGroup}" (${langQuarter}).`, 'Composite Import Successful');
@@ -612,6 +626,32 @@ export default function GradeImportPanel({ adviserClass }: Props) {
           subjectData={selectedSubjectRecord}
           onClose={() => setSelectedSubjectRecord(null)}
         />
+      )}
+
+      {/* Inline Confirm Modal (macOS Tauri-safe, replaces window.confirm) */}
+      {pendingConfirm && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{pendingConfirm.message}</p>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
+                className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer"
+              >
+                Yes, Replace
+              </button>
+              <button
+                onClick={() => setPendingConfirm(null)}
+                className="py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

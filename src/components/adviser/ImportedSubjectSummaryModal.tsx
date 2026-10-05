@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { AdviserClass, ImportedSubjectGrades } from '../../types';
 import { exportAdviserSubjectRecordPDF, exportAdviserSubjectRecordExcel } from '../../utils/adviser/adviserExports';
 import { X, Lock, Unlock, Printer, FileText, FileSpreadsheet, AlertCircle, Save, Check } from 'lucide-react';
+import { globalToast } from '../../context/ToastContext';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -42,7 +43,7 @@ export default function ImportedSubjectSummaryModal({ adviserClass, subjectData,
   const startEdit = (lrn: string, currentGrade: number | null) => {
     if (subjectData.isLocked) return;
     if (subjectData.isLanguageGroup) {
-      alert("Language composite grades cannot be edited directly. Edit the original English or Filipino grade instead.");
+      globalToast.info("Language composite grades cannot be edited directly. Edit the original English or Filipino grade instead.", "Language Composite");
       return;
     }
     setEditingLrn(lrn);
@@ -53,7 +54,7 @@ export default function ImportedSubjectSummaryModal({ adviserClass, subjectData,
     if (!editingLrn) return;
     const val = Number(editValue);
     if (isNaN(val) || val < 0 || val > 100) {
-      alert("Please enter a valid grade between 0 and 100.");
+      globalToast.error("Please enter a valid grade between 0 and 100.", "Invalid Grade");
       return;
     }
 
