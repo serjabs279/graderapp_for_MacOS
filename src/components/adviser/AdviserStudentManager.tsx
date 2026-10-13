@@ -5,8 +5,9 @@ import { GradeMatrix } from '../../utils/adviserUtils';
 import { globalToast } from '../../context/ToastContext';
 import {
   Users, Plus, Pencil, Trash2, Check, X, AlertCircle,
-  ClipboardList, Upload, CheckCircle2, ChevronDown, ChevronUp
+  ClipboardList, Upload, CheckCircle2, ChevronDown, ChevronUp, Eye
 } from 'lucide-react';
+import StudentGradesModal from './StudentGradesModal';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -73,6 +74,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
   const [showAdd, setShowAdd] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [editingLrn, setEditingLrn] = useState<string | null>(null);
+  const [viewingStudentLrn, setViewingStudentLrn] = useState<string | null>(null);
 
   // Single-add form state
   const [lrn, setLrn] = useState('');
@@ -410,6 +412,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
               <th className="px-6 py-3 font-bold text-slate-500">Sex</th>
               <th className="px-6 py-3 font-bold text-slate-500 text-center">Age</th>
               <th className="px-6 py-3 font-bold text-slate-500 text-right">Actions</th>
+              <th className="px-6 py-3 font-bold text-slate-500 text-center">Grades</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -447,11 +450,37 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
                     </button>
                   </div>
                 </td>
+                <td className="px-6 py-3 text-center">
+                  {gradeMatrix.find(r => r.lrn === s.lrn) ? (
+                    <button
+                      onClick={() => setViewingStudentLrn(s.lrn)}
+                      className="p-1.5 text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors cursor-pointer"
+                      title={`View ${s.name}'s grades`}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-slate-300 dark:text-slate-700">No grades</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Student Grades Modal */}
+      {viewingStudentLrn && (() => {
+        const studentRow = gradeMatrix.find(r => r.lrn === viewingStudentLrn);
+        if (!studentRow) return null;
+        return (
+          <StudentGradesModal
+            student={studentRow}
+            adviserClass={adviserClass}
+            onClose={() => setViewingStudentLrn(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

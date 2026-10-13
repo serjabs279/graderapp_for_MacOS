@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useToast } from '../../context/ToastContext';
 import { AdviserClass, ImportedSubjectGrades } from '../../types';
 import { exportAdviserSubjectRecordPDF, exportAdviserSubjectRecordExcel } from '../../utils/adviser/adviserExports';
 import { X, Lock, Unlock, Printer, FileText, FileSpreadsheet, AlertCircle, Save, Check } from 'lucide-react';
@@ -12,6 +13,7 @@ interface Props {
 
 export default function ImportedSubjectSummaryModal({ adviserClass, subjectData, onClose }: Props) {
   const { lockSubjectGrades, replaceSubjectGrades, addOverrideLogEntry, globalSettings } = useApp();
+  const { toast } = useToast();
   
   const [editingLrn, setEditingLrn] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -42,7 +44,7 @@ export default function ImportedSubjectSummaryModal({ adviserClass, subjectData,
   const startEdit = (lrn: string, currentGrade: number | null) => {
     if (subjectData.isLocked) return;
     if (subjectData.isLanguageGroup) {
-      alert("Language composite grades cannot be edited directly. Edit the original English or Filipino grade instead.");
+      toast.warning("Language composite grades cannot be edited directly. Edit the original English or Filipino grade instead.", 'Edit Not Allowed');
       return;
     }
     setEditingLrn(lrn);
@@ -53,7 +55,7 @@ export default function ImportedSubjectSummaryModal({ adviserClass, subjectData,
     if (!editingLrn) return;
     const val = Number(editValue);
     if (isNaN(val) || val < 0 || val > 100) {
-      alert("Please enter a valid grade between 0 and 100.");
+      toast.error("Please enter a valid grade between 0 and 100.", 'Invalid Grade');
       return;
     }
 

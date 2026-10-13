@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Project } from '../types';
 import { useApp } from '../context/AppContext';
+import { globalToast } from '../context/ToastContext';
 import { exportTeacherGradebookJSON } from '../utils/subjectGradeExport';
 import { exportTeacherGradebookExcel } from '../utils/teacherExcelExport';
 import { X, FileCode, FileSpreadsheet, Download } from 'lucide-react';
@@ -30,7 +31,7 @@ export default function TeacherExcelExportModal({ project, onClose }: Props) {
 
   const handleExport = () => {
     if (selected.length === 0) {
-      alert('Please select at least one quarter/semester to export.');
+      globalToast.warning('Please select at least one quarter/semester to export.', 'No Selection');
       return;
     }
     const sortedSelected = allQuarters.filter(q => selected.includes(q));

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { globalToast } from '../context/ToastContext';
 import { SubjectType, ArchiveFile, ArchiveValidationResult, ARCHIVE_VERSION } from '../types';
@@ -17,8 +17,14 @@ import {
   FileUp,
   Languages,
   Archive,
-  X
+  X,
+  Bug,
+  Terminal,
+  Sparkles,
+  ArrowLeft
 } from 'lucide-react';
+import DevErrorLogModal from './DevErrorLogModal';
+import { errorLogger } from '../utils/errorLogger';
 
 export default function SettingsView() {
   const { 
@@ -31,7 +37,8 @@ export default function SettingsView() {
     rolloverAcademicYear,
     authUsername,
     authPassword,
-    updateCredentials
+    updateCredentials,
+    setActiveRoute
   } = useApp();
 
   const [schoolName, setSchoolName] = useState(globalSettings.schoolName);
@@ -93,6 +100,29 @@ export default function SettingsView() {
     });
   };
 
+  // ─── Developer Mode Secret Unlock (tap version badge 5x) ──────────────────
+  const [devClickCount, setDevClickCount] = useState(0);
+  const [devUnlocked, setDevUnlocked] = useState(false);
+  const [showDevLog, setShowDevLog] = useState(false);
+  const devClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDevTap = useCallback(() => {
+    const newCount = devClickCount + 1;
+    setDevClickCount(newCount);
+
+    if (devClickTimer.current) clearTimeout(devClickTimer.current);
+    devClickTimer.current = setTimeout(() => setDevClickCount(0), 3000);
+
+    if (newCount >= 5) {
+      setDevUnlocked(true);
+      setDevClickCount(0);
+      errorLogger.info('Developer mode unlocked via Settings', 'SettingsView.tsx');
+      globalToast.success('Developer console unlocked.', '🛠 Developer Mode');
+    }
+  }, [devClickCount]);
+
+  const devSummary = errorLogger.getSummary();
+
   const getSubjectSum = (subj: SubjectType) => {
     const w = getSubjectWeightObj(subj);
     return Math.round((w.wow + w.ppt + w.qste) * 100);
@@ -105,7 +135,7 @@ export default function SettingsView() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAllWeightsValid) {
-      alert("Validation Error: Please make sure that Written/ Oral Works, Performance/ Product tasks, and Quarterly/ Summative/ Term Exams weights sum to exactly 100% for each of the 8 subjects.");
+      globalToast.error("Please ensure Written/Oral Works, Performance/Product tasks, and Quarterly/Summative/Term Exams weights sum to exactly 100% for each subject.", 'Validation Error');
       return;
     }
 
@@ -240,7 +270,6 @@ export default function SettingsView() {
           setTimeout(() => { window.location.reload(); }, 1500);
         } else {
           globalToast.error('Failed to restore backup. Invalid JSON file format.', 'Restore Failed');
-          alert('Failed to restore backup. Invalid JSON file format.');
         }
       };
       reader.readAsText(file);
@@ -278,9 +307,19 @@ CREATE TABLE IF NOT EXISTS grading_projects (
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       {/* Title */}
-      <div className="border-b border-slate-100 dark:border-slate-850 pb-4">
-        <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">System Settings</h2>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium">Manage default school information, DepEd assessment weight matrices, and local database backup tools.</p>
+      <div className="border-b border-slate-100 dark:border-slate-850 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">System Settings</h2>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium">Manage default school information, DepEd assessment weight matrices, and local database backup tools.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveRoute('portal-select')}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-850 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition border border-slate-200 dark:border-slate-800 cursor-pointer self-start sm:self-auto shrink-0 shadow-xs"
+        >
+          <ArrowLeft className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <span>Back to Portal Selection</span>
+        </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -619,11 +658,11 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                   onClick={() => {
                     setCredMessage(null);
                     if (!newUsername.trim()) {
-                      alert("Username cannot be empty.");
+                      globalToast.error('Username cannot be empty.', 'Validation Error');
                       return;
                     }
                     if (newPassword !== confirmPassword) {
-                      alert("Passwords do not match.");
+                      globalToast.error('Passwords do not match.', 'Validation Error');
                       return;
                     }
                     updateCredentials(newUsername.trim(), newPassword);
@@ -744,12 +783,114 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                 </pre>
               </div>
             </div>
-
           </div>
         </div>
       </form>
 
-      {/* Rollover Modal */}
+      {/* ── Developer-Only Section (hidden, unlocked via version badge 5-tap) ── */}
+      {devUnlocked && (
+        <div className="mt-6 bg-slate-950 border border-rose-900/40 rounded-2xl overflow-hidden">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-rose-900/30 bg-black/40 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
+                <Terminal className="w-4 h-4 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-rose-300 tracking-tight flex items-center gap-2">
+                  Developer Console
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400">PRIVATE</span>
+                </h3>
+                <p className="text-[10px] text-slate-500">Error traceback & anomaly log — not visible to users</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setDevUnlocked(false)}
+              className="text-slate-600 hover:text-rose-400 transition cursor-pointer"
+              title="Lock developer console"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Log Summary Stats */}
+          <div className="p-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Critical', value: devSummary.critical, color: 'text-rose-400' },
+              { label: 'Errors', value: devSummary.errors, color: 'text-orange-400' },
+              { label: 'Warnings', value: devSummary.warnings, color: 'text-amber-400' },
+              { label: 'Total Entries', value: devSummary.total, color: 'text-slate-300' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-black/40 border border-slate-800 rounded-xl p-3.5">
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</div>
+                <div className={`text-2xl font-black mt-1 ${color}`}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Session Info */}
+          <div className="px-6 pb-3 text-[11px] text-slate-600 font-mono">
+            Session ID: <span className="text-slate-400">{devSummary.sessionId}</span>
+            {devSummary.oldestEntry && (
+              <span className="ml-4">Oldest: <span className="text-slate-400">{new Date(devSummary.oldestEntry).toLocaleString()}</span></span>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="px-6 pb-6 flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowDevLog(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition cursor-pointer"
+            >
+              <Bug className="w-4 h-4" /> Open Error Log Console
+            </button>
+            <button
+              onClick={() => {
+                if (confirm('Clear all error logs? This cannot be undone.')) {
+                  errorLogger.clearAll();
+                  globalToast.success('Error log cleared.', 'Dev Console');
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
+            >
+              Clear All Logs
+            </button>
+            <button
+              onClick={() => {
+                const json = errorLogger.exportJSON();
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `srphs_dev_log_${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-bold rounded-xl transition cursor-pointer"
+            >
+              <Download className="w-4 h-4" /> Export Log JSON
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden Dev Mode Easter Egg Note */}
+      {!devUnlocked && (
+        <div
+          className="mt-6 text-center cursor-default select-none"
+          onClick={handleDevTap}
+          title=""
+        >
+          <p className="text-[9px] text-slate-700 dark:text-slate-700 font-mono">
+            v1.0.2 Stable · AR-Tech Solutions 2025
+            {devClickCount > 0 && devClickCount < 5 && (
+              <span className="ml-2 text-rose-800">{5 - devClickCount} more tap{5 - devClickCount !== 1 ? 's' : ''}...</span>
+            )}
+          </p>
+        </div>
+      )}
+
+
       {showRolloverModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden border border-slate-200 dark:border-slate-800">
@@ -929,6 +1070,14 @@ CREATE TABLE IF NOT EXISTS grading_projects (
             </div>
           </div>
         </div>
+      )}
+
+      {/* Developer Error Log Console Modal */}
+      {showDevLog && (
+        <DevErrorLogModal
+          isOpen={showDevLog}
+          onClose={() => setShowDevLog(false)}
+        />
       )}
     </div>
   );

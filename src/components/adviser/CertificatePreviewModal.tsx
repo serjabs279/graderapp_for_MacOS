@@ -3,6 +3,8 @@ import { AdviserClass, GlobalSettings } from '../../types';
 import { StudentGradeRow } from '../../utils/adviserUtils';
 import { X, Printer, Download, Calendar, Award, ChevronLeft, ChevronRight } from 'lucide-react';
 import { generateAcademicAchieverCertificates, CertificateOptions } from '../../utils/adviser/certificateGenerator';
+import { exportFile } from '../../utils/fileExportAdapter';
+import { globalToast } from '../../context/ToastContext';
 
 interface Props {
   isOpen: boolean;
@@ -41,11 +43,25 @@ export default function CertificatePreviewModal({
   const depedLogo = adviserClass.depedLogoBase64 || globalSettings.depedLogoBase64;
   const schoolLogo = adviserClass.schoolLogoBase64 || globalSettings.schoolLogoBase64;
 
-  const handleDownloadPDF = () => {
-    const opts: CertificateOptions = { periodLabel, givenDate };
-    const doc = generateAcademicAchieverCertificates(adviserClass, awardees, globalSettings, opts);
-    const filename = `Certificates_${adviserClass.gradeLevel}_${adviserClass.section}_${periodLabel.replace(/\s+/g, '_')}.pdf`;
-    doc.save(filename);
+  const handleDownloadPDF = async () => {
+    try {
+      const opts: CertificateOptions = { periodLabel, givenDate };
+      const doc = generateAcademicAchieverCertificates(adviserClass, awardees, globalSettings, opts);
+      const filename = `Certificates_${adviserClass.gradeLevel}_${adviserClass.section}_${periodLabel.replace(/\s+/g, '_')}.pdf`;
+      const pdfBytes = doc.output('arraybuffer');
+      const saved = await exportFile({
+        filename,
+        content: new Uint8Array(pdfBytes),
+        mimeType: 'application/pdf',
+        title: 'Save Academic Achiever Certificates PDF'
+      });
+      if (saved) {
+        globalToast.success(`Academic Excellence Certificates saved as "${filename}".`, 'Certificates Exported');
+      }
+    } catch (err: any) {
+      console.error('Certificate download error:', err);
+      globalToast.error('Failed to export certificates: ' + (err.message || String(err)), 'Export Error');
+    }
   };
 
   const handlePrintHTML = () => {

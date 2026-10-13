@@ -4,13 +4,15 @@ import { DEFAULT_GLOBAL_SETTINGS, SEED_PROJECTS } from '../data/seedData';
 import { SHS_PROFILES } from '../utils';
 import { getCalendar, getProjectPeriods, getFirstPeriod } from '../calendar/academicCalendar';
 import { persistLoad, persistSave, bootstrapAppDataBackup } from '../utils/tauriPersistence';
+import { autoSaver } from '../utils/autoSave';
+import { globalToast } from './ToastContext';
 
 interface AppContextType {
   projects: Project[];
   activeProjectId: string | null;
   globalSettings: GlobalSettings;
   darkMode: boolean;
-  activeRoute: 'dashboard' | 'class-manager' | 'settings' | 'about' | 'adviser';
+  activeRoute: 'portal-select' | 'dashboard' | 'class-manager' | 'settings' | 'about' | 'adviser';
   workspaceMode: 'JHS' | 'SHS';
   setWorkspaceMode: (mode: 'JHS' | 'SHS') => void;
   
@@ -72,12 +74,15 @@ interface AppContextType {
   // Settings & Db Operations
   updateGlobalSettings: (settings: Partial<GlobalSettings>) => void;
   toggleDarkMode: () => void;
-  setActiveRoute: (route: 'dashboard' | 'class-manager' | 'settings' | 'about' | 'adviser') => void;
+  setActiveRoute: (route: 'portal-select' | 'dashboard' | 'class-manager' | 'settings' | 'about' | 'adviser') => void;
   resetDatabase: () => void;
   backupData: () => string;
   restoreData: (json: string) => boolean;
   restoreArchive: (archive: ArchiveFile) => boolean;
   rolloverAcademicYear: (newYear: string, calendarType: 'Quarter' | 'Trimester') => boolean;
+  // Yearly Reset
+  yearlyResetDue: boolean;
+  performYearlyReset: (nextSchoolYear: string) => void;
   // Adviser Portal
   adviserClasses: AdviserClass[];
   saveAdviserClass: (cls: AdviserClass) => void;
@@ -87,11 +92,13 @@ interface AppContextType {
   importSubjectGrades: (classId: string, payload: ImportedSubjectGrades) => void;
   replaceSubjectGrades: (classId: string, subjectUID: string, quarterKey: string, payload: ImportedSubjectGrades) => void;
   lockSubjectGrades: (classId: string, subjectUID: string, quarterKey: string, lock: boolean) => void;
+  deleteImportedSubject: (classId: string, subjectUID: string, quarterKey: string) => void;
   setManualPromotionStatus: (classId: string, lrn: string, status: 'Promoted' | 'Retained' | null) => void;
   setObservedValue: (classId: string, lrn: string, quarter: string, field: 'responsible' | 'obedient' | 'compassionate' | 'kind' | 'serviceOriented', rating: ObservedValueRating) => void;
   setAttendance: (classId: string, lrn: string, month: string, daysAbsent: number) => void;
   addOverrideLogEntry: (classId: string, entry: Omit<OverrideLogEntry, 'id' | 'timestamp'>) => void;
   overrideStudentGrade: (classId: string, subjectUID: string, quarterKey: string, lrn: string, newGrade: number, reason: string, componentSubjectName?: string) => void;
+  renameSubjectInAdviserClass: (classId: string, oldSubjectName: string, newSubjectName: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -101,9 +108,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(DEFAULT_GLOBAL_SETTINGS);
   const [darkMode, setDarkMode] = useState<boolean>(false);
-  const [activeRoute, setActiveRoute] = useState<'dashboard' | 'class-manager' | 'settings' | 'about' | 'adviser'>('dashboard');
+  const [activeRoute, setActiveRoute] = useState<'portal-select' | 'dashboard' | 'class-manager' | 'settings' | 'about' | 'adviser'>('portal-select');
   const [workspaceMode, setWorkspaceModeState] = useState<'JHS' | 'SHS'>('JHS');
   const [adviserClasses, setAdviserClasses] = useState<AdviserClass[]>([]);
+
+  // Yearly reset prompt
+  const [yearlyResetDue, setYearlyResetDue] = useState<boolean>(false);
 
   // Sidebar collapsing state
   const [sidebarCollapsed, setSidebarCollapsedState] = useState<boolean>(false);
@@ -218,6 +228,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       // ── One-time: create AppData backups for existing users upgrading ─
       bootstrapAppDataBackup();
+
+      // ── Yearly reset detection ─────────────────────────────────────────
+      // Trigger on April 30+ if the user hasn't already done the reset this school year.
+      const now = new Date();
+      const isResetSeason = now.getMonth() === 3 && now.getDate() >= 30; // April = month 3
+      const lastResetSY = localStorage.getItem('srphs_yearly_reset_sy');
+      const rawSettings = localStorage.getItem('srphs_settings_p2');
+      const currentSY: string = rawSettings
+        ? (JSON.parse(rawSettings) as GlobalSettings).activeSchoolYear ?? 'Unknown'
+        : DEFAULT_GLOBAL_SETTINGS.activeSchoolYear ?? 'Unknown';
+      if (isResetSeason && lastResetSY !== currentSY) {
+        setYearlyResetDue(true);
+      }
+
+      // ── Register AutoSave callback to persist projects to AppData ────
+      autoSaver.onSave(async () => {
+        const serialized = localStorage.getItem('srphs_projects_p2');
+        if (serialized) {
+          await persistSave('srphs_projects_p2', serialized);
+        }
+      });
     };
 
     initAsync();
@@ -240,6 +271,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const login = (username: string, password: string): boolean => {
     if (username.trim().toLowerCase() === authUsername.toLowerCase() && password === authPassword) {
       setIsLoggedIn(true);
+      setActiveRoute('portal-select');
       localStorage.setItem('srphs_logged_in', 'true');
       return true;
     }
@@ -249,6 +281,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const bypassLogin = (superuserPassword: string): boolean => {
     if (superuserPassword === 'SRPHS_SUPER_BYPASS_2026') {
       setIsLoggedIn(true);
+      setActiveRoute('portal-select');
       localStorage.setItem('srphs_logged_in', 'true');
       return true;
     }
@@ -257,6 +290,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     setIsLoggedIn(false);
+    setActiveRoute('portal-select');
     localStorage.removeItem('srphs_logged_in');
   };
 
@@ -933,8 +967,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     persistSave('srphs_projects_p2', projSerialized);
     persistSave('srphs_settings_p2', setSerialized);
     localStorage.removeItem('srphs_active_id_p2');
-    alert("Offline Database successfully reset to system defaults.");
+    globalToast.success("Offline Database successfully reset to system defaults.", 'Database Reset');
   };
+
+  /**
+   * Yearly Reset — wipes all data and advances the school year.
+   * Called by YearlyResetModal after the user has downloaded their archive backup.
+   * Records the completed reset so the prompt doesn't reappear until next April.
+   */
+  const performYearlyReset = (nextSchoolYear: string) => {
+    // 1. Clear projects
+    setProjects([]);
+    localStorage.setItem('srphs_projects_p2', JSON.stringify([]));
+    persistSave('srphs_projects_p2', JSON.stringify([]));
+
+    // 2. Clear adviser classes
+    setAdviserClasses([]);
+    localStorage.setItem('srphs_adviser_classes', JSON.stringify([]));
+    persistSave('srphs_adviser_classes', JSON.stringify([]));
+
+    // 3. Reset settings to defaults but keep school name, teacher name, logos & advance school year
+    const rawSettings = localStorage.getItem('srphs_settings_p2');
+    const oldSettings: GlobalSettings = rawSettings ? JSON.parse(rawSettings) : globalSettings;
+    const oldSchoolYear = oldSettings.activeSchoolYear ?? '2026-2027';
+
+    const freshSettings: GlobalSettings = {
+      ...DEFAULT_GLOBAL_SETTINGS,
+      schoolName: oldSettings.schoolName ?? DEFAULT_GLOBAL_SETTINGS.schoolName,
+      teacherName: oldSettings.teacherName ?? DEFAULT_GLOBAL_SETTINGS.teacherName,
+      depedLogoBase64: oldSettings.depedLogoBase64,
+      schoolLogoBase64: oldSettings.schoolLogoBase64,
+      theme: oldSettings.theme ?? DEFAULT_GLOBAL_SETTINGS.theme,
+      activeSchoolYear: nextSchoolYear,
+    };
+    setGlobalSettings(freshSettings);
+    const setSerialized = JSON.stringify(freshSettings);
+    localStorage.setItem('srphs_settings_p2', setSerialized);
+    persistSave('srphs_settings_p2', setSerialized);
+
+    // 4. Clear active selections
+    setActiveProjectId(null);
+    localStorage.removeItem('srphs_active_id_p2');
+
+    // 5. Mark reset as done for the completed school year so the modal won't reappear until next April
+    localStorage.setItem('srphs_yearly_reset_sy', oldSchoolYear);
+    setYearlyResetDue(false);
+  };
+
 
   const backupData = () => {
     // Read directly from localStorage to avoid stale closure issues where React
@@ -1117,6 +1196,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+  const deleteImportedSubject = (classId: string, subjectUID: string, quarterKey: string) => {
+    updateAdviserClass(classId, cls => ({
+      ...cls,
+      importedGrades: cls.importedGrades.filter(
+        g => !(g.subjectUID === subjectUID && g.quarterKey === quarterKey)
+      ),
+      // Also remove override log entries that belong solely to this subject+quarter
+      overrideLog: cls.overrideLog.filter(
+        entry => !(entry.subjectUID === subjectUID && entry.quarterKey === quarterKey)
+      )
+    }));
+  };
+
   const setManualPromotionStatus = (classId: string, lrn: string, status: 'Promoted' | 'Retained' | null) => {
     updateAdviserClass(classId, cls => {
       const updated = { ...cls.manualPromotionStatus };
@@ -1294,6 +1386,79 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const renameSubjectInAdviserClass = (classId: string, oldSubjectName: string, newSubjectName: string) => {
+    const trimmedOld = oldSubjectName.trim();
+    const trimmedNew = newSubjectName.trim();
+    if (!trimmedNew || trimmedOld === trimmedNew) return;
+
+    updateAdviserClass(classId, cls => {
+      // 1. Rename in importedGrades
+      const updatedGrades = cls.importedGrades.map(g => {
+        let updatedG = { ...g };
+        if (g.subjectName === trimmedOld) {
+          updatedG.subjectName = trimmedNew;
+        }
+        if (g.languageRawGrades && g.languageRawGrades[trimmedOld] !== undefined) {
+          const raw = { ...g.languageRawGrades };
+          raw[trimmedNew] = raw[trimmedOld];
+          delete raw[trimmedOld];
+          updatedG.languageRawGrades = raw;
+        }
+        return updatedG;
+      });
+
+      // 2. Rename in subjectOrder - but if subjectOrder is empty, first
+      //    materialise it from defaults + imported names so the rename sticks.
+      //    Without this, buildGradeMatrix falls back to defaultStandardSubjects
+      //    which still use the old name and look up grades that no longer exist.
+      const defaultStdSubjects = cls.workspace === 'JHS'
+        ? ['English', 'Filipino', 'Mathematics', 'Science', 'AP', 'MAPEH', 'Values Education', 'TLE']
+        : [];
+      const importedNames = Array.from(new Set(cls.importedGrades.map(g => g.subjectName)));
+      const langLabels = (cls.languageGroups || []).map(lg => lg.label);
+      const existingOrder = (cls.subjectOrder && cls.subjectOrder.length > 0)
+        ? cls.subjectOrder
+        : defaultStdSubjects;
+      const materializedOrder = Array.from(new Set([
+        ...existingOrder,
+        ...importedNames.filter(s => !existingOrder.includes(s)),
+        ...langLabels.filter(s => !existingOrder.includes(s))
+      ]));
+
+      // Now apply the rename on the materialized order.
+      const updatedSubjectOrder = materializedOrder.map(s => s === trimmedOld ? trimmedNew : s);
+
+      // 3. Rename in languageGroups if present
+      const updatedLanguageGroups = (cls.languageGroups || []).map(lg => {
+        let label = lg.label === trimmedOld ? trimmedNew : lg.label;
+        let subjects = lg.subjects.map(s => s === trimmedOld ? trimmedNew : s);
+        return { label, subjects };
+      });
+
+      // 4. Log the audit entry
+      const logEntry: OverrideLogEntry = {
+        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        adviserName: cls.adviserName,
+        studentLRN: 'ALL',
+        studentName: 'CLASS',
+        subjectName: trimmedNew,
+        action: 'Subject Renamed',
+        previousValue: trimmedOld,
+        newValue: trimmedNew,
+        reason: `Adviser renamed subject from "${trimmedOld}" to "${trimmedNew}"`
+      };
+
+      return {
+        ...cls,
+        importedGrades: updatedGrades,
+        subjectOrder: updatedSubjectOrder,
+        languageGroups: updatedLanguageGroups,
+        overrideLog: [logEntry, ...(cls.overrideLog || [])]
+      };
+    });
+  };
+
   return (
     <AppContext.Provider value={{
       projects,
@@ -1355,6 +1520,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       restoreArchive,
       rolloverAcademicYear,
 
+      // Yearly Reset
+      yearlyResetDue,
+      performYearlyReset,
+
       // Adviser Portal
       adviserClasses,
       saveAdviserClass,
@@ -1364,11 +1533,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       importSubjectGrades,
       replaceSubjectGrades,
       lockSubjectGrades,
+      deleteImportedSubject,
       setManualPromotionStatus,
       setObservedValue,
       setAttendance,
       addOverrideLogEntry,
       overrideStudentGrade,
+      renameSubjectInAdviserClass,
     }}>
       {children}
     </AppContext.Provider>

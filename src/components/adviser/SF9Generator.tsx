@@ -3,9 +3,11 @@ import { useApp } from '../../context/AppContext';
 import { AdviserClass } from '../../types';
 import { GradeMatrix, StudentGradeRow } from '../../utils/adviserUtils';
 import { generateSF9 } from '../../utils/adviser/sf9Export';
+import { exportFile } from '../../utils/fileExportAdapter';
 import { globalToast } from '../../context/ToastContext';
 import { FileText, Download, CheckSquare, Square, Settings, Award, Eye, X } from 'lucide-react';
 import SF9RatingModal from './SF9RatingModal';
+import SF9PreviewModal from './SF9PreviewModal';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -13,12 +15,16 @@ interface Props {
 }
 
 export default function SF9Generator({ adviserClass, gradeMatrix }: Props) {
-  const { globalSettings } = useApp();
+  const { globalSettings, adviserClasses } = useApp();
   const [selectedLrns, setSelectedLrns] = useState<Set<string>>(new Set());
+
+  // Always use the live class from context so that ratings saved in the modal
+  // are reflected immediately when generating the PDF (fixes stale-prop bug).
+  const liveAdviserClass = adviserClasses.find(c => c.id === adviserClass.id) ?? adviserClass;
   const [ratingStudent, setRatingStudent] = useState<StudentGradeRow | null>(null);
 
-  // PDF preview state
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // HTML preview state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // Default: select all
   useEffect(() => {
@@ -26,13 +32,6 @@ export default function SF9Generator({ adviserClass, gradeMatrix }: Props) {
       setSelectedLrns(new Set(gradeMatrix.map(s => s.lrn)));
     }
   }, [gradeMatrix]);
-
-  // Revoke old blob URL when a new one is set or modal is closed
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
 
   const toggleAll = () => {
     if (selectedLrns.size === gradeMatrix.length) {
@@ -49,15 +48,23 @@ export default function SF9Generator({ adviserClass, gradeMatrix }: Props) {
     setSelectedLrns(next);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (selectedLrns.size === 0) return;
     try {
-      const doc = generateSF9(adviserClass, gradeMatrix, globalSettings, Array.from(selectedLrns));
+      const doc = generateSF9(liveAdviserClass, gradeMatrix, globalSettings, Array.from(selectedLrns));
       const title = selectedLrns.size === 1
         ? `SF9_${[...selectedLrns].map(lrn => gradeMatrix.find(s => s.lrn === lrn)?.name ?? lrn)[0].replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
-        : `SF9_Bulk_${adviserClass.gradeLevel}_${adviserClass.section}.pdf`;
-      doc.save(title);
-      globalToast.success(`SF-9 Report Cards generated for ${selectedLrns.size} learner(s) and saved as "${title}".`, 'SF-9 Export Complete');
+        : `SF9_Bulk_${liveAdviserClass.gradeLevel}_${liveAdviserClass.section}.pdf`;
+      const pdfBytes = doc.output('arraybuffer');
+      const saved = await exportFile({
+        filename: title,
+        content: new Uint8Array(pdfBytes),
+        mimeType: 'application/pdf',
+        title: 'Save SF-9 Report Card PDF'
+      });
+      if (saved) {
+        globalToast.success(`SF-9 Report Cards generated for ${selectedLrns.size} learner(s) and saved as "${title}".`, 'SF-9 Export Complete');
+      }
     } catch (err: any) {
       console.error('SF9 download error:', err);
       globalToast.error('Failed to generate SF9: ' + (err.message || String(err)), 'SF-9 Export Failed');
@@ -66,22 +73,11 @@ export default function SF9Generator({ adviserClass, gradeMatrix }: Props) {
 
   const handlePreview = () => {
     if (selectedLrns.size === 0) return;
-    try {
-      const doc = generateSF9(adviserClass, gradeMatrix, globalSettings, Array.from(selectedLrns));
-      const blob = doc.output('blob');
-      const url = URL.createObjectURL(blob);
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(url);
-      globalToast.info(`SF-9 preview rendered for ${selectedLrns.size} learner(s).`, 'Preview Ready');
-    } catch (err: any) {
-      console.error('SF9 preview error:', err);
-      globalToast.error('Failed to generate preview: ' + (err.message || String(err)), 'SF-9 Preview Failed');
-    }
+    setIsPreviewOpen(true);
   };
 
   const closePreview = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
+    setIsPreviewOpen(false);
   };
 
   const hasAll = selectedLrns.size > 0 && selectedLrns.size === gradeMatrix.length;
@@ -195,61 +191,22 @@ export default function SF9Generator({ adviserClass, gradeMatrix }: Props) {
       {/* ── SF9 Rating Modal ── */}
       {ratingStudent && (
         <SF9RatingModal
-          adviserClass={adviserClass}
+          adviserClass={liveAdviserClass}
           studentRow={ratingStudent}
           onClose={() => setRatingStudent(null)}
         />
       )}
 
-      {/* ── Inline PDF Preview Modal ── */}
-      {previewUrl && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col z-50">
-          {/* Preview toolbar */}
-          <div className="flex items-center justify-between px-6 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-amber-500" />
-              <span className="font-bold text-white text-sm">SF9 Print Preview</span>
-              <span className="text-xs text-slate-400 font-mono">
-                {selectedLrns.size === 1
-                  ? [...selectedLrns].map(lrn => gradeMatrix.find(s => s.lrn === lrn)?.name ?? lrn)[0]
-                  : `${selectedLrns.size} students`}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleDownload}
-                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors"
-              >
-                <Download className="h-3.5 w-3.5" /> Download PDF
-              </button>
-              <button
-                onClick={closePreview}
-                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer transition-colors"
-                title="Close Preview"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Object PDF viewer */}
-          <object
-            data={previewUrl}
-            type="application/pdf"
-            className="flex-1 w-full bg-white"
-          >
-            <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-900">
-              <p>Your browser does not support inline PDFs.</p>
-              <button
-                onClick={handleDownload}
-                className="mt-4 px-4 py-2 bg-amber-600 text-white rounded-lg font-bold"
-              >
-                Download PDF Instead
-              </button>
-            </div>
-          </object>
-        </div>
-      )}
+      {/* ── HTML SF9 Preview Modal (Works seamlessly in Android & Desktop) ── */}
+      <SF9PreviewModal
+        isOpen={isPreviewOpen}
+        onClose={closePreview}
+        adviserClass={liveAdviserClass}
+        gradeMatrix={gradeMatrix}
+        globalSettings={globalSettings}
+        selectedLrns={Array.from(selectedLrns)}
+        onDownloadPDF={handleDownload}
+      />
     </div>
   );
 }

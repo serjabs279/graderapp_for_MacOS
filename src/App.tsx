@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { ToastProvider } from './context/ToastContext';
 import Sidebar from './components/Sidebar';
@@ -8,104 +8,116 @@ import SettingsView from './components/SettingsView';
 import AboutView from './components/AboutView';
 import LoginView from './components/LoginView';
 import AdviserPortalView from './components/adviser/AdviserPortalView';
-import { X } from 'lucide-react';
+import AutoSaveIndicator from './components/AutoSaveIndicator';
+import BackupReminderModal from './components/BackupReminderModal';
+import YearlyResetModal from './components/YearlyResetModal';
+import { backupReminder } from './utils/backupReminder';
+import { X, Home, Menu } from 'lucide-react';
+
+import PortalSelectView from './components/PortalSelectView';
 
 function AppContent() {
-  const { activeRoute, setActiveRoute, activeProjectId, isLoggedIn } = useApp();
+  const { activeRoute, setActiveRoute, activeProjectId, isLoggedIn, yearlyResetDue } = useApp();
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    backupReminder.start({
+      intervalMs: 30 * 60 * 1000,
+      onRemind: () => setShowBackupModal(true)
+    });
+    return () => backupReminder.stop();
+  }, []);
 
   if (!isLoggedIn) {
     return <LoginView />;
   }
 
-  // If the active route is 'class-manager', we keep rendering the dashboard
-  // in the background, so the user sees it through the backdrop of our modal overlay.
-  const backgroundRoute = (activeRoute === 'class-manager' || activeRoute === 'adviser') ? 'dashboard' : activeRoute;
+  // If the user is on the post-login landing screen, render the full-screen Portal Selector
+  if (activeRoute === 'portal-select') {
+    return (
+      <>
+        <PortalSelectView />
+        <BackupReminderModal
+          isOpen={showBackupModal}
+          onClose={() => setShowBackupModal(false)}
+        />
+        {yearlyResetDue && <YearlyResetModal />}
+      </>
+    );
+  }
 
+  // If the user is on the dedicated Adviser Portal, render Adviser Portal full-screen
+  if (activeRoute === 'adviser') {
+    return (
+      <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
+        <AdviserPortalView />
+        <BackupReminderModal
+          isOpen={showBackupModal}
+          onClose={() => setShowBackupModal(false)}
+        />
+        {yearlyResetDue && <YearlyResetModal />}
+      </div>
+    );
+  }
+
+  // Otherwise, user is in the Teacher Grading Hub ('dashboard', 'class-manager', 'settings', 'about')
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200 print:block print:h-auto print:min-h-0 print:bg-white print:text-black">
-      {/* Navigation Sidebar */}
-      <Sidebar />
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200 print:block print:h-auto print:min-h-0 print:bg-white print:text-black">
+      {/* Mobile Top Navigation Bar (Shown only on small screens / mobile phones) */}
+      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setMobileSidebarOpen(true)}
+            className="p-1.5 -ml-1 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            aria-label="Open Navigation Menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-emerald-600 rounded-md flex items-center justify-center text-white font-black text-[10px] shadow-xs">
+              SR
+            </div>
+            <span className="font-black text-xs tracking-tight text-slate-900 dark:text-white">
+              SRPHS GRADE APP
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
+            {activeRoute === 'class-manager' ? 'Gradebook' : activeRoute === 'dashboard' ? 'Grading Hub' : activeRoute}
+          </span>
+        </div>
+      </header>
+
+      {/* Navigation Sidebar (Desktop pinned sidebar or Mobile drawer) */}
+      <Sidebar
+        isMobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
+      />
 
       {/* Main Workspace */}
-      <main id="main-content" className="flex-1 min-h-screen p-8 lg:p-12 print:p-0 print:m-0 print:overflow-visible print:h-auto print:block">
-        <div className="max-w-7xl mx-auto space-y-8 print:max-w-full print:space-y-4 print:p-0 print:m-0">
-          {backgroundRoute === 'dashboard' && <DashboardView />}
-          {backgroundRoute === 'settings' && <SettingsView />}
-          {backgroundRoute === 'about' && <AboutView />}
+      <main id="main-content" className="flex-1 min-h-[calc(100vh-49px)] md:min-h-screen p-3 sm:p-6 lg:p-12 print:p-0 print:m-0 print:overflow-visible print:h-auto print:block">
+        <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 print:max-w-full print:space-y-4 print:p-0 print:m-0">
+          {activeRoute === 'dashboard' && <DashboardView />}
+          {activeRoute === 'class-manager' && <ClassManagerView />}
+          {activeRoute === 'settings' && <SettingsView />}
+          {activeRoute === 'about' && <AboutView />}
         </div>
       </main>
 
-      {/* Gradebook Workspace Modal (Phase 6 Overlay) */}
-      {activeRoute === 'class-manager' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-5 md:p-8 animate-fade-in">
-          {/* Blur backdrop overlay */}
-          <div 
-            className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs transition-opacity cursor-pointer"
-            onClick={() => setActiveRoute('dashboard')}
-          />
+      {/* AutoSave Indicator (Fixed Top-Right) */}
+      <AutoSaveIndicator />
 
-          {/* Large desktop modal window that covers almost the whole screen */}
-          <div className="relative w-full h-full max-h-[96vh] max-w-[98%] xl:max-w-7xl bg-slate-50 dark:bg-slate-950 rounded-3xl border border-slate-150 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="bg-white dark:bg-slate-900 px-6 py-4.5 border-b border-slate-150 dark:border-slate-800 flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-sans font-black px-2.5 py-1 rounded-md border border-emerald-100 dark:border-emerald-900/30">
-                  WORKSPACE GRID
-                </span>
-                <span className="text-slate-200 dark:text-slate-850">|</span>
-                <span className="text-[10px] text-slate-450 dark:text-slate-550 font-sans font-bold uppercase tracking-wider">
-                  Project ID: <span className="font-mono text-emerald-700 dark:text-emerald-400 font-extrabold">{activeProjectId}</span>
-                </span>
-              </div>
+      {/* Periodic Backup Reminder Modal */}
+      <BackupReminderModal
+        isOpen={showBackupModal}
+        onClose={() => setShowBackupModal(false)}
+      />
 
-              <button
-                onClick={() => setActiveRoute('dashboard')}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-black rounded-xl transition-all cursor-pointer border border-slate-200/40 dark:border-slate-700/60 shadow-3xs"
-              >
-                <X className="h-4 w-4" /> Close Gradebook
-              </button>
-            </div>
-
-            {/* Scrollable Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 md:p-8">
-              <div className="max-w-7xl mx-auto">
-                <ClassManagerView />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Adviser Portal Modal Overlay */}
-      {activeRoute === 'adviser' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-5 md:p-8 animate-fade-in">
-          <div
-            className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs transition-opacity cursor-pointer"
-            onClick={() => setActiveRoute('dashboard')}
-          />
-          <div className="relative w-full h-full max-h-[96vh] max-w-[98%] xl:max-w-8xl bg-slate-50 dark:bg-slate-950 rounded-3xl border border-amber-200/30 dark:border-amber-900/20 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="bg-white dark:bg-slate-900 px-6 py-4.5 border-b border-amber-100 dark:border-amber-900/30 flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-sans font-black px-2.5 py-1 rounded-md border border-amber-200 dark:border-amber-900/30">
-                  ADVISER PORTAL
-                </span>
-                <span className="text-slate-200 dark:text-slate-850">|</span>
-                <span className="text-[10px] text-slate-450 dark:text-slate-550 font-sans font-bold uppercase tracking-wider">
-                  Class Consolidation &amp; Report Management
-                </span>
-              </div>
-              <button
-                onClick={() => setActiveRoute('dashboard')}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-xs font-black rounded-xl transition-all cursor-pointer border border-amber-200/60 dark:border-amber-800/40 shadow-3xs"
-              >
-                <X className="h-4 w-4" /> Close Portal
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <AdviserPortalView />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Yearly End-of-School-Year Reset Modal */}
+      {yearlyResetDue && <YearlyResetModal />}
     </div>
   );
 }

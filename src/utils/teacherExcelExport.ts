@@ -2,8 +2,9 @@ import * as XLSX from 'xlsx';
 import { Project } from '../types';
 import { computeProjectStudentGrade } from '../utils';
 import { globalToast } from '../context/ToastContext';
+import { exportFile } from './fileExportAdapter';
 
-export function exportTeacherGradebookExcel(
+export async function exportTeacherGradebookExcel(
   project: Project,
   selectedQuarters: string[],
   customWeights?: Record<string, { wow: number; ppt: number; qste: number }>
@@ -213,7 +214,14 @@ export function exportTeacherGradebookExcel(
       .replace(/\s+/g, '_')
       .replace(/[^a-zA-Z0-9_\-]/g, '') + '.xlsx';
 
-    XLSX.writeFile(wb, filename);
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await exportFile({
+      filename,
+      content: new Uint8Array(wbout),
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      title: 'Export Gradebook Spreadsheet'
+    });
+
     globalToast.success(`Gradebook spreadsheet exported as "${filename}".`, 'Excel Export Successful');
   } catch (err: any) {
     console.error('Teacher Excel export error:', err);

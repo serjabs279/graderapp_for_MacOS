@@ -353,6 +353,13 @@ export default function DashboardView() {
 
           <div className="flex flex-wrap gap-2.5 w-full md:w-auto">
             <button
+              onClick={() => setActiveRoute('portal-select')}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200 text-xs font-black rounded-xl transition-all cursor-pointer border border-slate-200 dark:border-slate-700"
+              title="Return to Main Portal Selection Hub"
+            >
+              <LayoutGrid className="h-4 w-4 text-emerald-500" /> Main Hub
+            </button>
+            <button
               onClick={() => setActiveRoute('class-manager')}
               className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-xs cursor-pointer"
             >
@@ -993,14 +1000,25 @@ export default function DashboardView() {
           </p>
         </div>
 
-        <div className="flex gap-4 text-center shrink-0">
-          <div className="px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl min-w-[80px]">
-            <div className="text-[9px] text-slate-400 font-mono font-bold uppercase tracking-wider">Active</div>
-            <div className="text-lg font-black text-indigo-600 dark:text-indigo-400">{activeCount}</div>
-          </div>
-          <div className="px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl min-w-[80px]">
-            <div className="text-[9px] text-slate-400 font-mono font-bold uppercase tracking-wider">Archived</div>
-            <div className="text-lg font-black text-slate-500">{archivedCount}</div>
+        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+          <button
+            onClick={() => setActiveRoute('portal-select')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-black transition cursor-pointer border border-slate-750 dark:border-slate-700 shadow-sm"
+            title="Return to Main Portal Selection Hub"
+          >
+            <LayoutGrid className="h-4 w-4 text-emerald-400" />
+            <span>Main Hub</span>
+          </button>
+
+          <div className="flex gap-3 text-center">
+            <div className="px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl min-w-[80px]">
+              <div className="text-[9px] text-slate-400 font-mono font-bold uppercase tracking-wider">Active</div>
+              <div className="text-lg font-black text-indigo-600 dark:text-indigo-400">{activeCount}</div>
+            </div>
+            <div className="px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl min-w-[80px]">
+              <div className="text-[9px] text-slate-400 font-mono font-bold uppercase tracking-wider">Archived</div>
+              <div className="text-lg font-black text-slate-500">{archivedCount}</div>
+            </div>
           </div>
         </div>
       </div>

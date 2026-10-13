@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { createDefaultAdviserClass, buildGradeMatrix, GradeMatrix } from '../../utils/adviserUtils';
+import { globalToast } from '../../context/ToastContext';
 import {
   GraduationCap, TableProperties, Trophy, Star, BarChart3, FileText, Settings2,
-  Plus, ChevronDown, Users, BookOpen, ClipboardList, ScrollText, History, AlertCircle
+  Plus, ChevronDown, Users, BookOpen, ClipboardList, ScrollText, History, AlertCircle,
+  Home, Activity, Trash2
 } from 'lucide-react';
 import GradeMatrixTab from './GradeMatrixTab';
 import GradeImportPanel from './GradeImportPanel';
@@ -16,11 +18,14 @@ import AdviserStudentManager from './AdviserStudentManager';
 import OverrideLogTab from './OverrideLogTab';
 import DirectGradeEntryTab from './directGradeEntry/DirectGradeEntryTab';
 import { PenTool } from 'lucide-react';
+import DataIntegrityModal from '../DataIntegrityModal';
 
 type PortalTab = 'masterlist' | 'matrix' | 'import' | 'direct-entry' | 'rankings' | 'awardees' | 'performance' | 'sf9' | 'settings' | 'logs';
 
 export default function AdviserPortalView() {
-  const { adviserClasses, saveAdviserClass, globalSettings, setActiveAdviserClass } = useApp();
+  const { adviserClasses, saveAdviserClass, deleteAdviserClass, globalSettings, setActiveAdviserClass, setActiveRoute } = useApp();
+  const [showIntegrityModal, setShowIntegrityModal] = useState(false);
+  const [pendingDeleteClassId, setPendingDeleteClassId] = useState<string | null>(null);
   
   const activeClassId = globalSettings.activeAdviserClassId;
   const activeAdviserClass = adviserClasses.find(c => c.id === activeClassId) || null;
@@ -45,6 +50,20 @@ export default function AdviserPortalView() {
   const handleSelectGroup = (id: string) => {
     setActiveAdviserClass(id);
     setShowClassDropdown(false);
+    setPendingDeleteClassId(null);
+  };
+
+  const handleDeleteClass = (e: React.MouseEvent, cls: typeof adviserClasses[0]) => {
+    e.stopPropagation();
+    if (pendingDeleteClassId === cls.id) {
+      // Confirmed — delete the section
+      deleteAdviserClass(cls.id);
+      if (activeClassId === cls.id) setActiveAdviserClass(null);
+      globalToast.success(`Section "${cls.gradeLevel} - ${cls.section} (${cls.schoolYear})" has been deleted.`, 'Section Deleted');
+      setPendingDeleteClassId(null);
+    } else {
+      setPendingDeleteClassId(cls.id);
+    }
   };
 
   const handleCreateSubmit = () => {
@@ -114,22 +133,56 @@ export default function AdviserPortalView() {
                 {adviserClasses.length === 0 && (
                   <div className="px-3 py-4 text-center text-[11px] text-slate-400">No advisory classes found. Create one.</div>
                 )}
-                {adviserClasses.map(cls => (
-                  <button
-                    key={cls.id}
-                    onClick={() => handleSelectGroup(cls.id)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-between ${
-                      activeClassId === cls.id
-                        ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div>
-                      <div>{cls.gradeLevel} - {cls.section}</div>
-                      <div className="text-[10px] font-normal text-slate-400">{cls.schoolYear} · {cls.workspace} · {cls.students.length} Student(s)</div>
+                {adviserClasses.map(cls => {
+                  const isConfirmingDelete = pendingDeleteClassId === cls.id;
+                  return (
+                    <div
+                      key={cls.id}
+                      className={`group flex items-center gap-1 rounded-lg transition-all ${
+                        activeClassId === cls.id
+                          ? 'bg-amber-50 dark:bg-amber-950/30'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                      } ${isConfirmingDelete ? 'ring-2 ring-red-300 dark:ring-red-800 bg-red-50 dark:bg-red-950/30' : ''}`}
+                    >
+                      <button
+                        onClick={() => handleSelectGroup(cls.id)}
+                        className={`flex-1 text-left px-3 py-2.5 text-xs font-bold transition-all cursor-pointer ${
+                          activeClassId === cls.id
+                            ? 'text-amber-700 dark:text-amber-400'
+                            : 'text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div>{cls.gradeLevel} - {cls.section}</div>
+                        <div className="text-[10px] font-normal text-slate-400">{cls.schoolYear} · {cls.workspace} · {cls.students.length} Student(s)</div>
+                      </button>
+
+                      {isConfirmingDelete ? (
+                        <div className="flex items-center gap-1 pr-1.5 shrink-0">
+                          <button
+                            onClick={(e) => handleDeleteClass(e, cls)}
+                            className="px-2 py-1 text-[10px] font-black bg-red-500 hover:bg-red-600 text-white rounded-md cursor-pointer transition-colors whitespace-nowrap"
+                          >
+                            Confirm Delete
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setPendingDeleteClassId(null); }}
+                            className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => handleDeleteClass(e, cls)}
+                          className="mr-1.5 p-1.5 rounded-md text-slate-300 dark:text-slate-700 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 dark:hover:text-red-400 transition-colors cursor-pointer shrink-0 opacity-0 group-hover:opacity-100"
+                          title="Delete this section"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
               <div className="p-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
                 <button
@@ -155,6 +208,27 @@ export default function AdviserPortalView() {
             </div>
           </div>
         )}
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setShowIntegrityModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200 dark:border-slate-700 text-xs font-bold transition cursor-pointer"
+            title="Inspect Data Health & Decay Protection"
+          >
+            <Activity className="h-3.5 w-3.5 text-indigo-500" />
+            <span className="hidden sm:inline">Data Health</span>
+          </button>
+
+          <button
+            id="adviser-btn-main-hub"
+            onClick={() => setActiveRoute('portal-select')}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white border border-amber-600 text-xs font-black transition cursor-pointer shadow-sm"
+            title="Return to Main Hub (Select Portals)"
+          >
+            <Home className="h-3.5 w-3.5 text-white" />
+            <span>Main Hub</span>
+          </button>
+        </div>
       </div>
 
       {/* No Class Selected State */}
@@ -282,6 +356,12 @@ export default function AdviserPortalView() {
           </div>
         </div>
       )}
+
+      {/* Data Health & Integrity Modal */}
+      <DataIntegrityModal
+        isOpen={showIntegrityModal}
+        onClose={() => setShowIntegrityModal(false)}
+      />
     </div>
   );
 }

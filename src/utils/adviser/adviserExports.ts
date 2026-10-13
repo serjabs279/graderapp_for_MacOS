@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { AdviserClass, ImportedSubjectGrades } from '../../types';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { globalToast } from '../../context/ToastContext';
+import { exportFile } from '../fileExportAdapter';
 
 interface RecordStudent {
   lrn: string;
@@ -13,7 +14,7 @@ interface RecordStudent {
   fil: number | null;
 }
 
-export function exportAdviserSubjectRecordPDF(
+export async function exportAdviserSubjectRecordPDF(
   adviserClass: AdviserClass,
   subjectData: ImportedSubjectGrades,
   students: RecordStudent[],
@@ -84,7 +85,8 @@ export function exportAdviserSubjectRecordPDF(
     });
 
     const filename = `SubjectRecord_${subjectData.subjectName}_${adviserClass.section}.pdf`;
-    doc.save(filename);
+    const pdfBytes = doc.output('arraybuffer');
+    await exportFile({ filename, content: new Uint8Array(pdfBytes), mimeType: 'application/pdf', title: 'Save Subject Record PDF' });
     globalToast.success(`Subject Record PDF exported as "${filename}".`, 'PDF Export Successful');
   } catch (err: any) {
     console.error('Subject Record PDF export error:', err);
@@ -92,7 +94,7 @@ export function exportAdviserSubjectRecordPDF(
   }
 }
 
-export function exportAdviserSubjectRecordExcel(
+export async function exportAdviserSubjectRecordExcel(
   adviserClass: AdviserClass,
   subjectData: ImportedSubjectGrades,
   students: RecordStudent[]
@@ -130,7 +132,8 @@ export function exportAdviserSubjectRecordExcel(
     XLSX.utils.book_append_sheet(wb, ws, "Subject Record");
     
     const filename = `SubjectRecord_${subjectData.subjectName}_${adviserClass.section}.xlsx`;
-    XLSX.writeFile(wb, filename);
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await exportFile({ filename, content: new Uint8Array(wbout), mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', title: 'Save Subject Record Spreadsheet' });
     globalToast.success(`Subject Record spreadsheet exported as "${filename}".`, 'Excel Export Successful');
   } catch (err: any) {
     console.error('Subject Record Excel export error:', err);

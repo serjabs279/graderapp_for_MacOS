@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useToast } from '../../context/ToastContext';
 import { AdviserClass } from '../../types';
-import { GradeMatrix, getQuarterKeys, computeAttendanceSummary } from '../../utils/adviserUtils';
-import { TableProperties, Printer, Edit3, Check, X, AlertCircle } from 'lucide-react';
+import { GradeMatrix, StudentGradeRow, getQuarterKeys, computeAttendanceSummary } from '../../utils/adviserUtils';
+import { TableProperties, Printer, Edit3, Check, X, AlertCircle, Eye } from 'lucide-react';
+import StudentGradesModal from './StudentGradesModal';
+import RenameSubjectModal from './RenameSubjectModal';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -11,8 +14,15 @@ interface Props {
 
 export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
   const { overrideStudentGrade } = useApp();
+  const { toast } = useToast();
   const quarterKeys = getQuarterKeys(adviserClass.workspace);
   const [activeQuarter, setActiveQuarter] = useState<string>('Final');
+
+  // Student grades view modal
+  const [viewingStudent, setViewingStudent] = useState<StudentGradeRow | null>(null);
+
+  // Rename subject modal
+  const [renamingSubject, setRenamingSubject] = useState<string | null>(null);
 
   // Local state for grade override modal
   const [editingCell, setEditingCell] = useState<{
@@ -45,7 +55,7 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
 
   const handleCellClick = (lrn: string, studentName: string, subjectName: string, currentGrade: number | null) => {
     if (activeQuarter === 'Final') {
-      alert("To edit grades, please select a specific Quarter / Semester from the tabs above instead of the consolidated Final view.");
+      toast.warning('To edit grades, select a specific Quarter / Semester from the tabs above instead of the consolidated Final view.', 'Final View is Read-Only');
       return;
     }
 
@@ -61,12 +71,12 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
     );
 
     if (!imported) {
-      alert(`No imported grade records found for "${targetSubjName}" in ${activeQuarter}. Please import grades first.`);
+      toast.error(`No imported grade records found for "${targetSubjName}" in ${activeQuarter}. Please import grades first.`, 'No Grade Records');
       return;
     }
 
     if (imported.isLocked) {
-      alert("This subject's grades are locked. Please unlock them in the Grade Import tab first.");
+      toast.warning("This subject's grades are locked. Please unlock them in the Grade Import tab first.", 'Subject Locked');
       return;
     }
 
@@ -145,15 +155,26 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
-                <th className="px-4 py-3 font-bold text-slate-500 sticky left-0 bg-slate-50 dark:bg-slate-950/50 z-10 w-8 text-center border-r border-slate-200 dark:border-slate-800">No.</th>
-                <th className="px-4 py-3 font-bold text-slate-500 sticky left-8 bg-slate-50 dark:bg-slate-950/50 z-10 min-w-[200px] border-r border-slate-200 dark:border-slate-800">Learner Name</th>
+              <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
+                <th className="px-4 py-3 font-bold text-slate-500 sticky left-0 bg-slate-50 dark:bg-slate-950 z-10 w-8 text-center border-r border-slate-200 dark:border-slate-800">No.</th>
+                <th className="px-4 py-3 font-bold text-slate-500 sticky left-8 bg-slate-50 dark:bg-slate-950 z-10 min-w-[200px] border-r border-slate-200 dark:border-slate-800">Learner Name</th>
                 
                 {columns.map((col, cIdx) => (
-                  <th key={cIdx} className={`px-3 py-3 text-center min-w-[90px] border-r border-slate-200 dark:border-slate-800 ${
+                  <th key={cIdx} className={`px-3 py-3 text-center min-w-[90px] border-r border-slate-200 dark:border-slate-800 group/hdr ${
                     col.isComposite && col.isMain ? 'font-black text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30' : 'font-bold text-slate-700 dark:text-slate-300'
                   }`}>
-                    <div className="truncate w-[90px]" title={col.label}>{col.label}</div>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="truncate max-w-[80px]" title={col.label}>{col.label}</div>
+                      {col.isMain && (
+                        <button
+                          onClick={() => setRenamingSubject(col.label)}
+                          title={`Rename subject "${col.label}"`}
+                          className="opacity-0 group-hover/hdr:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
+                        >
+                          <Edit3 className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                    </div>
                   </th>
                 ))}
 
@@ -192,8 +213,15 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
                     <td className="px-4 py-2.5 text-center text-slate-400 font-mono sticky left-0 bg-white dark:bg-slate-900 z-10 border-r border-slate-100 dark:border-slate-800">
                       {idx + 1}
                     </td>
-                    <td className={`px-4 py-2.5 font-bold sticky left-8 bg-white dark:bg-slate-900 z-10 border-r border-slate-100 dark:border-slate-800 truncate ${isRetained && activeQuarter === 'Final' ? 'text-red-700 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>
-                      {row.name}
+                    <td className={`px-4 py-2.5 font-bold sticky left-8 bg-white dark:bg-slate-900 z-10 border-r border-slate-100 dark:border-slate-800 group/name ${isRetained && activeQuarter === 'Final' ? 'text-red-700 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                      <button
+                        onClick={() => setViewingStudent(row)}
+                        className="flex items-start gap-1 text-left w-full cursor-pointer hover:underline decoration-amber-400"
+                        title={`View ${row.name}'s grades`}
+                      >
+                        <span className="truncate">{row.name}</span>
+                        <Eye className="w-3 h-3 mt-0.5 shrink-0 opacity-0 group-hover/name:opacity-100 transition-opacity text-amber-500" />
+                      </button>
                       <div className="text-[9px] font-mono font-normal text-slate-400">{row.lrn}</div>
                     </td>
 
@@ -373,6 +401,23 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
         </div>
       )}
 
+      {/* Student Grades View Modal */}
+      {viewingStudent && (
+        <StudentGradesModal
+          student={viewingStudent}
+          adviserClass={adviserClass}
+          onClose={() => setViewingStudent(null)}
+        />
+      )}
+
+      {/* Rename Subject Modal */}
+      {renamingSubject && (
+        <RenameSubjectModal
+          adviserClass={adviserClass}
+          subjectName={renamingSubject}
+          onClose={() => setRenamingSubject(null)}
+        />
+      )}
     </div>
   );
 }

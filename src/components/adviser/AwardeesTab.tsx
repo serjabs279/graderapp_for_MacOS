@@ -3,8 +3,11 @@ import { useApp } from '../../context/AppContext';
 import { AdviserClass, HonorsLabel } from '../../types';
 import { GradeMatrix } from '../../utils/adviserUtils';
 import { generateAcademicAchieverCertificates, getDefaultCertificateDate } from '../../utils/adviser/certificateGenerator';
+import { exportFile } from '../../utils/fileExportAdapter';
 import { globalToast } from '../../context/ToastContext';
-import { Star, Printer, Medal, Award, Eye } from 'lucide-react';
+import { Star, Printer, Medal, Award, Eye, Download, FileText } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import CertificatePreviewModal from './CertificatePreviewModal';
 
 interface Props {
@@ -41,7 +44,7 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
   const highHonors = awardees.filter(a => a.honorsLabel === 'With High Honors');
   const honors = awardees.filter(a => a.honorsLabel === 'With Honors');
 
-  const handleGenerateCertificates = () => {
+  const handleGenerateCertificates = async () => {
     if (awardees.length === 0) {
       globalToast.error('No academic achievers found to generate certificates for.', 'No Achievers');
       return;
@@ -52,11 +55,133 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
         givenDate
       });
       const filename = `Certificates_${adviserClass.gradeLevel}_${adviserClass.section}_${periodLabel.replace(/\s+/g, '_')}.pdf`;
-      doc.save(filename);
-      globalToast.success(`Generated ${awardees.length} Academic Excellence Certificate(s) (A4 Portrait, 2 per page) saved as "${filename}".`, 'Certificates Generated');
+      const pdfBytes = doc.output('arraybuffer');
+      const saved = await exportFile({
+        filename,
+        content: new Uint8Array(pdfBytes),
+        mimeType: 'application/pdf',
+        title: 'Save Academic Achiever Certificates PDF'
+      });
+      if (saved) {
+        globalToast.success(`Generated ${awardees.length} Academic Excellence Certificate(s) (A4 Portrait, 2 per page) saved as "${filename}".`, 'Certificates Generated');
+      }
     } catch (err: any) {
       console.error('Certificate generation error:', err);
       globalToast.error('Failed to generate certificates: ' + (err.message || String(err)), 'Generation Error');
+    }
+  };
+
+  const handleDownloadAwardeesListPDF = async () => {
+    if (awardees.length === 0) {
+      globalToast.error('No academic achievers found to export.', 'No Achievers');
+      return;
+    }
+    try {
+      const doc = new jsPDF({ format: 'a4', orientation: 'portrait' });
+      const schoolName = globalSettings.schoolName || 'SAN ROQUE PARISH HIGH SCHOOL INCORPORATED';
+      const depedLogo = adviserClass.depedLogoBase64 || globalSettings.depedLogoBase64;
+      const schoolLogo = adviserClass.schoolLogoBase64 || globalSettings.schoolLogoBase64;
+
+      let yPos = 16;
+      if (schoolLogo) {
+        try { doc.addImage(schoolLogo, 'PNG', 14, 10, 14, 14); } catch {}
+      }
+      if (depedLogo) {
+        try { doc.addImage(depedLogo, 'PNG', 182, 10, 14, 14); } catch {}
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text("Republic of the Philippines", 105, yPos, { align: 'center' });
+      yPos += 4.5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text("Department of Education", 105, yPos, { align: 'center' });
+      yPos += 4.5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text("Region X Northern Mindanao", 105, yPos, { align: 'center' });
+      yPos += 4.5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(schoolName.toUpperCase(), 105, yPos, { align: 'center' });
+      yPos += 6;
+
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(14, yPos, 196, yPos);
+      yPos += 7;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text("OFFICIAL LIST OF ACADEMIC EXCELLENCE AWARDEES", 105, yPos, { align: 'center' });
+      yPos += 5.5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(`Grade ${adviserClass.gradeLevel} - Section ${adviserClass.section}  |  School Year: ${adviserClass.schoolYear}  |  Period: ${periodLabel}`, 105, yPos, { align: 'center' });
+      yPos += 6;
+
+      const bodyData = awardees.map((row, idx) => [
+        idx + 1,
+        row.lrn,
+        row.name.toUpperCase(),
+        row.honorsLabel ?? 'Honors',
+        row.generalAverage?.toFixed(2) ?? '—'
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['No.', 'LRN', 'Learner Name', 'Academic Honor', 'Final Average']],
+        body: bodyData,
+        theme: 'grid',
+        headStyles: { fillColor: [180, 130, 20], halign: 'center', fontSize: 9, fontStyle: 'bold' },
+        styles: { fontSize: 8.5, cellPadding: 2.2 },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 12 },
+          1: { halign: 'center', cellWidth: 32 },
+          2: { fontStyle: 'bold' },
+          3: { halign: 'center', fontStyle: 'bold', cellWidth: 42 },
+          4: { halign: 'right', fontStyle: 'bold', cellWidth: 26 }
+        }
+      });
+
+      const finalY = (doc as any).lastAutoTable?.finalY ?? yPos + 60;
+      let sigY = finalY + 22;
+      if (sigY > 265) {
+        doc.addPage();
+        sigY = 30;
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text((adviserClass.adviserName || 'Class Adviser').toUpperCase(), 50, sigY, { align: 'center' });
+      doc.line(20, sigY - 4, 80, sigY - 4);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text("Class Adviser", 50, sigY + 4, { align: 'center' });
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text((adviserClass.principalName || 'School Principal').toUpperCase(), 160, sigY, { align: 'center' });
+      doc.line(130, sigY - 4, 190, sigY - 4);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text("School Head / Principal", 160, sigY + 4, { align: 'center' });
+
+      const filename = `Awardees_List_${adviserClass.gradeLevel}_${adviserClass.section}_SY${adviserClass.schoolYear}.pdf`;
+      const pdfBytes = doc.output('arraybuffer');
+      const saved = await exportFile({
+        filename,
+        content: new Uint8Array(pdfBytes),
+        mimeType: 'application/pdf',
+        title: 'Save Awardees List PDF'
+      });
+      if (saved) {
+        globalToast.success(`Awardees List exported as "${filename}".`, 'PDF Exported');
+      }
+    } catch (err: any) {
+      console.error('Awardees list export error:', err);
+      globalToast.error('Failed to export awardees list: ' + (err.message || String(err)), 'Export Error');
     }
   };
 
@@ -121,6 +246,14 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl shadow-sm cursor-pointer transition-all"
            >
               <Award className="h-4 w-4 text-amber-200" /> Generate Certificates (A4)
+           </button>
+           <button 
+             onClick={handleDownloadAwardeesListPDF}
+             disabled={awardees.length === 0}
+             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 text-slate-700 dark:text-slate-200 cursor-pointer transition-all"
+             title="Download Official Awardees List PDF"
+           >
+              <Download className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Download List PDF
            </button>
            <button 
              onClick={() => window.print()}

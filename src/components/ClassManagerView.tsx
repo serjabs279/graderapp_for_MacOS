@@ -37,7 +37,8 @@ import {
   FileUp,
   ArrowRightLeft,
   RefreshCw,
-  X
+  X,
+  ChevronLeft
 } from 'lucide-react';
 
 type TabType = 'gradebook' | 'assessments' | 'roster' | 'reports' | 'project-settings';
@@ -52,6 +53,7 @@ export default function ClassManagerView() {
     archiveProject,
     deleteProject,
     saveProject,
+    setActiveRoute,
 
     addStudentToActive,
     updateStudentInActive,
@@ -895,50 +897,61 @@ export default function ClassManagerView() {
           </div>
         )}
 
-        {/* Tab Selection */}
-        <div className="flex flex-wrap gap-1 bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-150 dark:border-slate-850 text-xs w-full sm:w-auto">
+        {/* Tab Selection & Navigation */}
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
-            onClick={() => setActiveTab('gradebook')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'gradebook'
-              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
-              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
+            onClick={() => setActiveRoute('dashboard')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-black transition cursor-pointer border border-slate-200 dark:border-slate-700"
+            title="Return to Grading Hub Overview"
           >
-            Gradebook
+            <ChevronLeft className="h-4 w-4 text-emerald-500" />
+            <span>Grading Hub</span>
           </button>
-          <button
-            onClick={() => setActiveTab('assessments')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'assessments'
-              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
-              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            Assessments ({(activeQuarterData?.assessments || []).length})
-          </button>
-          <button
-            onClick={() => setActiveTab('roster')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'roster'
-              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
-              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            Roster ({activeProject.students.length})
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('reports');
-              // Auto-select first student for individual card if none selected
-              if (!reportStudentId && activeProject.students.length > 0) {
-                setReportStudentId(activeProject.students[0].id);
-              }
-            }}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'reports'
-              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
-              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-          >
-            Reports & Print
-          </button>
+
+          <div className="flex flex-wrap gap-1 bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-150 dark:border-slate-850 text-xs">
+            <button
+              onClick={() => setActiveTab('gradebook')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'gradebook'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+            >
+              Gradebook
+            </button>
+            <button
+              onClick={() => setActiveTab('assessments')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'assessments'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+            >
+              Assessments ({(activeQuarterData?.assessments || []).length})
+            </button>
+            <button
+              onClick={() => setActiveTab('roster')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'roster'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+            >
+              Roster ({activeProject.students.length})
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('reports');
+                // Auto-select first student for individual card if none selected
+                if (!reportStudentId && activeProject.students.length > 0) {
+                  setReportStudentId(activeProject.students[0].id);
+                }
+              }}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${activeTab === 'reports'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+            >
+              Reports & Print
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1264,8 +1277,9 @@ export default function ClassManagerView() {
                 <table className="w-full text-left border-collapse border-spacing-0 select-none">
                   <thead>
                     {/* Header Row 1: Main Category Spans with Correct Mathematical Colspans */}
-                    <tr className="border-b border-slate-150 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/40 text-[9px] font-sans text-slate-450 dark:text-slate-500 uppercase tracking-widest font-black text-center">
-                      <th className="py-3 px-4 text-left w-64 min-w-[220px] border-r border-slate-200 dark:border-slate-800/60 bg-slate-100/50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 font-bold" colSpan={2}>Learner Details</th>
+                    <tr className="border-b border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[9px] font-sans text-slate-450 dark:text-slate-500 uppercase tracking-widest font-black text-center">
+                      <th rowSpan={2} className="py-3 px-4 text-left w-48 min-w-[220px] font-bold border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-slate-50 dark:bg-slate-950 z-20 shadow-[2px_0_5px_rgba(0,0,0,0.03)]">Student Name</th>
+                      <th rowSpan={2} className="py-3 px-1.5 text-center w-12 font-bold border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">Sex</th>
                       {wwAssessments.length > 0 && (
                         <th className="py-2.5 px-2 text-center bg-indigo-50/30 dark:bg-indigo-950/15 text-indigo-750 dark:text-indigo-400 font-black border-r border-slate-200 dark:border-slate-800" colSpan={wwAssessments.length + 3}>
                           <div className="flex items-center justify-center gap-2">
@@ -1312,10 +1326,7 @@ export default function ClassManagerView() {
                     </tr>
 
                     {/* Header Row 2: Assessment Names & Total Headers */}
-                    <tr className="border-b border-slate-150 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/20 text-[9px] font-sans text-slate-450 dark:text-slate-500 uppercase tracking-wide font-black text-center">
-                      {/* Frozen Student Columns */}
-                      <th className="py-3 px-4 text-left w-48 min-w-[220px] font-bold border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-slate-50 dark:bg-slate-950 z-20 shadow-[2px_0_5px_rgba(0,0,0,0.03)]">Student Name</th>
-                      <th className="py-3 px-1.5 text-center w-12 font-bold border-r border-slate-200 dark:border-slate-800">Sex</th>
+                    <tr className="border-b border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[9px] font-sans text-slate-450 dark:text-slate-500 uppercase tracking-wide font-black text-center">
 
                       {/* WW Columns */}
                       {wwAssessments.map(a => (
@@ -1373,33 +1384,55 @@ export default function ClassManagerView() {
                       const computed = computeProjectStudentGrade(activeProject, st.id, globalSettings.subjects, activeQuarterId);
                       const scores = (activeQuarterData?.scores || {})[st.id] || {};
                       const isInactive = st.status === 'Transferred' || st.status === 'Dropped';
+                      const isBeingAdjusted = Boolean(isAdjustmentModeOn && editingAdjustmentStudent?.id === st.id);
+                      const hasAdjustment = Boolean(computed.adjustmentEntry);
 
                       return (
                         <React.Fragment key={st.id}>
                           <tr
-                            className={`group text-xs font-medium transition-colors ${
-                              isInactive
-                                ? 'bg-rose-50/50 dark:bg-rose-950/20 hover:bg-rose-100/60 dark:hover:bg-rose-950/40 text-rose-900 dark:text-rose-200'
-                                : 'hover:bg-slate-50/50 dark:hover:bg-slate-850/10 text-slate-700 dark:text-slate-300'
+                            className={`group text-xs font-medium transition-all ${
+                              isBeingAdjusted
+                                ? 'bg-purple-100/70 dark:bg-purple-950/70 border-l-4 border-l-purple-600 dark:border-l-purple-400 ring-2 ring-purple-500/70 dark:ring-purple-400/80 shadow-[0_0_16px_rgba(168,85,247,0.35)]'
+                                : isInactive
+                                  ? 'bg-rose-50/50 dark:bg-rose-950/20 hover:bg-rose-100/60 dark:hover:bg-rose-950/40 text-rose-900 dark:text-rose-200'
+                                  : isAdjustmentModeOn
+                                    ? hasAdjustment
+                                      ? 'bg-purple-50/30 dark:bg-purple-950/20 hover:bg-purple-50/60 dark:hover:bg-purple-950/40 border-l-2 border-l-purple-400 text-slate-750 dark:text-slate-200'
+                                      : 'hover:bg-slate-50/50 dark:hover:bg-slate-850/10 text-slate-700 dark:text-slate-300 border-l-2 border-l-transparent hover:border-l-purple-300/60'
+                                    : 'hover:bg-slate-50/50 dark:hover:bg-slate-850/10 text-slate-700 dark:text-slate-300'
                             }`}
                           >
                           {/* Frozen student details with distinct right shadow/border */}
-                          <td className={`py-3 px-4 font-bold sticky left-0 z-10 transition-colors border-r shadow-[3px_0_6px_-2px_rgba(0,0,0,0.06)] min-w-[220px] ${
-                            isInactive
-                              ? 'bg-rose-50 dark:bg-rose-950/90 group-hover:bg-rose-100 dark:group-hover:bg-rose-900/60 border-rose-200 dark:border-rose-900/50'
-                              : 'bg-white dark:bg-slate-900 group-hover:bg-slate-50/80 dark:group-hover:bg-slate-850/20 group-even:bg-slate-50/30 dark:group-even:bg-slate-950/20 border-slate-150 dark:border-slate-800'
+                          <td className={`py-3 px-4 font-bold sticky left-0 z-10 transition-all border-r shadow-[3px_0_6px_-2px_rgba(0,0,0,0.06)] min-w-[220px] ${
+                            isBeingAdjusted
+                              ? 'bg-purple-50 dark:bg-slate-900 border-l-4 border-l-purple-600 dark:border-l-purple-400 ring-2 ring-purple-500/70 border-r-purple-300 dark:border-r-purple-800'
+                              : isInactive
+                                ? 'bg-rose-50 dark:bg-rose-950 group-hover:bg-rose-100 dark:group-hover:bg-rose-900 border-rose-200 dark:border-rose-900/50'
+                                : hasAdjustment && isAdjustmentModeOn
+                                  ? 'bg-white dark:bg-slate-900 border-l-2 border-l-purple-400 group-hover:bg-purple-50/40 dark:group-hover:bg-slate-850 border-slate-150 dark:border-slate-800'
+                                  : 'bg-white dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-800 group-even:bg-slate-50 dark:group-even:bg-slate-850 border-slate-150 dark:border-slate-800'
                           }`}>
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`tracking-tight ${isInactive ? 'font-black text-rose-800 dark:text-rose-300' : 'font-extrabold text-slate-850 dark:text-slate-100'}`}>
+                              <span className={`tracking-tight ${isBeingAdjusted ? 'font-black text-purple-950 dark:text-purple-200' : isInactive ? 'font-black text-rose-800 dark:text-rose-300' : 'font-extrabold text-slate-850 dark:text-slate-100'}`}>
                                 {st.name}
                               </span>
+                              {isBeingAdjusted && (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-purple-600 text-white animate-pulse shadow-xs flex items-center gap-1">
+                                  <Sparkles className="h-2.5 w-2.5" /> Adjusting
+                                </span>
+                              )}
+                              {hasAdjustment && isAdjustmentModeOn && !isBeingAdjusted && (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-2xs" title={`Grade adjusted from ${computed.rawFinalGrade} to ${computed.finalGrade}`}>
+                                  <Sliders className="h-2.5 w-2.5" /> Adj: {computed.rawFinalGrade} → {computed.finalGrade}
+                                </span>
+                              )}
                               {isInactive && (
                                 <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-100 border border-rose-300 dark:border-rose-800 shadow-2xs">
                                   {st.status}
                                 </span>
                               )}
                             </div>
-                            <div className={`text-[9px] font-sans font-medium mt-0.5 ${isInactive ? 'text-rose-500/80 dark:text-rose-400/80' : 'text-slate-400 dark:text-slate-500'}`}>
+                            <div className={`text-[9px] font-sans font-medium mt-0.5 ${isBeingAdjusted ? 'text-purple-600 dark:text-purple-400 font-bold' : isInactive ? 'text-rose-500/80 dark:text-rose-400/80' : 'text-slate-400 dark:text-slate-500'}`}>
                               LRN: {st.lrn}
                             </div>
                           </td>
@@ -1691,17 +1724,42 @@ export default function ClassManagerView() {
                         {isAdjustmentModeOn && (
                           <tr
                             key={`adj-${st.id}`}
-                            className="bg-purple-50/80 dark:bg-purple-950/40 border-b border-purple-200/70 dark:border-purple-800/50 text-xs font-mono transition-colors"
+                            className={`border-b text-xs font-mono transition-all ${
+                              isBeingAdjusted
+                                ? 'bg-purple-100/90 dark:bg-purple-950/80 border-l-4 border-l-purple-600 dark:border-l-purple-400 border-purple-300 dark:border-purple-700 ring-2 ring-purple-500/70 shadow-[0_0_18px_rgba(168,85,247,0.4)]'
+                                : hasAdjustment
+                                  ? 'bg-purple-50 dark:bg-purple-950/50 border-l-2 border-l-purple-400 dark:border-l-purple-600 border-purple-200 dark:border-purple-800/60'
+                                  : 'bg-purple-50/40 dark:bg-purple-950/30 border-l-2 border-l-purple-300/40 dark:border-l-purple-700/30 border-purple-100 dark:border-purple-900/40'
+                            }`}
                           >
                             <td
-                              className="py-2.5 px-4 font-bold sticky left-0 bg-purple-100/90 dark:bg-purple-950/90 z-10 border-r border-purple-200 dark:border-purple-800 min-w-[220px]"
+                              className={`py-2 px-3.5 font-bold sticky left-0 z-10 border-r min-w-[220px] transition-all ${
+                                isBeingAdjusted
+                                  ? 'bg-purple-100 dark:bg-purple-950 border-l-4 border-l-purple-600 dark:border-l-purple-400 border-purple-300 dark:border-purple-700 ring-2 ring-purple-500/60 shadow-[0_0_15px_rgba(168,85,247,0.25)]'
+                                  : 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800 border-l-2 border-l-purple-300/60 dark:border-l-purple-700/60'
+                              }`}
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 text-purple-900 dark:text-purple-200">
-                                  <Sliders className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
-                                  <span className="text-[10px] font-black uppercase tracking-wider">Adjustment</span>
+                              <div className="flex items-center justify-between gap-1.5">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <CornerDownRight className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] font-black uppercase tracking-tight text-purple-950 dark:text-purple-200 truncate" title={`Adjustment for ${st.name}`}>
+                                        {st.name.split(',')[0]}
+                                      </span>
+                                      <span className="text-[8px] font-mono font-bold text-purple-600 dark:text-purple-400 shrink-0">
+                                        (Adj)
+                                      </span>
+                                    </div>
+                                    <div className="text-[8px] font-mono text-purple-600/80 dark:text-purple-400/80 truncate">
+                                      {hasAdjustment
+                                        ? `Raw: ${computed.rawFinalGrade ?? computed.finalGrade} → Final: ${computed.finalGrade}`
+                                        : `Raw: ${computed.rawFinalGrade ?? computed.finalGrade}`}
+                                    </div>
+                                  </div>
                                 </div>
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     const raw = computed.rawFinalGrade ?? computed.finalGrade;
                                     setEditingAdjustmentStudent({
@@ -1714,14 +1772,35 @@ export default function ClassManagerView() {
                                     setTargetAdjustedGrade(computed.adjustmentEntry ? computed.adjustmentEntry.adjustedGrade : raw);
                                     setAdjustmentReason(computed.adjustmentEntry?.reason || 'Performance merit and remediation');
                                   }}
-                                  className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-[9px] font-black tracking-wider uppercase cursor-pointer shadow-3xs transition-all"
+                                  className={`px-2 py-1 rounded-lg text-[9px] font-black tracking-wider uppercase cursor-pointer transition-all flex items-center gap-1 shrink-0 ${
+                                    isBeingAdjusted
+                                      ? 'bg-purple-600 text-white ring-2 ring-purple-300 animate-pulse shadow-xs'
+                                      : hasAdjustment
+                                        ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-2xs'
+                                        : 'bg-purple-200/80 hover:bg-purple-600 hover:text-white dark:bg-purple-900/60 dark:hover:bg-purple-700 text-purple-800 dark:text-purple-200'
+                                  }`}
+                                  title={`Adjust quarterly grade for ${st.name}`}
                                 >
-                                  {computed.adjustmentEntry ? 'Edit Adj' : '+ Adjust'}
+                                  {isBeingAdjusted ? (
+                                    <>
+                                      <Sparkles className="h-2.5 w-2.5" /> Adjusting
+                                    </>
+                                  ) : hasAdjustment ? (
+                                    <>
+                                      <Edit3 className="h-2.5 w-2.5" /> Edit Adj
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="h-2.5 w-2.5" /> + Adjust
+                                    </>
+                                  )}
                                 </button>
                               </div>
                             </td>
-                            <td className="py-2.5 px-2.5 text-center border-r border-purple-200 dark:border-purple-800 text-purple-400 font-bold text-[10px]">
-                              Δ
+                            <td className="py-2.5 px-2.5 text-center border-r border-purple-200 dark:border-purple-800 text-purple-500 font-black text-[9px]">
+                              <span className="inline-block px-1 py-0.5 rounded bg-purple-200/50 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                                Δ
+                              </span>
                             </td>
 
                             {/* WW Adjustment distribution */}
@@ -3665,22 +3744,36 @@ export default function ClassManagerView() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
             <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800/80 rounded-2xl shadow-2xl w-full max-w-md space-y-4 p-6">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-xl">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2.5 bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 rounded-xl shadow-xs ring-2 ring-purple-500/30">
                     <Sliders className="h-4 w-4" />
                   </div>
                   <div>
                     <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">Teacher Grade Adjustment</h3>
-                    <p className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">{editingAdjustmentStudent.name}</p>
+                    <p className="text-[10px] text-purple-600 dark:text-purple-400 font-bold flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" /> Adjusting Learner
+                    </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setEditingAdjustmentStudent(null)}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
+              </div>
+
+              {/* Prominent Target Student Card */}
+              <div className="bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 rounded-xl p-3 flex items-center justify-between shadow-xs ring-1 ring-purple-500/20">
+                <div className="space-y-0.5">
+                  <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">Target Student</div>
+                  <div className="text-xs font-black text-slate-900 dark:text-slate-100">{editingAdjustmentStudent.name}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400">Raw Grade</div>
+                  <div className="text-sm font-black text-purple-700 dark:text-purple-300 font-mono">{rawGrade}</div>
+                </div>
               </div>
 
               <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-150 dark:border-slate-850 space-y-3">

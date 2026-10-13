@@ -5,7 +5,7 @@ import { getQuarterKeys } from '../../utils/adviserUtils';
 import { parseGradeJSON } from '../../utils/subjectGradeExport';
 import { globalToast } from '../../context/ToastContext';
 import ImportedSubjectSummaryModal from './ImportedSubjectSummaryModal';
-import { Upload, FileSpreadsheet, FileCode, AlertCircle, CheckCircle2, Lock, Unlock } from 'lucide-react';
+import { Upload, FileSpreadsheet, FileCode, AlertCircle, CheckCircle2, Lock, Unlock, Trash2, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function GradeImportPanel({ adviserClass }: Props) {
-  const { importSubjectGrades, replaceSubjectGrades, lockSubjectGrades, addOverrideLogEntry } = useApp();
+  const { importSubjectGrades, replaceSubjectGrades, lockSubjectGrades, addOverrideLogEntry, deleteImportedSubject } = useApp();
   const quarterKeys = getQuarterKeys(adviserClass.workspace);
 
   const [subjectType, setSubjectType] = useState<'languages' | 'other' | null>(null);
@@ -31,6 +31,7 @@ export default function GradeImportPanel({ adviserClass }: Props) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [selectedSubjectRecord, setSelectedSubjectRecord] = useState<ImportedSubjectGrades | null>(null);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null); // `${subjectUID}|${quarterKey}`
 
   const fileOneRef = useRef<HTMLInputElement>(null);
   const fileTwoRef = useRef<HTMLInputElement>(null);
@@ -372,6 +373,28 @@ export default function GradeImportPanel({ adviserClass }: Props) {
     globalToast.info(`Subject "${g.subjectName}" (${g.quarterKey}) is now ${!g.isLocked ? 'Locked' : 'Unlocked'}.`, !g.isLocked ? 'Subject Locked' : 'Subject Unlocked');
   };
 
+  const handleDeleteSubject = (g: ImportedSubjectGrades) => {
+    const key = `${g.subjectUID}|${g.quarterKey}`;
+    if (g.isLocked) {
+      globalToast.warning(`"${g.subjectName}" is locked. Unlock it first before deleting.`, 'Subject Locked');
+      return;
+    }
+    if (pendingDeleteKey === key) {
+      // Confirmed — perform delete
+      deleteImportedSubject(adviserClass.id, g.subjectUID, g.quarterKey);
+      addOverrideLogEntry(adviserClass.id, {
+        adviserName: adviserClass.adviserName, studentLRN: 'ALL', studentName: 'ALL',
+        subjectUID: g.subjectUID, subjectName: g.subjectName, quarterKey: g.quarterKey,
+        action: 'Subject Deleted', reason: 'Adviser removed imported subject record'
+      });
+      globalToast.success(`"${g.subjectName}" (${g.quarterKey}) has been removed from the grade matrix.`, 'Subject Deleted');
+      setPendingDeleteKey(null);
+    } else {
+      // First click — request confirmation
+      setPendingDeleteKey(key);
+    }
+  };
+
   return (
     <div className="p-8 space-y-8 max-w-5xl mx-auto">
       <div>
@@ -568,40 +591,78 @@ export default function GradeImportPanel({ adviserClass }: Props) {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...adviserClass.importedGrades]
               .sort((a, b) => new Date(b.importedAt).getTime() - new Date(a.importedAt).getTime())
-              .map(g => (
-                <div key={`${g.subjectUID}-${g.quarterKey}`} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col relative group shadow-sm">
-                  <div className="absolute top-3 right-3">
-                    <button
-                      onClick={() => handleLockToggle(g)}
-                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                        g.isLocked 
-                          ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400 hover:bg-red-100'
-                          : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-100'
-                      }`}
-                      title={g.isLocked ? "Unlock Subject" : "Lock Subject"}
+              .map(g => {
+                const cardKey = `${g.subjectUID}-${g.quarterKey}`;
+                const deleteKey = `${g.subjectUID}|${g.quarterKey}`;
+                const isConfirmingDelete = pendingDeleteKey === deleteKey;
+                return (
+                  <div key={cardKey} className={`bg-white dark:bg-slate-900 border rounded-xl p-4 flex flex-col relative group shadow-sm transition-all ${
+                    isConfirmingDelete
+                      ? 'border-red-400 dark:border-red-700 ring-2 ring-red-200 dark:ring-red-900/40'
+                      : 'border-slate-200 dark:border-slate-800'
+                  }`}>
+                    {/* Lock / Unlock button */}
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleLockToggle(g)}
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                          g.isLocked
+                            ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400 hover:bg-red-100'
+                            : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-100'
+                        }`}
+                        title={g.isLocked ? 'Unlock Subject' : 'Lock Subject'}
+                      >
+                        {g.isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSubject(g)}
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                          isConfirmingDelete
+                            ? 'bg-red-500 text-white hover:bg-red-600'
+                            : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-400'
+                        }`}
+                        title={isConfirmingDelete ? 'Click again to confirm deletion' : 'Delete this imported subject'}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest">{g.quarterKey}</div>
+                    <div
+                      className="font-bold text-slate-800 dark:text-slate-100 text-base mt-0.5 pr-16 truncate cursor-pointer hover:text-amber-600 hover:underline"
+                      title={g.subjectName}
+                      onClick={() => !isConfirmingDelete && setSelectedSubjectRecord(g)}
                     >
-                      {g.isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                    </button>
+                      {g.subjectName}
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-400 mt-1">{g.subjectUID}</div>
+
+                    {/* Confirm-delete banner */}
+                    {isConfirmingDelete && (
+                      <div className="mt-3 flex items-start gap-2 p-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
+                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <div className="text-[11px] font-black text-red-700 dark:text-red-400">Delete this subject?</div>
+                          <div className="text-[10px] text-red-600 dark:text-red-500 mt-0.5">This removes it from the grade matrix. Click the delete icon again to confirm, or</div>
+                          <button
+                            onClick={() => setPendingDeleteKey(null)}
+                            className="text-[10px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline mt-1 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex-1" />
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-500">
+                      <div>{Object.keys(g.grades).length} Students</div>
+                      <div>{new Date(g.importedAt).toLocaleDateString()}</div>
+                    </div>
                   </div>
-                  
-                  <div className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest">{g.quarterKey}</div>
-                  <div 
-                    className="font-bold text-slate-800 dark:text-slate-100 text-base mt-0.5 pr-8 truncate cursor-pointer hover:text-amber-600 hover:underline" 
-                    title={g.subjectName}
-                    onClick={() => setSelectedSubjectRecord(g)}
-                  >
-                    {g.subjectName}
-                  </div>
-                  <div className="text-[10px] font-mono text-slate-400 mt-1">{g.subjectUID}</div>
-                  
-                  <div className="flex-1" />
-                  
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-500">
-                    <div>{Object.keys(g.grades).length} Students</div>
-                    <div>{new Date(g.importedAt).toLocaleDateString()}</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         )}
       </div>

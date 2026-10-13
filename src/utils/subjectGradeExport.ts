@@ -1,5 +1,6 @@
 import { Project, SubjectGradeExportJSON } from '../types';
 import { computeProjectStudentGrade } from '../utils';
+import { exportFile } from './fileExportAdapter';
 
 /**
  * Generates a structured JSON object containing subject grade data per quarter for active students.
@@ -138,7 +139,7 @@ import { globalToast } from '../context/ToastContext';
 /**
  * Triggers a browser file download of the Subject Grade JSON file.
  */
-export function exportTeacherGradebookJSON(
+export async function exportTeacherGradebookJSON(
   project: Project,
   selectedQuarters: string[],
   customWeights?: Record<string, { wow: number; ppt: number; qste: number }>
@@ -164,17 +165,14 @@ export function exportTeacherGradebookJSON(
       .replace(/\s+/g, '_')
       .replace(/[^a-zA-Z0-9_\-]/g, '') + '.json';
 
-    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', url);
-    linkElement.setAttribute('download', filename);
-    document.body.appendChild(linkElement);
-    linkElement.click();
-    document.body.removeChild(linkElement);
-    URL.revokeObjectURL(url);
+    await exportFile({
+      filename,
+      content: jsonStr,
+      mimeType: 'application/json',
+      title: 'Export Subject Grades JSON'
+    });
 
-    globalToast.success(`Official Subject Grades JSON downloaded as "${filename}".`, 'JSON Export Successful');
+    globalToast.success(`Official Subject Grades JSON exported as "${filename}".`, 'JSON Export Successful');
   } catch (err: any) {
     console.error('Teacher JSON export error:', err);
     globalToast.error(err.message || 'Failed to export JSON file.', 'JSON Export Failed');

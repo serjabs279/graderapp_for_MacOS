@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useToast } from '../context/ToastContext';
 import { KeyRound, ShieldAlert, User, Eye, EyeOff, Lock, Sparkles, UserPlus, CheckCircle } from 'lucide-react';
 
 export default function LoginView() {
   const { login, bypassLogin, updateCredentials } = useApp();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   
   // Login fields
@@ -88,7 +90,7 @@ export default function LoginView() {
 
     const success = bypassLogin(bypassPass.trim());
     if (success) {
-      alert('Bypass Successful! Welcome Admin. You can now reset your custom credentials in System Settings.');
+      toast.success('Bypass Successful! Welcome Admin. You can now reset your custom credentials in System Settings.', 'Superuser Access Granted');
     } else {
       setBypassError('Invalid Superuser Password.');
     }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useApp } from '../context/AppContext';
 import {
   GraduationCap,
   HelpCircle,
@@ -10,16 +11,29 @@ import {
   Key,
   Flame,
   CheckCircle2,
-  HardDrive
+  HardDrive,
+  ArrowLeft
 } from 'lucide-react';
 
 export default function AboutView() {
+  const { setActiveRoute } = useApp();
+
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       {/* Page Title */}
-      <div className="border-b border-slate-100 dark:border-slate-850 pb-4">
-        <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">System Manual & Desktop Blueprint</h2>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium">Official reference guide, technology stack configurations, and offline workflow instructions.</p>
+      <div className="border-b border-slate-100 dark:border-slate-850 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">System Manual & Desktop Blueprint</h2>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium">Official reference guide, technology stack configurations, and offline workflow instructions.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveRoute('portal-select')}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-850 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition border border-slate-200 dark:border-slate-850 cursor-pointer self-start sm:self-auto shrink-0 shadow-xs"
+        >
+          <ArrowLeft className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          <span>Back to Portal Selection</span>
+        </button>
       </div>
 
       {/* Main Vision Banner */}

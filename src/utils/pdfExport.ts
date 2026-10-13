@@ -4,6 +4,7 @@ import { Project, Student } from '../types';
 import { computeProjectStudentGrade } from '../utils';
 import { globalToast } from '../context/ToastContext';
 import { AlignRight } from 'lucide-react';
+import { exportFile } from './fileExportAdapter';
 
 // Brand & Layout Colors for pdf-lib
 const COLOR_PRIMARY = rgb(15 / 255, 23 / 255, 42 / 255);    // Slate 900
@@ -65,16 +66,14 @@ function fitText(text: string, font: PDFFont, fontSize: number, maxWidth: number
 /**
  * Initiates a browser file download from an encoded Uint8Array PDF byte array.
  */
-function downloadPdfBuffer(pdfBytes: Uint8Array, filename: string) {
-  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+async function downloadPdfBuffer(pdfBytes: Uint8Array, filename: string) {
+  const finalName = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
+  await exportFile({
+    filename: finalName,
+    content: pdfBytes,
+    mimeType: 'application/pdf',
+    title: 'Save PDF'
+  });
 }
 
 /**
@@ -586,8 +585,7 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
     return true;
   } catch (err) {
     console.error('Vector PDF generation error:', err);
-    globalToast.error('An error occurred while generating the vector PDF.', 'PDF Export Failed');
-    alert('An error occurred while generating the vector PDF. Opening print dialog fallback.');
+    globalToast.error('An error occurred while generating the vector PDF. Opening print dialog fallback.', 'PDF Export Failed');
     window.print();
     return false;
   }
@@ -1005,8 +1003,7 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
     return true;
   } catch (err) {
     console.error('Consolidated vector PDF export error:', err);
-    globalToast.error('An error occurred while generating the consolidated vector PDF.', 'PDF Export Failed');
-    alert('An error occurred while generating the consolidated vector PDF. Fallback print triggered.');
+    globalToast.error('An error occurred while generating the consolidated vector PDF. Fallback print triggered.', 'PDF Export Failed');
     window.print();
     return false;
   }
@@ -1029,7 +1026,7 @@ export async function exportElementToPDF(
 
   const element = document.getElementById(elementId);
   if (!element) {
-    alert('Document element not found for PDF export.');
+    globalToast.error('Document element not found for PDF export.', 'PDF Export Error');
     return false;
   }
 

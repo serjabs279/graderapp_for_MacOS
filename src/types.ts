@@ -102,7 +102,9 @@ export interface OverrideLogEntry {
     | 'Subject Unlocked'
     | 'Direct Grade Entry Created'
     | 'Direct Grade Saved'
-    | 'Direct Grade Edited';
+    | 'Direct Grade Edited'
+    | 'Subject Renamed'
+    | 'Subject Deleted';
   previousValue?: string;
   newValue?: string;
   reason: string;

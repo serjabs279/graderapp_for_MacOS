@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AdviserClass, HonorsCriteria } from '../../types';
 import { Settings2, Save, Trash2, ShieldAlert, CheckCircle2, AlertTriangle, Calendar, Upload, Image as ImageIcon, ArrowUp, ArrowDown, ListOrdered, RotateCcw } from 'lucide-react';
@@ -36,6 +36,12 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
   const [principalName, setPrincipalName] = useState(adviserClass.principalName || '');
   const [passingGrade, setPassingGrade] = useState(adviserClass.promotionPassingGrade.toString());
   const [trackStrand, setTrackStrand] = useState(adviserClass.trackStrand || '');
+
+  // Sync subject order list when adviserClass changes externally (e.g. after a subject rename)
+  useEffect(() => {
+    setSubjectOrderList(getInitialSubjectList());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adviserClass.subjectOrder, adviserClass.importedGrades, adviserClass.languageGroups]);
   
   const [honors, setHonors] = useState<HonorsCriteria>(adviserClass.honorsCriteria);
   const [monthsStr, setMonthsStr] = useState(adviserClass.attendanceConfig.months.join(', '));
