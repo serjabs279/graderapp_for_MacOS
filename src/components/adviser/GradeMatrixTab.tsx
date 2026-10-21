@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { useToast } from '../../context/ToastContext';
 import { AdviserClass } from '../../types';
 import { GradeMatrix, StudentGradeRow, getQuarterKeys, computeAttendanceSummary } from '../../utils/adviserUtils';
 import { TableProperties, Printer, Edit3, Check, X, AlertCircle, Eye } from 'lucide-react';
 import StudentGradesModal from './StudentGradesModal';
 import RenameSubjectModal from './RenameSubjectModal';
+import { globalToast } from '../../context/ToastContext';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -14,7 +14,6 @@ interface Props {
 
 export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
   const { overrideStudentGrade } = useApp();
-  const { toast } = useToast();
   const quarterKeys = getQuarterKeys(adviserClass.workspace);
   const [activeQuarter, setActiveQuarter] = useState<string>('Final');
 
@@ -55,7 +54,7 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
 
   const handleCellClick = (lrn: string, studentName: string, subjectName: string, currentGrade: number | null) => {
     if (activeQuarter === 'Final') {
-      toast.warning('To edit grades, select a specific Quarter / Semester from the tabs above instead of the consolidated Final view.', 'Final View is Read-Only');
+      globalToast.info("To edit grades, please select a specific Quarter / Semester from the tabs above instead of the consolidated Final view.", "Edit Grades");
       return;
     }
 
@@ -71,12 +70,12 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
     );
 
     if (!imported) {
-      toast.error(`No imported grade records found for "${targetSubjName}" in ${activeQuarter}. Please import grades first.`, 'No Grade Records');
+      globalToast.error(`No imported grade records found for "${targetSubjName}" in ${activeQuarter}. Please import grades first.`, "Grades Not Found");
       return;
     }
 
     if (imported.isLocked) {
-      toast.warning("This subject's grades are locked. Please unlock them in the Grade Import tab first.", 'Subject Locked');
+      globalToast.warning("This subject's grades are locked. Please unlock them in the Grade Import tab first.", "Grades Locked");
       return;
     }
 

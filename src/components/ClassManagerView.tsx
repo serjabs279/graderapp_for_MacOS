@@ -266,6 +266,50 @@ export default function ClassManagerView() {
     showCustomAlert(`Successfully added column "${modalAssName.trim()}" (${modalAssCategory}, HPS: ${modalAssPerfectScore}) to gradebook spreadsheet!`, "Assessment Column Created", "success");
   };
 
+  // Edit Assessment / HPS Modal states
+  const [editingAssessmentModal, setEditingAssessmentModal] = useState<Assessment | null>(null);
+  const [editAssName, setEditAssName] = useState('');
+  const [editAssCategory, setEditAssCategory] = useState<'WOW' | 'PPT' | 'QSTE'>('WOW');
+  const [editAssPerfectScore, setEditAssPerfectScore] = useState<number>(20);
+  const [editAssDate, setEditAssDate] = useState('');
+  const [editAssDescription, setEditAssDescription] = useState('');
+
+  const handleOpenEditAssessment = (ass: Assessment) => {
+    setEditingAssessmentModal(ass);
+    setEditAssName(ass.name);
+    setEditAssCategory(ass.category);
+    setEditAssPerfectScore(ass.perfectScore);
+    setEditAssDate(ass.date || '');
+    setEditAssDescription(ass.description || '');
+  };
+
+  const handleSaveEditAssessment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAssessmentModal) return;
+    if (!editAssName.trim()) {
+      showCustomAlert("Please enter an assessment name.", "Validation Error", "error");
+      return;
+    }
+    if (!editAssPerfectScore || editAssPerfectScore <= 0) {
+      showCustomAlert("Highest Possible Score (HPS) must be greater than 0.", "Validation Error", "error");
+      return;
+    }
+
+    const updatedAssessment: Assessment = {
+      ...editingAssessmentModal,
+      name: editAssName.trim(),
+      category: editAssCategory,
+      perfectScore: editAssPerfectScore,
+      date: editAssDate || undefined,
+      description: editAssDescription || undefined
+    };
+
+    updateAssessmentInActive(activeQuarterId, updatedAssessment);
+    setEditingAssessmentModal(null);
+    globalToast.success(`Updated "${updatedAssessment.name}" HPS to ${updatedAssessment.perfectScore} pts.`);
+  };
+
+
   // Selected student for Individual Summary Report Tab
   const [reportStudentId, setReportStudentId] = useState<string>('');
 
@@ -1330,9 +1374,19 @@ export default function ClassManagerView() {
 
                       {/* WW Columns */}
                       {wwAssessments.map(a => (
-                        <th key={a.id} className="py-3 px-2 text-center w-18 min-w-[72px] group relative" title={a.description}>
-                          <div className="truncate w-16 mx-auto font-black text-slate-700 dark:text-slate-350">{a.name}</div>
-                          <div className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5">Max: {a.perfectScore}</div>
+                        <th
+                          key={a.id}
+                          onClick={() => handleOpenEditAssessment(a)}
+                          className="py-2.5 px-2 text-center w-18 min-w-[72px] group relative cursor-pointer hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30 transition-colors border-b-2 border-transparent hover:border-indigo-400"
+                          title={`Click to edit ${a.name} (HPS: ${a.perfectScore})`}
+                        >
+                          <div className="flex items-center justify-center gap-0.5">
+                            <span className="truncate max-w-[56px] font-black text-slate-700 dark:text-slate-350">{a.name}</span>
+                            <Edit3 className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 text-indigo-500 transition-opacity shrink-0" />
+                          </div>
+                          <div className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                            Max: <span className="font-mono font-bold underline decoration-dotted">{a.perfectScore}</span>
+                          </div>
                         </th>
                       ))}
                       {wwAssessments.length > 0 && (
@@ -1345,9 +1399,19 @@ export default function ClassManagerView() {
 
                       {/* PT Columns */}
                       {ptAssessments.map(a => (
-                        <th key={a.id} className="py-3 px-2 text-center w-18 min-w-[72px] group relative" title={a.description}>
-                          <div className="truncate w-16 mx-auto font-black text-slate-700 dark:text-slate-350">{a.name}</div>
-                          <div className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5">Max: {a.perfectScore}</div>
+                        <th
+                          key={a.id}
+                          onClick={() => handleOpenEditAssessment(a)}
+                          className="py-2.5 px-2 text-center w-18 min-w-[72px] group relative cursor-pointer hover:bg-teal-50/60 dark:hover:bg-teal-950/30 transition-colors border-b-2 border-transparent hover:border-teal-400"
+                          title={`Click to edit ${a.name} (HPS: ${a.perfectScore})`}
+                        >
+                          <div className="flex items-center justify-center gap-0.5">
+                            <span className="truncate max-w-[56px] font-black text-slate-700 dark:text-slate-350">{a.name}</span>
+                            <Edit3 className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 text-teal-500 transition-opacity shrink-0" />
+                          </div>
+                          <div className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5 group-hover:text-teal-600 dark:group-hover:text-teal-400">
+                            Max: <span className="font-mono font-bold underline decoration-dotted">{a.perfectScore}</span>
+                          </div>
                         </th>
                       ))}
                       {ptAssessments.length > 0 && (
@@ -1360,9 +1424,19 @@ export default function ClassManagerView() {
 
                       {/* QE Columns */}
                       {qeAssessments.map(a => (
-                        <th key={a.id} className="py-3 px-2 text-center w-18 min-w-[72px] group relative" title={a.description}>
-                          <div className="truncate w-16 mx-auto font-black text-slate-700 dark:text-slate-350">{a.name}</div>
-                          <div className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5">Max: {a.perfectScore}</div>
+                        <th
+                          key={a.id}
+                          onClick={() => handleOpenEditAssessment(a)}
+                          className="py-2.5 px-2 text-center w-18 min-w-[72px] group relative cursor-pointer hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 transition-colors border-b-2 border-transparent hover:border-emerald-400"
+                          title={`Click to edit ${a.name} (HPS: ${a.perfectScore})`}
+                        >
+                          <div className="flex items-center justify-center gap-0.5">
+                            <span className="truncate max-w-[56px] font-black text-slate-700 dark:text-slate-350">{a.name}</span>
+                            <Edit3 className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 text-emerald-500 transition-opacity shrink-0" />
+                          </div>
+                          <div className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5 group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                            Max: <span className="font-mono font-bold underline decoration-dotted">{a.perfectScore}</span>
+                          </div>
                         </th>
                       ))}
                       {qeAssessments.length > 0 && (
@@ -2000,6 +2074,13 @@ export default function ClassManagerView() {
                             title="Move Down"
                           >
                             <ChevronDown className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditAssessment(ass)}
+                            className="p-1.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer"
+                            title="Edit Assessment & HPS"
+                          >
+                            <Edit3 className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => {
@@ -3033,6 +3114,196 @@ export default function ClassManagerView() {
                 <button
                   type="button"
                   onClick={() => setIsAddAssessmentModalOpen(false)}
+                  className="py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------
+          EDIT ASSESSMENT & HPS POP-UP MODAL
+          -------------------------------------------------------- */}
+      {editingAssessmentModal && activeProject && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 md:p-7 max-w-lg w-full space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                  <Edit3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                    Edit Assessment & Highest Possible Score
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-bold">
+                    Update assessment details & HPS for {activeProject.subject} ({activeQuarterId})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingAssessmentModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditAssessment} className="space-y-4">
+              {/* Category Selector Cards */}
+              <div>
+                <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1.5 block">
+                  Grading Component Category
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditAssCategory('WOW')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${editAssCategory === 'WOW'
+                      ? 'bg-indigo-50/80 dark:bg-indigo-950/50 border-indigo-500 text-indigo-900 dark:text-indigo-100 ring-2 ring-indigo-500/30'
+                      : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
+                      }`}
+                  >
+                    <div className="text-[11px] font-black flex items-center justify-between">
+                      <span>Written Work</span>
+                      <span className="text-[9px] font-mono font-extrabold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">WW</span>
+                    </div>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
+                      Quizzes & Unit Tests
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditAssCategory('PPT')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${editAssCategory === 'PPT'
+                      ? 'bg-teal-50/80 dark:bg-teal-950/50 border-teal-500 text-teal-900 dark:text-teal-100 ring-2 ring-teal-500/30'
+                      : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
+                      }`}
+                  >
+                    <div className="text-[11px] font-black flex items-center justify-between">
+                      <span>Performance</span>
+                      <span className="text-[9px] font-mono font-extrabold bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 px-1.5 py-0.5 rounded">PT</span>
+                    </div>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
+                      Projects & Practical
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditAssCategory('QSTE')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${editAssCategory === 'QSTE'
+                      ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-500 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/30'
+                      : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100/50'
+                      }`}
+                  >
+                    <div className="text-[11px] font-black flex items-center justify-between">
+                      <span>Quarterly Exam</span>
+                      <span className="text-[9px] font-mono font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">QE</span>
+                    </div>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-semibold">
+                      Periodic Exam
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Assessment Title */}
+              <div>
+                <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  Assessment Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Quiz 1, PT2: Science Experiment"
+                  value={editAssName}
+                  onChange={(e) => setEditAssName(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-3 text-xs font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 mt-1"
+                />
+              </div>
+
+              {/* Highest Possible Score (HPS) with quick score chips */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                    Highest Possible Score (HPS / Max) *
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {[10, 15, 20, 25, 30, 50, 100].map(pts => (
+                      <button
+                        key={pts}
+                        type="button"
+                        onClick={() => setEditAssPerfectScore(pts)}
+                        className={`text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded cursor-pointer transition-colors ${editAssPerfectScore === pts
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                          }`}
+                      >
+                        {pts} pts
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  max={1000}
+                  value={editAssPerfectScore}
+                  onChange={(e) => setEditAssPerfectScore(parseInt(e.target.value) || 1)}
+                  className="w-full bg-indigo-50/20 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border-2 border-indigo-400/50 dark:border-indigo-500/50 rounded-xl py-2.5 px-3 text-sm font-mono font-black focus:outline-hidden focus:ring-2 focus:ring-indigo-500 mt-1"
+                />
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                  Changing HPS instantly recalculates percentage scores (P.S.) and weighted scores (W.S.) across all students.
+                </p>
+              </div>
+
+              {/* Date & Optional Description */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    Conduct Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={editAssDate}
+                    onChange={(e) => setEditAssDate(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-mono font-semibold focus:outline-hidden mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    Notes / Description (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Brief notes..."
+                    value={editAssDescription}
+                    onChange={(e) => setEditAssDescription(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs font-medium focus:outline-hidden mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer shadow-3xs flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Save Changes</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingAssessmentModal(null)}
                   className="py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel

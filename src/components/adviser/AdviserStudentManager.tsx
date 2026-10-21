@@ -84,6 +84,11 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
   const [reason, setReason] = useState('Late enrollee');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Inline delete confirm modal state (replaces window.confirm/prompt — blocked in macOS Tauri)
+  const [deleteTarget, setDeleteTarget] = useState<{ lrn: string; name: string } | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteReasonError, setDeleteReasonError] = useState('');
+
   // Bulk import state
   const [bulkText, setBulkText] = useState('');
   const [bulkImported, setBulkImported] = useState(false);
@@ -131,30 +136,39 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
     const parsedAge = age ? parseInt(age, 10) : undefined;
     updateAdviserClass(adviserClass.id, cls => ({
       ...cls,
-      students: cls.students.map(s => s.lrn === oldLrn ? { lrn, name, sex, age: parsedAge } : s).sort((a, b) => a.name.localeCompare(b.name))
+      students: cls.students.map(s => s.lrn === oldLrn ? { ...s, lrn, name, sex, age: parsedAge } : s).sort((a, b) => a.name.localeCompare(b.name))
     }));
     addOverrideLogEntry(adviserClass.id, {
       adviserName: adviserClass.adviserName, studentLRN: lrn, studentName: name,
-      action: 'Student Edited', previousValue: JSON.stringify(oldStudent), newValue: JSON.stringify({ lrn, name, sex, age: parsedAge }), reason
+      action: 'Student Edited', previousValue: JSON.stringify(oldStudent), newValue: JSON.stringify({ ...oldStudent, lrn, name, sex, age: parsedAge }), reason
     });
     globalToast.info(`Updated learner record for ${name}.`, 'Student Updated');
     resetForm();
   };
 
   const handleDelete = (sLrn: string, sName: string) => {
-    const delReason = window.prompt('Enter reason for deletion (e.g., Dropped, Transferred):');
-    if (!delReason) return;
-    if (window.confirm(`Are you sure you want to delete ${sName} from the masterlist?`)) {
-      updateAdviserClass(adviserClass.id, cls => ({
-        ...cls,
-        students: cls.students.filter(s => s.lrn !== sLrn)
-      }));
-      addOverrideLogEntry(adviserClass.id, {
-        adviserName: adviserClass.adviserName, studentLRN: sLrn, studentName: sName,
-        action: 'Student Deleted', reason: delReason
-      });
-      globalToast.warning(`Removed ${sName} from section masterlist.`, 'Student Removed');
+    setDeleteTarget({ lrn: sLrn, name: sName });
+    setDeleteReason('');
+    setDeleteReasonError('');
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    if (!deleteReason.trim()) {
+      setDeleteReasonError('Please enter a reason for deletion.');
+      return;
     }
+    updateAdviserClass(adviserClass.id, cls => ({
+      ...cls,
+      students: cls.students.filter(s => s.lrn !== deleteTarget.lrn)
+    }));
+    addOverrideLogEntry(adviserClass.id, {
+      adviserName: adviserClass.adviserName, studentLRN: deleteTarget.lrn, studentName: deleteTarget.name,
+      action: 'Student Deleted', reason: deleteReason.trim()
+    });
+    globalToast.warning(`Removed ${deleteTarget.name} from section masterlist.`, 'Student Removed');
+    setDeleteTarget(null);
+    setDeleteReason('');
   };
 
   const startEdit = (s: AdviserStudent) => {
@@ -481,6 +495,53 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
           />
         );
       })()}
+
+      {/* ── Inline Delete Confirm Modal (macOS Tauri-safe) ── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-50 dark:bg-red-950/30 text-red-600 rounded-xl shrink-0">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-black text-slate-800 dark:text-white text-sm">Delete Student?</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Removing <strong>{deleteTarget.name}</strong> from the masterlist.</p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Reason (required)</label>
+              <select
+                value={deleteReason}
+                onChange={e => { setDeleteReason(e.target.value); setDeleteReasonError(''); }}
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                <option value="">Select reason...</option>
+                <option value="Dropped">Dropped</option>
+                <option value="Transferred">Transferred</option>
+                <option value="Duplicate entry">Duplicate entry</option>
+                <option value="Added by mistake">Added by mistake</option>
+                <option value="Other">Other</option>
+              </select>
+              {deleteReasonError && <p className="text-[10px] text-red-500 font-semibold">{deleteReasonError}</p>}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={confirmDelete}
+                className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer"
+              >
+                Confirm Delete
+              </button>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
