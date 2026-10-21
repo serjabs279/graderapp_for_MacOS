@@ -81,6 +81,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
   const [name, setName] = useState('');
   const [sex, setSex] = useState<'Male' | 'Female'>('Male');
   const [age, setAge] = useState<string>('');
+  const [birthdate, setBirthdate] = useState<string>('');
   const [reason, setReason] = useState('Late enrollee');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -96,7 +97,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
   const reasonOptions = ['Late enrollee', 'Teacher omitted learner', 'Approved correction', 'Other'];
 
   const resetForm = () => {
-    setLrn(''); setName(''); setSex('Male'); setAge(''); setReason('Late enrollee'); setErrorMsg('');
+    setLrn(''); setName(''); setSex('Male'); setAge(''); setBirthdate(''); setReason('Late enrollee'); setErrorMsg('');
     setShowAdd(false); setEditingLrn(null);
   };
 
@@ -120,7 +121,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
     const parsedAge = age ? parseInt(age, 10) : undefined;
     updateAdviserClass(adviserClass.id, cls => ({
       ...cls,
-      students: [...cls.students, { lrn, name, sex, age: parsedAge }].sort((a, b) => a.name.localeCompare(b.name))
+      students: [...cls.students, { lrn, name, sex, age: parsedAge, birthdate: birthdate.trim() || undefined }].sort((a, b) => a.name.localeCompare(b.name))
     }));
     addOverrideLogEntry(adviserClass.id, {
       adviserName: adviserClass.adviserName, studentLRN: lrn, studentName: name, action: 'Student Added', reason
@@ -134,13 +135,14 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
     if (oldLrn !== lrn && adviserClass.students.some(s => s.lrn === lrn)) { setErrorMsg('LRN already in use.'); return; }
     const oldStudent = adviserClass.students.find(s => s.lrn === oldLrn);
     const parsedAge = age ? parseInt(age, 10) : undefined;
+    const updatedStudent: AdviserStudent = { ...oldStudent, lrn, name, sex, age: parsedAge, birthdate: birthdate.trim() || undefined };
     updateAdviserClass(adviserClass.id, cls => ({
       ...cls,
-      students: cls.students.map(s => s.lrn === oldLrn ? { ...s, lrn, name, sex, age: parsedAge } : s).sort((a, b) => a.name.localeCompare(b.name))
+      students: cls.students.map(s => s.lrn === oldLrn ? updatedStudent : s).sort((a, b) => a.name.localeCompare(b.name))
     }));
     addOverrideLogEntry(adviserClass.id, {
       adviserName: adviserClass.adviserName, studentLRN: lrn, studentName: name,
-      action: 'Student Edited', previousValue: JSON.stringify(oldStudent), newValue: JSON.stringify({ ...oldStudent, lrn, name, sex, age: parsedAge }), reason
+      action: 'Student Edited', previousValue: JSON.stringify(oldStudent), newValue: JSON.stringify(updatedStudent), reason
     });
     globalToast.info(`Updated learner record for ${name}.`, 'Student Updated');
     resetForm();
@@ -173,6 +175,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
 
   const startEdit = (s: AdviserStudent) => {
     setEditingLrn(s.lrn); setLrn(s.lrn); setName(s.name); setSex(s.sex); setAge(s.age !== undefined ? String(s.age) : '');
+    setBirthdate(s.birthdate || '');
     setReason('Approved correction'); setErrorMsg(''); setShowAdd(false); setShowBulk(false);
   };
 
@@ -353,7 +356,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
               <AlertCircle className="h-3 w-3" /> {errorMsg}
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase text-slate-500">LRN (12 Digits)</label>
               <input
@@ -384,12 +387,21 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-500">Age (Optional)</label>
+              <label className="text-[10px] font-bold uppercase text-slate-500">Age</label>
               <input
                 type="number"
                 value={age}
                 onChange={e => setAge(e.target.value)}
                 placeholder="Auto"
+                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-lg dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Birthdate (SF10)</label>
+              <input
+                type="date"
+                value={birthdate}
+                onChange={e => setBirthdate(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-lg dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
               />
             </div>
@@ -445,7 +457,18 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
                 <td className="px-6 py-3 font-mono text-slate-500 dark:text-slate-400 text-xs">{s.lrn}</td>
                 <td className="px-6 py-3 font-bold text-slate-700 dark:text-slate-200">{s.name}</td>
                 <td className="px-6 py-3 text-slate-600 dark:text-slate-400">{s.sex}</td>
-                <td className="px-6 py-3 text-center text-slate-500 dark:text-slate-400 font-mono text-xs">{s.age !== undefined ? s.age : <span className="text-slate-400 italic">Auto</span>}</td>
+                <td className="px-6 py-3 text-center text-slate-500 dark:text-slate-400 font-mono text-xs">
+                  {s.birthdate ? (
+                    <div>
+                      <span>{s.age !== undefined ? s.age : '—'}</span>
+                      <div className="text-[10px] text-slate-400 font-normal">{s.birthdate}</div>
+                    </div>
+                  ) : s.age !== undefined ? (
+                    s.age
+                  ) : (
+                    <span className="text-slate-400 italic">Auto</span>
+                  )}
+                </td>
                 <td className="px-6 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <button

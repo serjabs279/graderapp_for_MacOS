@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { errorLogger, LogEntry, LogLevel, LogCategory } from '../utils/errorLogger';
+import { exportFile } from '../utils/fileExportAdapter';
 import {
   X,
   Bug,
@@ -220,16 +221,18 @@ export default function DevErrorLogModal({ isOpen, onClose }: DevErrorLogModalPr
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const json = errorLogger.exportJSON();
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `srphs_dev_error_log_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    errorLogger.info('Dev log exported', 'DevErrorLogModal.tsx');
+    const filename = `srphs_dev_error_log_${new Date().toISOString().slice(0, 10)}.json`;
+    const saved = await exportFile({
+      filename,
+      content: json,
+      mimeType: 'application/json',
+      title: 'Export Dev Error Log',
+    });
+    if (saved) {
+      errorLogger.info('Dev log exported', 'DevErrorLogModal.tsx');
+    }
   };
 
   if (!isOpen) return null;

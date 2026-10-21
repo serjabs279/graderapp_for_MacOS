@@ -11,6 +11,7 @@ import AdviserPortalView from './components/adviser/AdviserPortalView';
 import AutoSaveIndicator from './components/AutoSaveIndicator';
 import BackupReminderModal from './components/BackupReminderModal';
 import YearlyResetModal from './components/YearlyResetModal';
+import DownloadedFileLocatorModal from './components/DownloadedFileLocatorModal';
 import { backupReminder } from './utils/backupReminder';
 import { X, Home, Menu } from 'lucide-react';
 
@@ -43,6 +44,7 @@ function AppContent() {
           onClose={() => setShowBackupModal(false)}
         />
         {yearlyResetDue && <YearlyResetModal />}
+        <DownloadedFileLocatorModal />
       </>
     );
   }
@@ -57,6 +59,7 @@ function AppContent() {
           onClose={() => setShowBackupModal(false)}
         />
         {yearlyResetDue && <YearlyResetModal />}
+        <DownloadedFileLocatorModal />
       </div>
     );
   }
@@ -118,6 +121,9 @@ function AppContent() {
 
       {/* Yearly End-of-School-Year Reset Modal */}
       {yearlyResetDue && <YearlyResetModal />}
+
+      {/* Downloaded File Locator — auto-pops up after any JSON export */}
+      <DownloadedFileLocatorModal />
     </div>
   );
 }

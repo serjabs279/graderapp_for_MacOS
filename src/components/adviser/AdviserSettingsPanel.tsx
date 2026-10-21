@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AdviserClass, HonorsCriteria } from '../../types';
-import { Settings2, Save, Trash2, ShieldAlert, CheckCircle2, AlertTriangle, Calendar, Upload, Image as ImageIcon, ArrowUp, ArrowDown, ListOrdered, RotateCcw } from 'lucide-react';
+import { Settings2, Save, Trash2, ShieldAlert, CheckCircle2, AlertTriangle, Calendar, Upload, Image as ImageIcon, ArrowUp, ArrowDown, ListOrdered, RotateCcw, Plus, GraduationCap, X, Sparkles } from 'lucide-react';
+import { DEFAULT_SHS_TRACKS_STRANDS } from '../../utils/adviserUtils';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -36,6 +37,17 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
   const [principalName, setPrincipalName] = useState(adviserClass.principalName || '');
   const [passingGrade, setPassingGrade] = useState(adviserClass.promotionPassingGrade.toString());
   const [trackStrand, setTrackStrand] = useState(adviserClass.trackStrand || '');
+  const [availableTracks, setAvailableTracks] = useState<string[]>(() => {
+    if (adviserClass.availableTracksStrands && adviserClass.availableTracksStrands.length > 0) {
+      return adviserClass.availableTracksStrands;
+    }
+    return [...DEFAULT_SHS_TRACKS_STRANDS];
+  });
+  const [newTrackInput, setNewTrackInput] = useState('');
+  const [schoolId, setSchoolId] = useState(adviserClass.schoolId || '');
+  const [division, setDivision] = useState(adviserClass.division || '');
+  const [region, setRegion] = useState(adviserClass.region || '');
+  const [district, setDistrict] = useState(adviserClass.district || '');
 
   // Sync subject order list when adviserClass changes externally (e.g. after a subject rename)
   useEffect(() => {
@@ -81,6 +93,27 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
     setSubjectOrderList(nextList);
   };
 
+  const handleAddTrack = () => {
+    const trimmed = newTrackInput.trim();
+    if (!trimmed) return;
+    if (!availableTracks.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
+      setAvailableTracks(prev => [...prev, trimmed]);
+      if (!trackStrand) setTrackStrand(trimmed);
+    }
+    setNewTrackInput('');
+  };
+
+  const handleRemoveTrack = (trackToRemove: string) => {
+    setAvailableTracks(prev => prev.filter(t => t !== trackToRemove));
+    if (trackStrand === trackToRemove) {
+      setTrackStrand('');
+    }
+  };
+
+  const handleResetTracks = () => {
+    setAvailableTracks([...DEFAULT_SHS_TRACKS_STRANDS]);
+  };
+
   const handleSave = () => {
     updateAdviserClass(adviserClass.id, cls => {
       const updatedMonths = monthsStr.split(',').map(m => m.trim()).filter(Boolean);
@@ -108,7 +141,12 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
         },
         depedLogoBase64: depedLogo,
         schoolLogoBase64: schoolLogo,
-        trackStrand: trackStrand.trim() || undefined
+        trackStrand: trackStrand.trim() || undefined,
+        availableTracksStrands: availableTracks.length > 0 ? availableTracks : undefined,
+        schoolId: schoolId.trim() || undefined,
+        division: division.trim() || undefined,
+        region: region.trim() || undefined,
+        district: district.trim() || undefined
       };
     });
     setIsSaved(true);
@@ -198,22 +236,180 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
                 className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
-          </div>
-
-          {/* SHS Track / Strand */}
-          {adviserClass.workspace === 'SHS' && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
-              <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg border-b border-slate-100 dark:border-slate-800 pb-3">Track / Strand (SHS)</h3>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Track / Strand</label>
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-slate-500">School ID</label>
                 <input
                   type="text"
-                  value={trackStrand}
-                  onChange={e => setTrackStrand(e.target.value)}
-                  placeholder="e.g. Academic  or  Academic - HUMSS"
-                  className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  value={schoolId}
+                  onChange={e => setSchoolId(e.target.value)}
+                  placeholder="e.g. 301234"
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
                 />
-                <p className="text-[10px] text-slate-400">New curriculum → Track only (e.g. "Academic"). Old curriculum → Track + Strand (e.g. "Academic - HUMSS").</p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-slate-500">District</label>
+                <input
+                  type="text"
+                  value={district}
+                  onChange={e => setDistrict(e.target.value)}
+                  placeholder="e.g. Talibon II"
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-slate-500">Division</label>
+                <input
+                  type="text"
+                  value={division}
+                  onChange={e => setDivision(e.target.value)}
+                  placeholder="e.g. Division of Bohol"
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-slate-500">Region</label>
+                <input
+                  type="text"
+                  value={region}
+                  onChange={e => setRegion(e.target.value)}
+                  placeholder="e.g. Region VII - Central Visayas"
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* SHS Track / Strand Configuration */}
+          {adviserClass.workspace === 'SHS' && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5 text-amber-500" />
+                  <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">SHS Tracks &amp; Strands</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetTracks}
+                  className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  title="Reset to official DepEd standard tracks & strands"
+                >
+                  <RotateCcw className="h-3 w-3" /> Reset Defaults
+                </button>
+              </div>
+
+              {/* Section Default Strand */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  Default Track / Strand for Section
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={trackStrand}
+                    onChange={e => setTrackStrand(e.target.value)}
+                    className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">— None (Set individually per student in SF9) —</option>
+                    {availableTracks.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Serves as the section fallback. Students can override this individually in their SF-9 assessment card.
+                </p>
+              </div>
+
+              {/* Available Tracks & Strands Manager */}
+              <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Available Track &amp; Strand Options ({availableTracks.length})
+                  </label>
+                  <span className="text-[10px] text-slate-400">Populates the SF-9 dropdown</span>
+                </div>
+
+                {/* Add new track input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newTrackInput}
+                    onChange={e => setNewTrackInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTrack();
+                      }
+                    }}
+                    placeholder="Enter track/strand (e.g. Academic - STEM)"
+                    className="flex-1 px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddTrack}
+                    disabled={!newTrackInput.trim()}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </button>
+                </div>
+
+                {/* Quick Add Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-amber-500" /> Presets:
+                  </span>
+                  {[
+                    'Academic - STEM',
+                    'Academic - HUMSS',
+                    'Academic - ABM',
+                    'Academic - GAS',
+                    'TVL - ICT',
+                    'TVL - Home Economics'
+                  ].map(preset => {
+                    const alreadyExists = availableTracks.some(t => t.toLowerCase() === preset.toLowerCase());
+                    if (alreadyExists) return null;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          setAvailableTracks(prev => [...prev, preset]);
+                          if (!trackStrand) setTrackStrand(preset);
+                        }}
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-amber-50 dark:bg-slate-800 dark:hover:bg-amber-950/30 text-slate-600 hover:text-amber-700 dark:text-slate-300 dark:hover:text-amber-300 border border-slate-200/60 dark:border-slate-700 transition-colors cursor-pointer"
+                      >
+                        + {preset}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Current Tracks List / Pills */}
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50/70 dark:bg-slate-950/40 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  {availableTracks.length === 0 ? (
+                    <div className="text-xs text-slate-400 p-2 italic w-full text-center">
+                      No tracks configured. Click "Reset Defaults" or type one above.
+                    </div>
+                  ) : (
+                    availableTracks.map(track => (
+                      <span
+                        key={track}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-2xs"
+                      >
+                        <span className="truncate max-w-[220px]">{track}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTrack(track)}
+                          className="text-slate-400 hover:text-red-500 p-0.5 rounded transition-colors cursor-pointer"
+                          title="Remove option"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -302,9 +302,12 @@ export function generateSF9(
       doc.setFont('helvetica', 'normal');
       doc.text("Track / Strand:", labelX, bioY);
 
+      const studentObj = adviserClass.students.find(s => s.lrn === student.lrn);
+      const studentTrackStrand = studentObj?.trackStrand || student.trackStrand || adviserClass.trackStrand || 'Senior High School';
+
       doc.setFont('helvetica', 'bold');
       doc.text(
-        adviserClass.trackStrand || 'Senior High School',
+        studentTrackStrand,
         valueX,
         bioY
       );
@@ -426,7 +429,7 @@ export function generateSF9(
         body: bodyRows,
         theme: 'grid',
         styles: { fontSize: 9.2, cellPadding: { top: 5.2, bottom: 5.2, left: 1.5, right: 1.5 }, overflow: 'visible' },
-        headStyles: { fillColor: [44, 62, 80], halign: 'center', fontSize: 8.8, cellPadding: { top: 3.5, bottom: 3.5, left: 1, right: 1 } },
+        headStyles: { fillColor: [226, 232, 240], textColor: [30, 41, 59], fontStyle: 'bold', halign: 'center', fontSize: 8.8, cellPadding: { top: 3.5, bottom: 3.5, left: 1, right: 1 } },
         columnStyles: {
           0: { fontStyle: 'bold', cellWidth: 42 },
           1: { halign: 'center', cellWidth: 12 },
@@ -504,7 +507,7 @@ export function generateSF9(
         body: sem1Body,
         theme: 'grid',
         styles: { fontSize: 7.5, cellPadding: 1.8 },
-        headStyles: { fillColor: [44, 62, 80], halign: 'center', fontSize: 8 },
+        headStyles: { fillColor: [226, 232, 240], textColor: [30, 41, 59], fontStyle: 'bold', halign: 'center', fontSize: 8 },
         columnStyles: {
           0: { fontStyle: 'bold' },
           1: { halign: 'center', cellWidth: 10 },
@@ -562,7 +565,7 @@ export function generateSF9(
         body: sem2Body,
         theme: 'grid',
         styles: { fontSize: 7.5, cellPadding: 1.8 },
-        headStyles: { fillColor: [44, 62, 80], halign: 'center', fontSize: 8 },
+        headStyles: { fillColor: [226, 232, 240], textColor: [30, 41, 59], fontStyle: 'bold', halign: 'center', fontSize: 8 },
         columnStyles: {
           0: { fontStyle: 'bold' },
           1: { halign: 'center', cellWidth: 10 },
@@ -606,7 +609,7 @@ export function generateSF9(
       body: valuesBody,
       theme: 'grid',
       styles: { fontSize: 7.5, cellPadding: { top: 2.2, bottom: 2.2, left: 1, right: 1 } },
-      headStyles: { fillColor: [44, 62, 80], halign: 'center', fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [226, 232, 240], textColor: [30, 41, 59], fontStyle: 'bold', halign: 'center', fontSize: 8, cellPadding: 2 },
       columnStyles: {
         0: { fontStyle: 'bold', cellWidth: 28 },
         1: { cellWidth: 62 },

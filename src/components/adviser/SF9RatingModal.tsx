@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { getCalendar, getFirstPeriod } from '../../calendar/academicCalendar';
 import { useApp } from '../../context/AppContext';
 import { AdviserClass, ObservedValueRating } from '../../types';
-import { StudentGradeRow } from '../../utils/adviserUtils';
-import { X, Check, ClipboardList, CalendarDays, Award } from 'lucide-react';
+import { StudentGradeRow, DEFAULT_SHS_TRACKS_STRANDS } from '../../utils/adviserUtils';
+import { X, Check, ClipboardList, CalendarDays, Award, GraduationCap, Sparkles } from 'lucide-react';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -13,8 +13,20 @@ interface Props {
 
 export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Props) {
   const { setObservedValue, setAttendance, updateAdviserClass } = useApp();
-  const [activeTab, setActiveTab] = useState<'observed' | 'attendance'>('observed');
+  const [activeTab, setActiveTab] = useState<'observed' | 'attendance' | 'trackStrand'>('observed');
   const [localAge, setLocalAge] = useState<string>(studentRow.age !== undefined ? String(studentRow.age) : '');
+
+  const studentObj = adviserClass.students.find(s => s.lrn === studentRow.lrn);
+  const [localTrackStrand, setLocalTrackStrand] = useState<string>(
+    studentRow.trackStrand ?? studentObj?.trackStrand ?? ''
+  );
+  const [customTrackInput, setCustomTrackInput] = useState('');
+  const [isCustomMode, setIsCustomMode] = useState(false);
+
+  // Available tracks from adviserClass settings or standard defaults
+  const availableTracks = (adviserClass.availableTracksStrands && adviserClass.availableTracksStrands.length > 0)
+    ? adviserClass.availableTracksStrands
+    : DEFAULT_SHS_TRACKS_STRANDS;
   
   // Quarters
   const quartersList = getCalendar().periods.map(p => p.id);
@@ -102,33 +114,35 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
       setAttendance(adviserClass.id, studentRow.lrn, m, daysAbsent);
     });
 
-    // 3. Save Age if updated
+    // 3. Save Age and Track & Strand
     const parsedAge = localAge ? parseInt(localAge, 10) : undefined;
-    if (parsedAge !== studentRow.age) {
-      updateAdviserClass(adviserClass.id, cls => ({
-        ...cls,
-        students: cls.students.map(s => s.lrn === studentRow.lrn ? { ...s, age: parsedAge } : s)
-      }));
-    }
+    updateAdviserClass(adviserClass.id, cls => ({
+      ...cls,
+      students: cls.students.map(s => s.lrn === studentRow.lrn ? {
+        ...s,
+        age: parsedAge,
+        trackStrand: localTrackStrand.trim() || undefined
+      } : s)
+    }));
 
     onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* Header */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
-          <div className="space-y-1">
-            <h3 className="font-sans font-black text-sm text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-3">
+          <div className="space-y-0.5 min-w-0">
+            <h3 className="font-sans font-black text-sm text-slate-800 dark:text-slate-200 uppercase tracking-wider truncate">
               Student Assessment Card (SF9 Details)
             </h3>
-            <p className="text-xs font-mono font-bold text-slate-500">
+            <p className="text-xs font-mono font-bold text-slate-500 truncate">
               {studentRow.name} • LRN: {studentRow.lrn}
             </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
               <span className="text-[10px] font-black uppercase text-slate-400">Age:</span>
               <input
@@ -136,41 +150,78 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
                 value={localAge}
                 onChange={e => setLocalAge(e.target.value)}
                 placeholder="Auto"
-                className="w-14 px-1 py-0.5 text-xs font-bold font-mono text-slate-800 dark:text-slate-200 bg-transparent text-center focus:outline-none"
+                className="w-12 px-1 py-0.5 text-xs font-bold font-mono text-slate-800 dark:text-slate-200 bg-transparent text-center focus:outline-none"
               />
             </div>
-            <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-450 transition-colors">
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-450 transition-colors cursor-pointer">
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
+        {/* Quick SHS Track & Strand Banner / Selector Bar */}
+        {adviserClass.workspace === 'SHS' && (
+          <div className="px-6 py-2.5 bg-amber-50/70 dark:bg-amber-950/20 border-b border-amber-200/50 dark:border-amber-900/30 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <GraduationCap className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="font-bold text-slate-700 dark:text-slate-300">SHS Track &amp; Strand:</span>
+            </div>
+            <div className="flex items-center gap-2 flex-1 max-w-md justify-end">
+              <select
+                value={localTrackStrand}
+                onChange={e => setLocalTrackStrand(e.target.value)}
+                className="w-full sm:w-auto min-w-[240px] px-3 py-1.5 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs cursor-pointer"
+              >
+                <option value="">Default ({adviserClass.trackStrand || 'Section Default'})</option>
+                {availableTracks.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+                {localTrackStrand && !availableTracks.includes(localTrackStrand) && (
+                  <option value={localTrackStrand}>{localTrackStrand} (Custom)</option>
+                )}
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Tab Controls */}
-        <div className="px-6 py-2 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800/60 flex gap-2">
+        <div className="px-6 py-2 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800/60 flex flex-wrap gap-2">
           <button
             onClick={() => setActiveTab('observed')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-2 cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'observed'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <Award className="h-4 w-4" /> Learner Observed Values
+            <Award className="h-3.5 w-3.5" /> Learner Observed Values
           </button>
           <button
             onClick={() => setActiveTab('attendance')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-2 cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'attendance'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <CalendarDays className="h-4 w-4" /> Attendance Record
+            <CalendarDays className="h-3.5 w-3.5" /> Attendance Record
           </button>
+          {adviserClass.workspace === 'SHS' && (
+            <button
+              onClick={() => setActiveTab('trackStrand')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'trackStrand'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+              }`}
+            >
+              <GraduationCap className="h-3.5 w-3.5" /> Track &amp; Strand
+            </button>
+          )}
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 min-h-[400px]">
+        <div className="flex-1 overflow-y-auto p-6 min-h-[380px]">
           
           {/* TAB 1: Observed Values Rating Grid */}
           {activeTab === 'observed' && (
@@ -272,6 +323,102 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: SHS Track & Strand Selector */}
+          {activeTab === 'trackStrand' && adviserClass.workspace === 'SHS' && (
+            <div className="space-y-6 animate-in fade-in duration-150 max-w-2xl mx-auto">
+              <div className="bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/30 rounded-2xl p-4 text-xs text-amber-800 dark:text-amber-300 leading-relaxed font-medium">
+                Set the official Senior High School Track and Strand for <strong>{studentRow.name}</strong>. This will be printed on their official SF-9 Learner Progress Report Card and SF-9 HTML preview.
+              </div>
+
+              {/* Effective Preview Card */}
+              <div className="bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-2">
+                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+                  Effective Track &amp; Strand on SF-9:
+                </span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <GraduationCap className="h-5 w-5 text-amber-500 shrink-0" />
+                    <span>{localTrackStrand || adviserClass.trackStrand || 'Senior High School (Not set)'}</span>
+                  </div>
+                  <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg shrink-0 ${
+                    localTrackStrand
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                      : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                  }`}>
+                    {localTrackStrand ? 'Student Specific' : 'Section Default'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Dropdown Selection */}
+              <div className="space-y-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Select Track &amp; Strand from Section Settings
+                </label>
+                <select
+                  value={localTrackStrand}
+                  onChange={e => {
+                    setLocalTrackStrand(e.target.value);
+                    if (e.target.value) setIsCustomMode(false);
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                >
+                  <option value="">— Use Section Default ({adviserClass.trackStrand || 'None'}) —</option>
+                  {availableTracks.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                  {localTrackStrand && !availableTracks.includes(localTrackStrand) && (
+                    <option value={localTrackStrand}>{localTrackStrand} (Custom)</option>
+                  )}
+                </select>
+                <p className="text-[10px] text-slate-400">
+                  Options are configured globally in <span className="font-semibold text-slate-600 dark:text-slate-300">Adviser Settings → SHS Tracks &amp; Strands</span>.
+                </p>
+
+                {/* Custom Track/Strand Option */}
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                      Need a custom or unlisted strand for this learner?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomMode(!isCustomMode)}
+                      className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                    >
+                      {isCustomMode ? 'Hide Custom Input' : '+ Enter Custom Strand'}
+                    </button>
+                  </div>
+
+                  {isCustomMode && (
+                    <div className="flex gap-2 pt-2 animate-in fade-in duration-150">
+                      <input
+                        type="text"
+                        value={customTrackInput}
+                        onChange={e => setCustomTrackInput(e.target.value)}
+                        placeholder="e.g. Arts and Design - Visual Arts"
+                        className="flex-1 px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (customTrackInput.trim()) {
+                            setLocalTrackStrand(customTrackInput.trim());
+                            setCustomTrackInput('');
+                          }
+                        }}
+                        disabled={!customTrackInput.trim()}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl cursor-pointer"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

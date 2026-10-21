@@ -64,6 +64,9 @@ export default function SF9PreviewModal({
     ? currentStudent.age
     : defaultAgeByGrade(adviserClass.gradeLevel);
 
+  const currentStudentObj = adviserClass.students.find(s => s.lrn === currentStudent.lrn);
+  const currentStudentTrack = currentStudentObj?.trackStrand || currentStudent.trackStrand || adviserClass.trackStrand || 'SHS';
+
   const handlePrint = () => {
     window.print();
   };
@@ -193,7 +196,7 @@ export default function SF9PreviewModal({
                     <div className="overflow-x-auto">
                       <table className="w-full border-collapse border border-slate-400 text-[11px]">
                         <thead>
-                          <tr className="bg-slate-800 text-white font-bold text-center">
+                          <tr className="bg-slate-200 text-slate-800 font-bold text-center">
                             <th className="border border-slate-400 px-2 py-1.5 text-left font-black">Learning Areas</th>
                             <th className="border border-slate-400 px-1 py-1.5 w-8">1</th>
                             <th className="border border-slate-400 px-1 py-1.5 w-8">2</th>
@@ -294,7 +297,7 @@ export default function SF9PreviewModal({
                         <div className="font-bold text-[11px] text-slate-700 mb-1">First Semester</div>
                         <table className="w-full border-collapse border border-slate-400 text-[11px]">
                           <thead>
-                            <tr className="bg-slate-800 text-white font-bold text-center">
+                            <tr className="bg-slate-200 text-slate-800 font-bold text-center">
                               <th className="border border-slate-400 px-2 py-1 text-left">Subjects</th>
                               <th className="border border-slate-400 px-1 py-1 w-8">1</th>
                               <th className="border border-slate-400 px-1 py-1 w-8">2</th>
@@ -330,7 +333,7 @@ export default function SF9PreviewModal({
                         <div className="font-bold text-[11px] text-slate-700 mb-1">Second Semester</div>
                         <table className="w-full border-collapse border border-slate-400 text-[11px]">
                           <thead>
-                            <tr className="bg-slate-800 text-white font-bold text-center">
+                            <tr className="bg-slate-200 text-slate-800 font-bold text-center">
                               <th className="border border-slate-400 px-2 py-1 text-left">Subjects</th>
                               <th className="border border-slate-400 px-1 py-1 w-8">3</th>
                               <th className="border border-slate-400 px-1 py-1 w-8">4</th>
@@ -377,7 +380,7 @@ export default function SF9PreviewModal({
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse border border-slate-400 text-[10.5px]">
                       <thead>
-                        <tr className="bg-slate-800 text-white font-bold text-center">
+                        <tr className="bg-slate-200 text-slate-800 font-bold text-center">
                           <th className="border border-slate-400 px-2 py-1 text-left w-24">Core Values</th>
                           <th className="border border-slate-400 px-2 py-1 text-left">Behavior Statements</th>
                           <th className="border border-slate-400 px-1 py-1 w-7">1</th>
@@ -453,14 +456,14 @@ export default function SF9PreviewModal({
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse border border-slate-400 text-[10px]">
                       <thead>
-                        <tr className="bg-slate-800 text-white font-bold text-center">
+                        <tr className="bg-slate-200 text-slate-800 font-bold text-center">
                           <th className="border border-slate-400 px-1 py-1 text-left">Month</th>
                           {attMonths.map((m) => (
                             <th key={m} className="border border-slate-400 px-0.5 py-1 text-[9px]">
                               {m.substring(0, 3)}
                             </th>
                           ))}
-                          <th className="border border-slate-400 px-1 py-1 font-black bg-slate-900">Total</th>
+                          <th className="border border-slate-400 px-1 py-1 font-black bg-slate-300 text-slate-900">Total</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -591,7 +594,7 @@ export default function SF9PreviewModal({
                       <div>Section: <strong className="text-slate-900 uppercase">{adviserClass.section}</strong></div>
                       <div>School Year: <strong className="text-slate-900">{adviserClass.schoolYear}</strong></div>
                       {isSHS && (
-                        <div>Strand: <strong className="text-slate-900">{adviserClass.trackStrand || 'SHS'}</strong></div>
+                        <div>Track / Strand: <strong className="text-slate-900">{currentStudentTrack}</strong></div>
                       )}
                     </div>
                   </div>

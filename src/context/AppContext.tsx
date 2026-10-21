@@ -189,11 +189,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // ── Settings: try localStorage → AppData backup → defaults ───────
       const localSettings = await persistLoad('srphs_settings_p2');
       if (localSettings) {
-        setGlobalSettings(JSON.parse(localSettings));
+        // Merge defaults UNDER saved data so new default fields (e.g. googleDriveLink)
+        // are automatically available for existing users on update.
+        const saved = JSON.parse(localSettings) as GlobalSettings;
+        const merged: GlobalSettings = { ...DEFAULT_GLOBAL_SETTINGS, ...saved };
+        setGlobalSettings(merged);
       } else {
         setGlobalSettings(DEFAULT_GLOBAL_SETTINGS);
         await persistSave('srphs_settings_p2', JSON.stringify(DEFAULT_GLOBAL_SETTINGS));
       }
+
 
       if (localDarkMode) {
         setDarkMode(JSON.parse(localDarkMode));

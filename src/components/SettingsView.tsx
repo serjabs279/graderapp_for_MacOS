@@ -21,10 +21,13 @@ import {
   Bug,
   Terminal,
   Sparkles,
-  ArrowLeft
+  ArrowLeft,
+  Cloud,
+  Link
 } from 'lucide-react';
 import DevErrorLogModal from './DevErrorLogModal';
 import { errorLogger } from '../utils/errorLogger';
+import { exportFile } from '../utils/fileExportAdapter';
 
 export default function SettingsView() {
   const { 
@@ -51,6 +54,12 @@ export default function SettingsView() {
   const [subjects, setSubjects] = useState(globalSettings.subjects);
   const [depedLogoBase64, setDepedLogoBase64] = useState<string | undefined>(globalSettings.depedLogoBase64);
   const [schoolLogoBase64, setSchoolLogoBase64] = useState<string | undefined>(globalSettings.schoolLogoBase64);
+  const [googleDriveLink, setGoogleDriveLink] = useState(globalSettings.googleDriveLink || '');
+  const [schoolId, setSchoolId] = useState(globalSettings.schoolId || '');
+  const [division, setDivision] = useState(globalSettings.division || '');
+  const [region, setRegion] = useState(globalSettings.region || '');
+  const [district, setDistrict] = useState(globalSettings.district || '');
+  const [driveLinkSaved, setDriveLinkSaved] = useState(false);
 
   const [saved, setSaved] = useState(false);
   const [restored, setRestored] = useState<boolean | null>(null);
@@ -149,26 +158,39 @@ export default function SettingsView() {
       calendarType,
       subjects,
       depedLogoBase64,
-      schoolLogoBase64
+      schoolLogoBase64,
+      googleDriveLink: googleDriveLink.trim() || undefined,
+      schoolId: schoolId.trim() || undefined,
+      division: division.trim() || undefined,
+      region: region.trim() || undefined,
+      district: district.trim() || undefined,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
 
+  const handleSaveDriveLink = () => {
+    updateGlobalSettings({ googleDriveLink: googleDriveLink.trim() || undefined });
+    setDriveLinkSaved(true);
+    setTimeout(() => setDriveLinkSaved(false), 2500);
+    globalToast.success('Google Drive folder link saved!', 'Cloud Settings');
+  };
+
   // Phase 9: Export backup as file download
-  const handleBackupDownload = () => {
+  const handleBackupDownload = async () => {
     try {
       const jsonStr = backupData();
-      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(jsonStr);
-      
       const exportFileDefaultName = `srphs_grading_backup_${new Date().toISOString().split('T')[0]}.json`;
       
-      const linkElement = document.createElement('a');
-      linkElement.setAttribute('href', dataUri);
-      linkElement.setAttribute('download', exportFileDefaultName);
-      linkElement.click();
-      setBackupDownloaded(true);
-      globalToast.success(`Database backup downloaded as "${exportFileDefaultName}".`, 'Backup Export Complete');
+      const saved = await exportFile({
+        filename: exportFileDefaultName,
+        content: jsonStr,
+        mimeType: 'application/json',
+        title: 'Save Database Backup',
+      });
+      if (saved) {
+        setBackupDownloaded(true);
+      }
     } catch (err: any) {
       console.error('Backup download error:', err);
       globalToast.error('Failed to create backup: ' + (err.message || String(err)), 'Backup Export Failed');
@@ -352,6 +374,46 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     required
                     value={teacherName}
                     onChange={(e) => setTeacherName(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">DepEd School ID (6 Digits)</label>
+                  <input
+                    type="text"
+                    value={schoolId}
+                    onChange={(e) => setSchoolId(e.target.value)}
+                    placeholder="e.g. 301234"
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">DepEd Division</label>
+                  <input
+                    type="text"
+                    value={division}
+                    onChange={(e) => setDivision(e.target.value)}
+                    placeholder="e.g. Division of Bohol"
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">DepEd Region</label>
+                  <input
+                    type="text"
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                    placeholder="e.g. Region VII - Central Visayas"
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">District (Optional)</label>
+                  <input
+                    type="text"
+                    value={district}
+                    onChange={(e) => setDistrict(e.target.value)}
+                    placeholder="e.g. Talibon II"
                     className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
                   />
                 </div>
@@ -596,6 +658,50 @@ CREATE TABLE IF NOT EXISTS grading_projects (
 
           {/* Right Column: Database Maintenance & SQLite Schema */}
           <div className="space-y-6">
+
+            {/* ─── Google Drive Integration Card ─── */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
+              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Cloud className="h-5 w-5 text-blue-500" />
+                Cloud Share Destination
+              </h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
+                Paste your Google Drive folder link below. After exporting a JSON, the <span className="text-slate-700 dark:text-slate-300">Downloaded File Locator</span> pop-up will have a direct <strong>Upload to Drive</strong> button pointing here.
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                  <Link className="w-3 h-3" /> Google Drive Folder URL
+                </label>
+                <input
+                  type="url"
+                  value={googleDriveLink}
+                  onChange={(e) => setGoogleDriveLink(e.target.value)}
+                  placeholder="https://drive.google.com/drive/folders/..."
+                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3.5 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-blue-400/30 placeholder:text-slate-400"
+                />
+                {googleDriveLink && !googleDriveLink.startsWith('https://drive.google.com') && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> Link should be a Google Drive URL.
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveDriveLink}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-3xs"
+              >
+                {driveLinkSaved ? <CheckCircle className="h-4 w-4" /> : <Cloud className="h-4 w-4" />}
+                {driveLinkSaved ? 'Drive Link Saved!' : 'Save Drive Folder Link'}
+              </button>
+
+              {globalSettings.googleDriveLink && (
+                <div className="bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-xl p-2.5 text-[10px] text-blue-700 dark:text-blue-300 font-mono truncate">
+                  ✓ {globalSettings.googleDriveLink}
+                </div>
+              )}
+            </div>
 
             {/* Account Credentials Card */}
             <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
@@ -856,15 +962,14 @@ CREATE TABLE IF NOT EXISTS grading_projects (
               Clear All Logs
             </button>
             <button
-              onClick={() => {
+              onClick={async () => {
                 const json = errorLogger.exportJSON();
-                const blob = new Blob([json], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `srphs_dev_log_${new Date().toISOString().slice(0,10)}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
+                await exportFile({
+                  filename: `srphs_dev_log_${new Date().toISOString().slice(0, 10)}.json`,
+                  content: json,
+                  mimeType: 'application/json',
+                  title: 'Export Dev Log JSON',
+                });
               }}
               className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-bold rounded-xl transition cursor-pointer"
             >

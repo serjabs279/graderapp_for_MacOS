@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AlertTriangle, Download, Trash2, CheckCircle2, ChevronRight, Shield, Calendar } from 'lucide-react';
+import { exportFile } from '../utils/fileExportAdapter';
 
 /**
  * YearlyResetModal
@@ -25,17 +26,19 @@ export default function YearlyResetModal() {
   const [startY, endY] = currentSY.split('-').map(Number);
   const nextSY = `${endY}-${endY + 1}`;
 
-  const handleBackupDownload = () => {
+  const handleBackupDownload = async () => {
     try {
       const jsonStr = backupData();
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `srphs_archive_SY${currentSY}_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setBackupDownloaded(true);
+      const filename = `srphs_archive_SY${currentSY}_${new Date().toISOString().split('T')[0]}.json`;
+      const saved = await exportFile({
+        filename,
+        content: jsonStr,
+        mimeType: 'application/json',
+        title: 'Download Archive Backup',
+      });
+      if (saved) {
+        setBackupDownloaded(true);
+      }
     } catch (err) {
       console.error('Archive download failed:', err);
     }

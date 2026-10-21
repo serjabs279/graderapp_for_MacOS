@@ -19,7 +19,12 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     TLE: { wow: 0.20, ppt: 0.60, qste: 0.20 }
   },
   activeSchoolYear: "2026-2027",
-  calendarType: "Quarter"
+  calendarType: "Quarter",
+  googleDriveLink: "https://drive.google.com/drive/folders/19zYEzYTR_GcV18QyOLYTpK0udhY81FD1?usp=sharing",
+  schoolId: "404512",
+  division: "Division of Bohol",
+  region: "Region VII - Central Visayas",
+  district: "Talibon II"
 };
 
 export const SEED_PROJECTS: Project[] = [

@@ -3,6 +3,7 @@ import { Clock, Download, X, CheckCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { globalToast } from '../context/ToastContext';
 import { backupReminder } from '../utils/backupReminder';
+import { exportFile } from '../utils/fileExportAdapter';
 
 interface BackupReminderModalProps {
   isOpen: boolean;
@@ -29,18 +30,17 @@ export default function BackupReminderModal({ isOpen, onClose }: BackupReminderM
       const filename = `srphs_backup_${year}-${month}-${day}_${hours}-${minutes}-${seconds}.json`;
 
       const jsonStr = backupData();
-      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonStr);
+      const saved = await exportFile({
+        filename,
+        content: jsonStr,
+        mimeType: 'application/json',
+        title: 'Save Periodic Backup',
+      });
 
-      const link = document.createElement('a');
-      link.href = dataUri;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      backupReminder.recordBackup();
-      globalToast.success(`Backup saved: ${filename}`, 'Backup Complete');
-      onClose();
+      if (saved) {
+        backupReminder.recordBackup();
+        onClose();
+      }
     } catch (err: any) {
       console.error('Backup download error:', err);
       globalToast.error('Failed to create backup: ' + (err?.message || String(err)), 'Backup Failed');

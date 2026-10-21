@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AdviserClass } from '../../types';
 import { GradeMatrix, StudentGradeRow, getQuarterKeys, computeAttendanceSummary } from '../../utils/adviserUtils';
-import { TableProperties, Printer, Edit3, Check, X, AlertCircle, Eye } from 'lucide-react';
+import { TableProperties, Printer, Edit3, Check, X, AlertCircle, Eye, Download } from 'lucide-react';
 import StudentGradesModal from './StudentGradesModal';
 import RenameSubjectModal from './RenameSubjectModal';
 import { globalToast } from '../../context/ToastContext';
+import { exportGradeMatrixJSON } from '../../utils/adviser/sf10MatrixExport';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -13,9 +14,10 @@ interface Props {
 }
 
 export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
-  const { overrideStudentGrade } = useApp();
+  const { overrideStudentGrade, globalSettings } = useApp();
   const quarterKeys = getQuarterKeys(adviserClass.workspace);
   const [activeQuarter, setActiveQuarter] = useState<string>('Final');
+  const [isExporting, setIsExporting] = useState<boolean>(false);
 
   // Student grades view modal
   const [viewingStudent, setViewingStudent] = useState<StudentGradeRow | null>(null);
@@ -119,12 +121,34 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
 
   return (
     <div className="p-8 space-y-6 max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <TableProperties className="h-5 w-5 text-amber-500" /> Class Performance Matrix
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Consolidated view of official grades. Click any cell during active quarter views to manually override grades.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              if (gradeMatrix.length === 0) {
+                globalToast.warning("No student records to export in the grade matrix.", "Empty Matrix");
+                return;
+              }
+              setIsExporting(true);
+              try {
+                await exportGradeMatrixJSON(adviserClass, gradeMatrix, globalSettings);
+              } finally {
+                setIsExporting(false);
+              }
+            }}
+            disabled={isExporting || gradeMatrix.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+            title="Export consolidated grades and attendance as JSON for SF-10 generator"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>{isExporting ? 'Exporting...' : 'Export Matrix JSON (for SF-10)'}</span>
+          </button>
         </div>
       </div>
 

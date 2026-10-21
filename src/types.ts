@@ -115,6 +115,8 @@ export interface AdviserStudent {
   name: string;
   sex: 'Male' | 'Female';
   age?: number;
+  birthdate?: string;     // YYYY-MM-DD or MM/DD/YYYY for DepEd SF10
+  trackStrand?: string;   // SHS student-specific track & strand
 }
 
 export interface AdviserClass {
@@ -138,7 +140,12 @@ export interface AdviserClass {
   overrideLog: OverrideLogEntry[];
   schoolLogoBase64?: string;
   depedLogoBase64?: string;
-  trackStrand?: string;   // SHS only — e.g. "Academic" (new) or "Academic - HUMSS" (old)
+  trackStrand?: string;   // SHS only — default / section track & strand
+  availableTracksStrands?: string[]; // SHS only — global list of selectable tracks & strands
+  schoolId?: string;      // DepEd 6-digit School ID (e.g. '301234')
+  division?: string;      // DepEd Division (e.g. 'Division of Bohol')
+  region?: string;        // DepEd Region (e.g. 'Region VII - Central Visayas')
+  district?: string;      // DepEd District
 }
 
 
@@ -243,6 +250,13 @@ export interface GlobalSettings {
   schoolLogoBase64?: string;
   // Academic Year Rollover
   activeSchoolYear?: string;
+  // Cloud integrations
+  googleDriveLink?: string;  // Permanently saved Google Drive folder URL for file sharing
+  // DepEd Institutional Details (for SF9 and SF10 permanent records)
+  schoolId?: string;         // DepEd 6-digit School ID (e.g. 301234)
+  division?: string;         // DepEd Division (e.g. Division of Bohol)
+  region?: string;           // DepEd Region (e.g. Region VII - Central Visayas)
+  district?: string;         // DepEd District (e.g. Talibon II)
 }
 
 // ─── Archive System ──────────────────────────────────────────────────────────

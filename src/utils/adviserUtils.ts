@@ -16,6 +16,8 @@ export interface StudentGradeRow {
   name: string;
   sex: 'Male' | 'Female';
   age?: number;
+  birthdate?: string;
+  trackStrand?: string;
   subjects: SubjectGradeEntry[];
   generalAverage: number | null;
   rank?: number;
@@ -27,6 +29,19 @@ export type GradeMatrix = StudentGradeRow[];
 
 export const JHS_QUARTERS = getCalendar('Quarter').periods.map(p => p.id);
 export const SHS_SEMESTERS = ['Semester 1', 'Semester 2'];
+
+export const DEFAULT_SHS_TRACKS_STRANDS: string[] = [
+  'Academic - STEM',
+  'Academic - HUMSS',
+  'Academic - ABM',
+  'Academic - GAS',
+  'TVL - Information & Communications Technology (ICT)',
+  'TVL - Home Economics (HE)',
+  'TVL - Industrial Arts (IA)',
+  'TVL - Agri-Fishery Arts',
+  'Arts and Design',
+  'Sports'
+];
 
 export function getQuarterKeys(workspace: 'JHS' | 'SHS', calendarType: 'Quarter' | 'Trimester' = 'Quarter'): string[] {
   return getCalendar(calendarType).periods.map(p => p.id);
@@ -132,7 +147,7 @@ export function buildGradeMatrix(adviserClass: AdviserClass): GradeMatrix {
       };
     });
     const stObj = adviserClass.students.find(s => s.lrn === lrn);
-    return { lrn, name, sex, age: stObj?.age, subjects: subjectEntries, generalAverage: avg(subjectEntries.map(s => s.finalGrade)) };
+    return { lrn, name, sex, age: stObj?.age, birthdate: stObj?.birthdate, trackStrand: stObj?.trackStrand, subjects: subjectEntries, generalAverage: avg(subjectEntries.map(s => s.finalGrade)) };
   });
 
   const ranked = [...matrix].filter(s => s.generalAverage !== null).sort((a, b) => (b.generalAverage ?? 0) - (a.generalAverage ?? 0));
@@ -215,5 +230,6 @@ export function createDefaultAdviserClass(schoolYear: string, gradeLevel: string
       schoolDaysPerMonth: { June: 15, July: 23, August: 22, September: 21, October: 23, November: 20, January: 22, February: 20, March: 21, April: 10 }
     },
     importedGrades: [], overrideLog: [],
+    availableTracksStrands: workspace === 'SHS' ? [...DEFAULT_SHS_TRACKS_STRANDS] : undefined,
   };
 }

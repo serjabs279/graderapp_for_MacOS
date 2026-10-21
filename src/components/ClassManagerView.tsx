@@ -7,6 +7,7 @@ import { exportClassRecordPDF } from '../utils/pdfExport';
 import { globalToast } from '../context/ToastContext';
 import TeacherExcelExportModal from './TeacherExcelExportModal';
 import { parseTeacherExcelRecords } from '../utils/excelImportParser';
+import { exportFile } from '../utils/fileExportAdapter';
 import {
   Plus,
   Trash2,
@@ -696,7 +697,7 @@ export default function ClassManagerView() {
   };
 
   // CSV report generation download with all raw assessment scores
-  const handleExportCSVReport = () => {
+  const handleExportCSVReport = async () => {
     if (!activeProject) return;
     const activeStudents = activeProject.students.filter(s => s.status === 'Active' || !s.status);
     const qData = activeProject.quarters?.[activeQuarterId];
@@ -770,13 +771,13 @@ export default function ClassManagerView() {
       csvContent += rowCols.join(',') + '\n';
     });
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `ClassRecord_${activeProject.subject}_${activeProject.gradeLevel}_${activeProject.section}_${activeQuarterId.replace(/\s+/g, '')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const filename = `ClassRecord_${activeProject.subject}_${activeProject.gradeLevel}_${activeProject.section}_${activeQuarterId.replace(/\s+/g, '')}.csv`;
+    await exportFile({
+      filename,
+      content: csvContent,
+      mimeType: 'text/csv;charset=utf-8;',
+      title: 'Save Class Record CSV',
+    });
   };
 
   // Print trigger

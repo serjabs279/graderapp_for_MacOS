@@ -1,5 +1,6 @@
 import { isAndroid, isTauri, isDesktop } from './platform';
 import { globalToast } from '../context/ToastContext';
+import { fileLocator } from './fileLocator';
 
 /**
  * fileExportAdapter.ts
@@ -58,6 +59,18 @@ async function saveOnAndroid(
         const { writeFile } = await import('@tauri-apps/plugin-fs');
         await writeFile(selectedPath, bytes);
         globalToast.success(`Saved to selected location.`, 'File Saved');
+        
+        const folder = selectedPath.includes('/') ? selectedPath.substring(0, selectedPath.lastIndexOf('/')) : 'Downloads';
+        fileLocator.notify({
+          filename,
+          savedPath: selectedPath,
+          folderPath: folder,
+          fileSizeBytes: bytes.length,
+          timestamp: Date.now(),
+          mimeType,
+          content,
+          isJson: filename.toLowerCase().endsWith('.json')
+        });
         return true;
       } else {
         // User cancelled the file picker dialog
@@ -78,6 +91,15 @@ async function saveOnAndroid(
             title: filename,
           });
           globalToast.success(`File shared / saved successfully.`, 'Export Completed');
+          fileLocator.notify({
+            filename,
+            folderPath: 'Shared Location / Files',
+            fileSizeBytes: bytes.length,
+            timestamp: Date.now(),
+            mimeType,
+            content,
+            isJson: filename.toLowerCase().endsWith('.json')
+          });
           return true;
         }
       } catch (shareErr: any) {
@@ -92,6 +114,16 @@ async function saveOnAndroid(
       const { BaseDirectory } = fs;
       await fs.writeFile(filename, bytes, { baseDir: BaseDirectory.Download });
       globalToast.success(`"${filename}" saved to Downloads folder.`, 'File Saved');
+      fileLocator.notify({
+        filename,
+        savedPath: `/storage/emulated/0/Download/${filename}`,
+        folderPath: '/storage/emulated/0/Download',
+        fileSizeBytes: bytes.length,
+        timestamp: Date.now(),
+        mimeType,
+        content,
+        isJson: filename.toLowerCase().endsWith('.json')
+      });
       return true;
     } catch (fsErr) {
       console.error('[Android] FS Download write failed:', fsErr);
@@ -134,6 +166,19 @@ async function saveOnDesktop(
         const { writeFile } = await import('@tauri-apps/plugin-fs');
         await writeFile(selectedPath, bytes);
         globalToast.success(`"${filename}" saved successfully.`, 'File Saved');
+
+        const sep = selectedPath.includes('\\') ? '\\' : '/';
+        const folder = selectedPath.substring(0, selectedPath.lastIndexOf(sep));
+        fileLocator.notify({
+          filename,
+          savedPath: selectedPath,
+          folderPath: folder,
+          fileSizeBytes: bytes.length,
+          timestamp: Date.now(),
+          mimeType,
+          content,
+          isJson: filename.toLowerCase().endsWith('.json')
+        });
         return true;
       }
       return false; // User cancelled
@@ -157,6 +202,16 @@ async function saveOnDesktop(
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
+
+      fileLocator.notify({
+        filename,
+        folderPath: 'Selected Folder',
+        fileSizeBytes: bytes.length,
+        timestamp: Date.now(),
+        mimeType,
+        content,
+        isJson: filename.toLowerCase().endsWith('.json')
+      });
       return true;
     } catch (err: any) {
       if (err?.name === 'AbortError') return false; // User cancelled
@@ -175,6 +230,17 @@ async function saveOnDesktop(
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 1000);
+
+  fileLocator.notify({
+    filename,
+    folderPath: 'Downloads Folder',
+    fileSizeBytes: bytes.length,
+    timestamp: Date.now(),
+    mimeType,
+    content,
+    isJson: filename.toLowerCase().endsWith('.json')
+  });
+
   return true;
 }
 
@@ -186,8 +252,9 @@ export async function exportFile({
   content,
   mimeType = 'application/octet-stream',
 }: ExportFileOptions): Promise<boolean> {
-  if (isAndroid() && isTauri()) {
+  if (isAndroid()) {
     return saveOnAndroid(filename, content, mimeType);
   }
   return saveOnDesktop(filename, content, mimeType);
 }
+
