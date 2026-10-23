@@ -18,7 +18,9 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {
-        ignored: ['**/src-tauri/target/**', '**/release/**', '**/dist/**'],
+        // gen/ holds the Android Gradle build output; watching the .so files there
+        // crashes Vite on Windows with EBUSY while Gradle is assembling.
+        ignored: ['**/src-tauri/target/**', '**/src-tauri/gen/**', '**/release/**', '**/dist/**'],
       },
     },
   };

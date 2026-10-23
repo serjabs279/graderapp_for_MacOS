@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -37,12 +36,28 @@
   --color-indigo-850: #064e3b;
   --color-indigo-900: #064e3b;
   --color-indigo-950: #022c22;
+
+  /* Warm ash / paper neutrals — replaces the cool slate scale so surfaces stop
+     reading as glaring white and container edges stay legible against them. */
+  --color-white: #fdfcf9;
+  --color-slate-50: #f7f5ef;
+  --color-slate-100: #efece4;
+  --color-slate-200: #dcd6c9;
+  --color-slate-300: #c6bfae;
+  --color-slate-400: #9c9483;
+  --color-slate-500: #777064;
+  --color-slate-600: #5b554b;
+  --color-slate-700: #454038;
+  --color-slate-800: #2e2a25;
+  --color-slate-850: #262320;
+  --color-slate-900: #1f1c18;
+  --color-slate-950: #141210;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: #eae6dc;
+  color: #1f1c18;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -51,8 +66,8 @@ button, input, select, textarea {
 }
 
 .dark body {
-  background-color: #0b0f19;
-  color: #f1f5f9;
+  background-color: #141210;
+  color: #efece4;
 }
 
 /* Custom scrollbars for professional dashboard styling */
@@ -64,22 +79,327 @@ button, input, select, textarea {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #c6bfae;
   border-radius: 4px;
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #454038;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #9c9483;
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #5b554b;
 }
 
 /* Custom transitions and styling */
 .transition-all-custom {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@layer components {
+  .ui-page {
+    @apply w-full min-w-0 space-y-6;
+  }
+
+  .ui-heading {
+    @apply text-balance text-2xl font-semibold text-slate-900 dark:text-slate-100;
+  }
+
+  .ui-section-title {
+    @apply text-balance text-base font-semibold text-slate-900 dark:text-slate-100;
+  }
+
+  .ui-description {
+    @apply mt-2 max-w-3xl text-pretty text-sm leading-relaxed text-slate-600 dark:text-slate-400;
+  }
+
+  .ui-label {
+    @apply block text-xs font-medium text-slate-600 dark:text-slate-400;
+  }
+
+  .ui-panel {
+    @apply rounded-xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900;
+  }
+
+  .ui-button,
+  .ui-button-primary,
+  .ui-button-danger {
+    @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ui-button {
+    @apply border-slate-300 bg-white text-slate-700 shadow-xs hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800;
+  }
+
+  .ui-button-primary {
+    @apply border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600;
+  }
+
+  .ui-button-danger {
+    @apply border-red-700 bg-red-700 text-white hover:bg-red-800 dark:border-red-700 dark:bg-red-700 dark:hover:bg-red-600;
+  }
+
+  .ui-icon-button {
+    @apply inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ui-field {
+    @apply min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500;
+    color-scheme: light;
+  }
+
+  .dark .ui-field {
+    color-scheme: dark;
+  }
+
+  .ui-tabs {
+    @apply flex flex-wrap gap-1 border-b border-slate-300 pb-3 dark:border-slate-700;
+  }
+
+  .ui-tab {
+    @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800;
+  }
+
+  .ui-tab[aria-pressed="true"],
+  .ui-tab[aria-current="page"] {
+    @apply bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300;
+  }
+
+  .ui-badge {
+    @apply inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300;
+  }
+
+  .ui-notice {
+    @apply flex items-start gap-3 rounded-lg border border-slate-300 bg-slate-50 p-4 text-pretty text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300;
+  }
+
+  .ui-dialog-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .ui-dialog {
+    @apply flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900;
+  }
+
+  .ui-dialog-header {
+    @apply flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800;
+  }
+
+  .ui-dialog-body {
+    @apply min-h-0 overflow-y-auto p-5;
+  }
+
+  .ui-dialog-footer {
+    @apply flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-800;
+  }
+
+  .ui-mobile-header {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+
+  .dark .ui-mobile-header {
+    @apply bg-slate-900;
+  }
+
+  .ui-confirm-dialog::backdrop {
+    @apply bg-slate-950/60;
+  }
+
+  .ui-toast-container {
+    @apply pointer-events-none fixed inset-x-0 z-50 mx-auto flex w-full max-w-md flex-col gap-3 px-4 sm:left-auto sm:right-0 sm:mx-0;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+
+  .app-ui :where(button, input, select, textarea, a, [tabindex]):focus-visible {
+    @apply outline-2 outline-offset-2 outline-emerald-600;
+  }
+
+  .adviser-page {
+    @apply mx-auto w-full min-w-0 max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8;
+  }
+
+  .adviser-heading {
+    @apply flex items-center gap-2 text-balance text-2xl font-semibold text-slate-900 dark:text-slate-100;
+  }
+
+  .adviser-description {
+    @apply mt-2 max-w-3xl text-pretty text-sm leading-relaxed text-slate-600 dark:text-slate-400;
+  }
+
+  .adviser-panel {
+    @apply overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900;
+  }
+
+  .adviser-button,
+  .adviser-button-primary {
+    @apply inline-flex min-h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .adviser-button {
+    @apply border-slate-300 bg-white text-slate-700 shadow-xs hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800;
+  }
+
+  .adviser-button-primary {
+    @apply border-amber-700 bg-amber-700 text-white hover:bg-amber-800 dark:border-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700;
+  }
+
+  .adviser-field {
+    @apply min-h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100;
+    color-scheme: light;
+  }
+
+  .dark .adviser-field {
+    color-scheme: dark;
+  }
+
+  .adviser-periods {
+    @apply flex flex-wrap gap-1 border-b border-slate-300 pb-3 dark:border-slate-700;
+  }
+
+  .adviser-period {
+    @apply min-h-10 cursor-pointer whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800;
+  }
+
+  .adviser-period[aria-pressed="true"] {
+    @apply bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300;
+  }
+
+  .adviser-nav-button {
+    @apply flex min-h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800;
+  }
+
+  .adviser-nav-button[aria-current="page"] {
+    @apply bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300;
+  }
+
+  .adviser-portal :where(button, input, select, textarea, a):focus-visible {
+    @apply outline-2 outline-offset-2 outline-amber-600;
+  }
+
+  .adviser-page table {
+    @apply tabular-nums;
+  }
+}
+
+/* --------------------------------------------------------
+   EXCEL-STYLE FOCUS CELL (gradebook grid crosshair)
+   Hovering or selecting a score cell highlights the learner
+   row and the assessment column so a wide grid stays readable.
+   Screen only, so printed records are never affected.
+   -------------------------------------------------------- */
+@media screen {
+  .gradebook-grid {
+    --focus-row-tint: rgb(4 120 87 / 0.1);
+    --focus-col-tint: rgb(4 120 87 / 0.12);
+    --focus-cell-tint: rgb(4 120 87 / 0.22);
+    --focus-row-tint-strong: rgb(4 120 87 / 0.15);
+    --focus-col-tint-strong: rgb(4 120 87 / 0.18);
+    --focus-cell-tint-strong: rgb(4 120 87 / 0.3);
+    /* Score chips are opaque, so they need their own wash on top of the fill. */
+    --focus-chip-tint: rgb(5 150 105 / 0.1);
+    --focus-chip-tint-strong: rgb(5 150 105 / 0.14);
+    --focus-chip-cell-tint: rgb(5 150 105 / 0.22);
+    --focus-chip-cell-tint-strong: rgb(5 150 105 / 0.26);
+    --focus-chip-wash: transparent;
+    --focus-sticky: #e4f3ea;
+    --focus-sticky-strong: #d3ebdd;
+    --focus-edge: #047857;
+    --focus-edge-soft: rgb(4 120 87 / 0.45);
+    --focus-row-bar: rgb(4 120 87 / 0.4);
+    --focus-halo: rgb(4 120 87 / 0.18);
+    --focus-halo-strong: rgb(4 120 87 / 0.24);
+  }
+
+  .dark .gradebook-grid {
+    --focus-row-tint: rgb(52 211 153 / 0.09);
+    --focus-col-tint: rgb(52 211 153 / 0.11);
+    --focus-cell-tint: rgb(52 211 153 / 0.2);
+    --focus-row-tint-strong: rgb(52 211 153 / 0.13);
+    --focus-col-tint-strong: rgb(52 211 153 / 0.16);
+    --focus-cell-tint-strong: rgb(52 211 153 / 0.26);
+    --focus-chip-tint: rgb(52 211 153 / 0.09);
+    --focus-chip-tint-strong: rgb(52 211 153 / 0.12);
+    --focus-chip-cell-tint: rgb(52 211 153 / 0.19);
+    --focus-chip-cell-tint-strong: rgb(52 211 153 / 0.22);
+    --focus-sticky: #20342b;
+    --focus-sticky-strong: #274538;
+    --focus-edge: #34d399;
+    --focus-edge-soft: rgb(52 211 153 / 0.45);
+    --focus-row-bar: rgb(52 211 153 / 0.45);
+    --focus-halo: rgb(52 211 153 / 0.2);
+    --focus-halo-strong: rgb(52 211 153 / 0.26);
+  }
+
+  /* Pointer preview. Row rules are kept at one class so the column and cell
+     rules that follow always win on the intersections. */
+  .gradebook-grid tr:where(.focus-row) > td {
+    background-color: var(--focus-row-tint);
+    --focus-chip-wash: var(--focus-chip-tint);
+  }
+  .gradebook-grid tr:where(.focus-row) > td[data-focus-sticky] {
+    background-color: var(--focus-sticky);
+    box-shadow: inset 3px 0 0 0 var(--focus-row-bar);
+  }
+  .gradebook-grid td.focus-col,
+  .gradebook-grid th.focus-col {
+    background-color: var(--focus-col-tint);
+    --focus-chip-wash: var(--focus-chip-tint);
+  }
+  .gradebook-grid td.focus-cell {
+    background-color: var(--focus-cell-tint);
+    --focus-chip-wash: var(--focus-chip-cell-tint);
+  }
+
+  /* Selected cell — the crosshair stays put while typing */
+  .gradebook-grid tr:where(.focus-row-active) > td {
+    background-color: var(--focus-row-tint-strong);
+    --focus-chip-wash: var(--focus-chip-tint-strong);
+  }
+  .gradebook-grid tr:where(.focus-row-active) > td[data-focus-sticky] {
+    background-color: var(--focus-sticky-strong);
+    box-shadow: inset 3px 0 0 0 var(--focus-edge);
+  }
+  .gradebook-grid td.focus-col-active,
+  .gradebook-grid th.focus-col-active {
+    background-color: var(--focus-col-tint-strong);
+    --focus-chip-wash: var(--focus-chip-tint-strong);
+  }
+  .gradebook-grid td.focus-cell-active {
+    background-color: var(--focus-cell-tint-strong);
+    --focus-chip-wash: var(--focus-chip-cell-tint-strong);
+  }
+
+  /* Wash the score chips too (they paint an opaque fill over the cell tint). */
+  .gradebook-grid td:where(:not([data-focus-sticky])) > div {
+    background-image: linear-gradient(var(--focus-chip-wash), var(--focus-chip-wash));
+  }
+
+  /* The focused chip gets a solid jade edge and a soft halo so the cell itself
+     is unmistakable, even before you read the row or column wash. */
+  .gradebook-grid td.focus-cell > div,
+  .gradebook-grid td.focus-cell-active > div {
+    border-color: var(--focus-edge);
+    box-shadow: 0 0 0 3px var(--focus-halo);
+  }
+
+  .gradebook-grid td.focus-cell-active > div {
+    box-shadow: 0 0 0 3px var(--focus-halo-strong);
+  }
+
+  /* The focused assessment header keeps a marker so the column is identifiable;
+     the pinned column gets the stronger bar. */
+  .gradebook-grid th.focus-col {
+    box-shadow: inset 0 -2px 0 0 var(--focus-edge-soft);
+  }
+
+  .gradebook-grid th.focus-col-active {
+    box-shadow: inset 0 -3px 0 0 var(--focus-edge);
+  }
 }
 
 /* --------------------------------------------------------

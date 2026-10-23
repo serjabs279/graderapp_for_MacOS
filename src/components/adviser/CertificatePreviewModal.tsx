@@ -4,6 +4,7 @@ import { StudentGradeRow } from '../../utils/adviserUtils';
 import { X, Printer, Download, Calendar, Award, ChevronLeft, ChevronRight } from 'lucide-react';
 import { generateAcademicAchieverCertificates, CertificateOptions } from '../../utils/adviser/certificateGenerator';
 import { exportFile } from '../../utils/fileExportAdapter';
+import { isAndroid } from '../../utils/platform';
 import { globalToast } from '../../context/ToastContext';
 
 interface Props {
@@ -13,9 +14,9 @@ interface Props {
   awardees: StudentGradeRow[];
   globalSettings: GlobalSettings;
   periodLabel: string;
-  onPeriodChange: (period: string) => void;
   givenDate: string;
   onGivenDateChange: (date: string) => void;
+  averageLabel?: string;
 }
 
 export default function CertificatePreviewModal({
@@ -25,9 +26,9 @@ export default function CertificatePreviewModal({
   awardees,
   globalSettings,
   periodLabel,
-  onPeriodChange,
   givenDate,
   onGivenDateChange,
+  averageLabel = 'General Average',
 }: Props) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -45,7 +46,7 @@ export default function CertificatePreviewModal({
 
   const handleDownloadPDF = async () => {
     try {
-      const opts: CertificateOptions = { periodLabel, givenDate };
+      const opts: CertificateOptions = { periodLabel, givenDate, averageLabel };
       const doc = generateAcademicAchieverCertificates(adviserClass, awardees, globalSettings, opts);
       const filename = `Certificates_${adviserClass.gradeLevel}_${adviserClass.section}_${periodLabel.replace(/\s+/g, '_')}.pdf`;
       const pdfBytes = doc.output('arraybuffer');
@@ -65,42 +66,36 @@ export default function CertificatePreviewModal({
   };
 
   const handlePrintHTML = () => {
+    if (isAndroid()) {
+      handleDownloadPDF();
+      return;
+    }
     window.print();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[95vh] overflow-hidden">
+    <div className="ui-dialog-overlay">
+      <div role="dialog" aria-modal="true" aria-label="Certificate settings and preview" className="ui-dialog max-w-5xl">
         {/* Modal Header & Controls */}
-        <div className="p-4 sm:px-6 bg-slate-50 dark:bg-slate-950/70 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-2">
-            <Award className="w-5 h-5 text-amber-500" />
-            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base">
-              Certificate Settings & Preview
-            </h3>
-            <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-semibold px-2.5 py-0.5 rounded-full">
-              {awardees.length} Achiever(s)
-            </span>
+        <div className="ui-dialog-header flex-col items-stretch">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="ui-section-title flex items-center gap-2">
+                <Award className="size-5 shrink-0 text-amber-600" /> Certificate preview
+              </h3>
+              <p className="ui-description mt-1 tabular-nums">{awardees.length} achiever(s) · A4, 2 per page</p>
+            </div>
+            <button onClick={onClose} className="ui-icon-button" aria-label="Close certificate preview">
+              <X className="size-5" />
+            </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownloadPDF}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
-            >
-              <Download className="w-4 h-4" /> Download PDF (A4 - 2/page)
+          <div className="flex flex-wrap gap-2">
+            <button onClick={handleDownloadPDF} className="adviser-button-primary">
+              <Download className="size-4" /> Download PDF
             </button>
-            <button
-              onClick={handlePrintHTML}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition cursor-pointer"
-            >
-              <Printer className="w-4 h-4" /> Print
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition"
-            >
-              <X className="w-5 h-5" />
+            <button onClick={handlePrintHTML} className="adviser-button">
+              <Printer className="size-4" /> Print
             </button>
           </div>
         </div>
@@ -109,19 +104,14 @@ export default function CertificatePreviewModal({
         <div className="p-4 bg-amber-50/50 dark:bg-amber-950/20 border-b border-amber-200/60 dark:border-amber-900/40 grid grid-cols-1 sm:grid-cols-2 gap-4 shrink-0">
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Grading Period / Quarter
+              Grading Period
             </label>
-            <select
-              value={periodLabel}
-              onChange={(e) => onPeriodChange(e.target.value)}
-              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-            >
-              <option value="1st Quarter">1st Quarter</option>
-              <option value="2nd Quarter">2nd Quarter</option>
-              <option value="3rd Quarter">3rd Quarter</option>
-              <option value="4th Quarter">4th Quarter</option>
-              <option value="Full Year">Full Academic Year (Annual)</option>
-            </select>
+            <div className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+              {periodLabel === 'Full Year' ? 'Full Academic Year (Annual)' : periodLabel}
+            </div>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">
+              Follows the period selected on the Awardees list.
+            </span>
           </div>
 
           <div>
@@ -248,7 +238,7 @@ export default function CertificatePreviewModal({
             {/* Citation */}
             <div className="text-center space-y-1.5 my-3 px-4">
               <p className="text-xs sm:text-sm text-slate-700">
-                for obtaining an outstanding General Average of{' '}
+                for obtaining an outstanding {averageLabel} of{' '}
                 <strong className="font-black text-slate-900">
                   {currentStudent?.generalAverage?.toFixed(2) || '0.00'}
                 </strong>{' '}

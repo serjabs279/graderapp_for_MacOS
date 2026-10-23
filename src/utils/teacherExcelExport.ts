@@ -19,7 +19,7 @@ export async function exportTeacherGradebookExcel(
       const sheetData: any[][] = [];
 
       // Top info metadata
-      sheetData.push(['SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED']);
+      sheetData.push([project.schoolName || 'DEPARTMENT OF EDUCATION']);
       sheetData.push([`Electronic Class Record — ${qKey}`]);
       sheetData.push(['Subject UID', project.subjectUID ?? 'N/A']);
       sheetData.push(['Subject', project.subject]);
@@ -148,7 +148,7 @@ export async function exportTeacherGradebookExcel(
     // ── 2. Add a Consolidated Summary Sheet if more than 1 quarter is selected ──
     if (selectedQuarters.length > 1) {
       const summaryData: any[][] = [];
-      summaryData.push(['SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED']);
+      summaryData.push([project.schoolName || 'DEPARTMENT OF EDUCATION']);
       summaryData.push(['Consolidated Grade Summary Sheet']);
       summaryData.push(['Subject', project.subject]);
       summaryData.push(['Grade & Section', `${project.gradeLevel} - ${project.section}`]);

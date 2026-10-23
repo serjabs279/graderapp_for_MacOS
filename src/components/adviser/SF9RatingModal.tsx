@@ -129,48 +129,49 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="ui-dialog-overlay">
+      <div role="dialog" aria-modal="true" aria-label={`SF9 details for ${studentRow.name}`} className="ui-dialog max-w-4xl">
         
         {/* Header */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-3">
-          <div className="space-y-0.5 min-w-0">
-            <h3 className="font-sans font-black text-sm text-slate-800 dark:text-slate-200 uppercase tracking-wider truncate">
+        <div className="ui-dialog-header flex-wrap">
+          <div className="min-w-0 flex-1 space-y-1">
+            <h3 className="ui-section-title">
               Student Assessment Card (SF9 Details)
             </h3>
-            <p className="text-xs font-mono font-bold text-slate-500 truncate">
+            <p className="text-sm tabular-nums font-medium text-slate-500 truncate text-pretty">
               {studentRow.name} • LRN: {studentRow.lrn}
             </p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
-              <span className="text-[10px] font-black uppercase text-slate-400">Age:</span>
+              <span className="text-sm font-semibold text-slate-500">Age:</span>
               <input
                 type="number"
                 value={localAge}
                 onChange={e => setLocalAge(e.target.value)}
                 placeholder="Auto"
-                className="w-12 px-1 py-0.5 text-xs font-bold font-mono text-slate-800 dark:text-slate-200 bg-transparent text-center focus:outline-none"
+                className="ui-field w-12 text-center tabular-nums"
               />
             </div>
-            <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-450 transition-colors cursor-pointer">
+            <button onClick={onClose} className="adviser-button">
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
+        <div className="ui-dialog-body flex-1 space-y-5">
         {/* Quick SHS Track & Strand Banner / Selector Bar */}
         {adviserClass.workspace === 'SHS' && (
-          <div className="px-6 py-2.5 bg-amber-50/70 dark:bg-amber-950/20 border-b border-amber-200/50 dark:border-amber-900/30 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="px-6 py-2.5 bg-amber-50/70 dark:bg-amber-950/20 border-b border-amber-200/50 dark:border-amber-900/30 flex flex-wrap items-center justify-between gap-3 text-sm">
             <div className="flex items-center gap-2">
               <GraduationCap className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span className="font-bold text-slate-700 dark:text-slate-300">SHS Track &amp; Strand:</span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">SHS Track &amp; Strand:</span>
             </div>
             <div className="flex items-center gap-2 flex-1 max-w-md justify-end">
               <select
                 value={localTrackStrand}
                 onChange={e => setLocalTrackStrand(e.target.value)}
-                className="w-full sm:w-auto min-w-[240px] px-3 py-1.5 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs cursor-pointer"
+                className="ui-field"
               >
                 <option value="">Default ({adviserClass.trackStrand || 'Section Default'})</option>
                 {availableTracks.map(t => (
@@ -188,32 +189,32 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
         <div className="px-6 py-2 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800/60 flex flex-wrap gap-2">
           <button
             onClick={() => setActiveTab('observed')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'observed'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-            }`}
+            className={`px-3.5 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "observed"
+                ? "bg-amber-600 text-white"
+                : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+            } `}
           >
             <Award className="h-3.5 w-3.5" /> Learner Observed Values
           </button>
           <button
             onClick={() => setActiveTab('attendance')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'attendance'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-            }`}
+            className={`px-3.5 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "attendance"
+                ? "bg-amber-600 text-white"
+                : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+            } `}
           >
             <CalendarDays className="h-3.5 w-3.5" /> Attendance Record
           </button>
           {adviserClass.workspace === 'SHS' && (
             <button
               onClick={() => setActiveTab('trackStrand')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'trackStrand'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-              }`}
+              className={`px-3.5 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "trackStrand"
+                  ? "bg-amber-600 text-white"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+              } `}
             >
               <GraduationCap className="h-3.5 w-3.5" /> Track &amp; Strand
             </button>
@@ -221,14 +222,14 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 min-h-[380px]">
+        <div className="min-w-0">
           
           {/* TAB 1: Observed Values Rating Grid */}
           {activeTab === 'observed' && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              <div className="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/10 rounded-2xl p-4 text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed font-semibold">
+            <div className="space-y-6">
+              <div className="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/10 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-300 leading-relaxed font-semibold">
                 Rate the behavior statements using the official non-numerical scale:
-                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2 font-mono">
+                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2 tabular-nums">
                   <span><strong>AO</strong> - Always Observed</span>
                   <span><strong>SO</strong> - Sometimes Observed</span>
                   <span><strong>RO</strong> - Rarely Observed</span>
@@ -236,13 +237,13 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
                 </div>
               </div>
 
-              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
-                <table className="w-full text-left border-collapse text-xs">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-sm tabular-nums">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-850">
-                      <th className="p-3 font-bold text-slate-500">Core Values & Statements</th>
+                    <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800">
+                      <th className="p-3 font-medium text-slate-500">Core Values & Statements</th>
                       {quartersList.map(q => (
-                        <th key={q} className="p-3 text-center font-bold text-slate-500 w-24">
+                        <th key={q} className="p-3 text-center font-medium text-slate-500 w-24">
                           {q.replace(' Quarter', '')}
                         </th>
                       ))}
@@ -250,10 +251,10 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                     {coreValues.map(({ field, label, sub }) => (
-                      <tr key={field} className="hover:bg-slate-50/30 dark:hover:bg-slate-850/15 transition-colors">
+                      <tr key={field} className="hover:bg-slate-50/30 dark:hover:bg-slate-800/15 transition-colors">
                         <td className="p-3.5 space-y-0.5">
-                          <div className="font-extrabold text-slate-800 dark:text-slate-200">{label}</div>
-                          <div className="text-[10px] text-slate-400 font-semibold">{sub}</div>
+                          <div className="font-semibold text-slate-800 dark:text-slate-200">{label}</div>
+                          <div className="text-sm text-slate-500 font-semibold">{sub}</div>
                         </td>
                         {quartersList.map(q => {
                           const currentVal = localObserved[q]?.[field] ?? '';
@@ -262,7 +263,7 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
                               <select
                                 value={currentVal}
                                 onChange={e => handleRatingChange(q, field, e.target.value as ObservedValueRating)}
-                                className="w-20 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg py-1 px-2 text-center text-xs font-mono font-black text-slate-850 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                className="ui-field w-20 text-center"
                               >
                                 {ratings.map(r => (
                                   <option key={r.value} value={r.value}>{r.value || '—'}</option>
@@ -281,8 +282,8 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
 
           {/* TAB 2: Attendance Input Grid */}
           {activeTab === 'attendance' && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              <div className="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/10 rounded-2xl p-4 text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed font-semibold">
+            <div className="space-y-6">
+              <div className="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/10 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-300 leading-relaxed font-semibold">
                 Input the number of days the student was absent for each month. The number of days present will automatically be calculated based on the total school days configured.
               </div>
 
@@ -293,29 +294,29 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
                   const present = Math.max(0, maxDays - absent);
                   
                   return (
-                    <div key={m} className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between gap-3 shadow-sm">
+                    <div key={m} className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col justify-between gap-3">
                       <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800/60 pb-2">
-                        <span className="font-extrabold text-slate-800 dark:text-slate-250">{m}</span>
-                        <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{m}</span>
+                        <span className="text-sm tabular-nums font-medium text-slate-500">
                           {maxDays} Days
                         </span>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Absent</label>
+                          <label className="ui-label">Absent</label>
                           <input
                             type="number"
                             min={0}
                             max={maxDays}
                             value={absent}
                             onChange={e => handleAbsentChange(m, e.target.value)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-350 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono font-black focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            className="ui-field tabular-nums"
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Present</label>
-                          <div className="w-full bg-slate-100 dark:bg-slate-800 border border-transparent rounded-xl px-3 py-1.5 text-xs font-mono font-black text-emerald-600 dark:text-emerald-450 select-none">
+                          <label className="ui-label">Present</label>
+                          <div className="w-full bg-slate-100 dark:bg-slate-800 border border-transparent rounded-xl px-3 py-1.5 text-sm tabular-nums font-semibold text-slate-600 dark:text-slate-500 select-none">
                             {present}
                           </div>
                         </div>
@@ -329,34 +330,34 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
 
           {/* TAB 3: SHS Track & Strand Selector */}
           {activeTab === 'trackStrand' && adviserClass.workspace === 'SHS' && (
-            <div className="space-y-6 animate-in fade-in duration-150 max-w-2xl mx-auto">
-              <div className="bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/30 rounded-2xl p-4 text-xs text-amber-800 dark:text-amber-300 leading-relaxed font-medium">
+            <div className="space-y-6 max-w-2xl mx-auto">
+              <div className="bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/30 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-300 leading-relaxed font-medium">
                 Set the official Senior High School Track and Strand for <strong>{studentRow.name}</strong>. This will be printed on their official SF-9 Learner Progress Report Card and SF-9 HTML preview.
               </div>
 
               {/* Effective Preview Card */}
-              <div className="bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-2">
-                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+              <div className="bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-2">
+                <span className="text-sm font-semibold text-slate-500">
                   Effective Track &amp; Strand on SF-9:
                 </span>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  <div className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     <GraduationCap className="h-5 w-5 text-amber-500 shrink-0" />
                     <span>{localTrackStrand || adviserClass.trackStrand || 'Senior High School (Not set)'}</span>
                   </div>
-                  <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg shrink-0 ${
+                  <span className={`text-sm font-semibold px-2.5 py-1 rounded-lg shrink-0 ${
                     localTrackStrand
-                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                      : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                  }`}>
+                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                      : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                  } `}>
                     {localTrackStrand ? 'Student Specific' : 'Section Default'}
                   </span>
                 </div>
               </div>
 
               {/* Dropdown Selection */}
-              <div className="space-y-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+              <div className="space-y-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6">
+                <label className="ui-label">
                   Select Track &amp; Strand from Section Settings
                 </label>
                 <select
@@ -365,7 +366,7 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
                     setLocalTrackStrand(e.target.value);
                     if (e.target.value) setIsCustomMode(false);
                   }}
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                  className="ui-field"
                 >
                   <option value="">— Use Section Default ({adviserClass.trackStrand || 'None'}) —</option>
                   {availableTracks.map(t => (
@@ -375,33 +376,33 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
                     <option value={localTrackStrand}>{localTrackStrand} (Custom)</option>
                   )}
                 </select>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-sm text-slate-500 text-pretty">
                   Options are configured globally in <span className="font-semibold text-slate-600 dark:text-slate-300">Adviser Settings → SHS Tracks &amp; Strands</span>.
                 </p>
 
                 {/* Custom Track/Strand Option */}
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800/60 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
                       Need a custom or unlisted strand for this learner?
                     </span>
                     <button
                       type="button"
                       onClick={() => setIsCustomMode(!isCustomMode)}
-                      className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                      className="adviser-button"
                     >
                       {isCustomMode ? 'Hide Custom Input' : '+ Enter Custom Strand'}
                     </button>
                   </div>
 
                   {isCustomMode && (
-                    <div className="flex gap-2 pt-2 animate-in fade-in duration-150">
+                    <div className="flex gap-2 pt-2">
                       <input
                         type="text"
                         value={customTrackInput}
                         onChange={e => setCustomTrackInput(e.target.value)}
                         placeholder="e.g. Arts and Design - Visual Arts"
-                        className="flex-1 px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="ui-field"
                       />
                       <button
                         type="button"
@@ -412,7 +413,7 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
                           }
                         }}
                         disabled={!customTrackInput.trim()}
-                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl cursor-pointer"
+                        className="adviser-button-primary"
                       >
                         Apply
                       </button>
@@ -425,19 +426,20 @@ export default function SF9RatingModal({ adviserClass, studentRow, onClose }: Pr
 
         </div>
 
+        </div>
         {/* Footer Actions */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/40 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-end gap-3 shrink-0">
+        <div className="ui-dialog-footer">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-805 dark:text-slate-200 text-xs font-black rounded-xl cursor-pointer transition-colors"
+            className="adviser-button"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-sm transition-colors flex items-center gap-1.5"
+            className="adviser-button-primary"
           >
             <Check className="h-4 w-4" /> Save changes
           </button>

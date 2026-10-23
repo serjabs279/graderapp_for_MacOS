@@ -53,6 +53,58 @@ function avg(values: (number | null)[]): number | null {
   return Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 100) / 100;
 }
 
+/** Whole-year age from an ISO (YYYY-MM-DD) or SF10 (MM/DD/YYYY) birthdate. */
+export function calculateAge(birthdate: string | undefined, asOf: Date = new Date()): number | undefined {
+  if (!birthdate) return undefined;
+  const value = birthdate.trim();
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value);
+  const us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
+  const year = iso ? Number(iso[1]) : us ? Number(us[3]) : NaN;
+  const month = iso ? Number(iso[2]) : us ? Number(us[1]) : NaN;
+  const day = iso ? Number(iso[3]) : us ? Number(us[2]) : NaN;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return undefined;
+  const birth = new Date(year, month - 1, day);
+  if (birth.getFullYear() !== year || birth.getMonth() !== month - 1 || birth.getDate() !== day) return undefined;
+  if (birth > asOf) return undefined;
+  let age = asOf.getFullYear() - year;
+  const hadBirthday = asOf.getMonth() > month - 1 || (asOf.getMonth() === month - 1 && asOf.getDate() >= day);
+  if (!hadBirthday) age--;
+  return age >= 0 ? age : undefined;
+}
+
+/**
+ * Computes a subject's final rating without pretending missing periods are zero
+ * or silently averaging a partial set of quarters.
+ * - JHS / trimester: every period in the calendar is required.
+ * - SHS: a semester is complete only when both of its quarters are present.
+ */
+export function computeSubjectFinal(
+  qGrades: Record<string, number | null>,
+  workspace: 'JHS' | 'SHS'
+): number | null {
+  const values = Object.values(qGrades);
+  if (values.length === 0) return null;
+
+  if (workspace === 'SHS') {
+    const [q1, q2, q3, q4] = values;
+    const sem1Any = q1 !== null || q2 !== null;
+    const sem2Any = q3 !== null || q4 !== null;
+    const sem1Complete = q1 !== null && q2 !== null;
+    const sem2Complete = q3 !== null && q4 !== null;
+
+    // A partially entered semester makes the subject incomplete.
+    if ((sem1Any && !sem1Complete) || (sem2Any && !sem2Complete)) return null;
+    if (sem1Complete && sem2Complete) return avg([q1, q2, q3, q4]);
+    if (sem1Complete) return avg([q1, q2]);
+    if (sem2Complete) return avg([q3, q4]);
+    return null;
+  }
+
+  // All calendar periods are needed for a JHS/trimester final rating.
+  if (values.some(v => v === null || v === undefined)) return null;
+  return avg(values);
+}
+
 function getGrade(importedGrades: ImportedSubjectGrades[], subjectName: string, quarterKey: string, lrn: string): number | null {
   const entry = importedGrades.find(g => g.subjectName === subjectName && g.quarterKey === quarterKey);
   if (!entry) return null;
@@ -143,11 +195,22 @@ export function buildGradeMatrix(adviserClass: AdviserClass): GradeMatrix {
         languageComponents: subj.languageGroup?.subjects,
         languageQuarters: langQuarters,
         quarters: qGrades, 
-        finalGrade: avg(Object.values(qGrades)) 
+        finalGrade: computeSubjectFinal(qGrades, workspace)
       };
     });
     const stObj = adviserClass.students.find(s => s.lrn === lrn);
-    return { lrn, name, sex, age: stObj?.age, birthdate: stObj?.birthdate, trackStrand: stObj?.trackStrand, subjects: subjectEntries, generalAverage: avg(subjectEntries.map(s => s.finalGrade)) };
+    // A general average is only meaningful once every subject has a complete final rating.
+    const allSubjectsComplete = subjectEntries.length > 0 && subjectEntries.every(s => s.finalGrade !== null);
+    return {
+      lrn,
+      name,
+      sex,
+      age: stObj?.age,
+      birthdate: stObj?.birthdate,
+      trackStrand: stObj?.trackStrand,
+      subjects: subjectEntries,
+      generalAverage: allSubjectsComplete ? avg(subjectEntries.map(s => s.finalGrade)) : null
+    };
   });
 
   const ranked = [...matrix].filter(s => s.generalAverage !== null).sort((a, b) => (b.generalAverage ?? 0) - (a.generalAverage ?? 0));
@@ -163,19 +226,68 @@ export function buildGradeMatrix(adviserClass: AdviserClass): GradeMatrix {
   return matrix;
 }
 
-export function classifyHonors(row: StudentGradeRow, criteria: HonorsCriteria): HonorsLabel {
-  const ga = row.generalAverage;
+function classifyAverage(ga: number | null, minGrade: number, criteria: HonorsCriteria): HonorsLabel {
   if (ga === null) return null;
-  const allFinals = row.subjects.map(s => s.finalGrade).filter((g): g is number => g !== null);
-  const minGrade = allFinals.length > 0 ? Math.min(...allFinals) : 0;
   if (ga >= criteria.highestHonors.minAverage && minGrade >= criteria.highestHonors.minAnySubject) return 'With Highest Honors';
   if (ga >= criteria.highHonors.minAverage && minGrade >= criteria.highHonors.minAnySubject) return 'With High Honors';
   if (ga >= criteria.honors.minAverage && minGrade >= criteria.honors.minAnySubject) return 'With Honors';
   return null;
 }
 
+export function classifyHonors(row: StudentGradeRow, criteria: HonorsCriteria): HonorsLabel {
+  const ga = row.generalAverage;
+  if (ga === null) return null;
+  // Never award honors while any learning area still lacks a complete final rating.
+  if (row.subjects.some(s => s.finalGrade === null)) return null;
+  const allFinals = row.subjects.map(s => s.finalGrade).filter((g): g is number => g !== null);
+  const minGrade = allFinals.length > 0 ? Math.min(...allFinals) : 0;
+  return classifyAverage(ga, minGrade, criteria);
+}
+
+/**
+ * Honors for a single quarter: average of the subjects already graded in that
+ * quarter, with the minimum-grade rule applied to those same subjects.
+ */
+export function getQuarterHonors(
+  row: StudentGradeRow,
+  quarterKey: string,
+  criteria: HonorsCriteria
+): { average: number | null; honorsLabel: HonorsLabel; gradedSubjects: number } {
+  const grades = row.subjects
+    .map(s => s.quarters[quarterKey])
+    .filter((g): g is number => g !== null);
+  if (grades.length === 0) return { average: null, honorsLabel: null, gradedSubjects: 0 };
+  const average = avg(grades);
+  const minGrade = Math.min(...grades);
+  return { average, honorsLabel: classifyAverage(average, minGrade, criteria), gradedSubjects: grades.length };
+}
+
+/** Subjects that at least one learner has been graded in for the given quarter. */
+export function getQuarterTrackedSubjects(matrix: GradeMatrix, quarterKey: string): Set<string> {
+  const tracked = new Set<string>();
+  const subjects = matrix[0]?.subjects ?? [];
+  subjects.forEach((subj, idx) => {
+    if (matrix.some(row => row.subjects[idx]?.quarters[quarterKey] != null)) tracked.add(subj.subjectName);
+  });
+  return tracked;
+}
+
+/** Quarter-complete: every tracked subject, including composite components, has a grade. */
+export function isQuarterComplete(row: StudentGradeRow, quarterKey: string, trackedSubjects: Set<string>): boolean {
+  return row.subjects.every(subj => {
+    if (!trackedSubjects.has(subj.subjectName)) return true;
+    if (subj.isLanguageGroup && subj.languageComponents?.length) {
+      return subj.languageComponents.every(c => subj.languageQuarters?.[c]?.[quarterKey] != null);
+    }
+    return subj.quarters[quarterKey] != null;
+  });
+}
+
 export function determinePromotion(row: StudentGradeRow, passingGrade: number, manualOverrides: Record<string, 'Promoted' | 'Retained'>): PromotionStatus {
   if (manualOverrides[row.lrn]) return manualOverrides[row.lrn];
+  if (row.subjects.length === 0) return 'To be Finalized';
+  // Missing subject/quarter grades must block a promotion decision.
+  if (row.subjects.some(s => s.finalGrade === null)) return 'To be Finalized';
   const allFinals = row.subjects.map(s => s.finalGrade).filter((g): g is number => g !== null);
   if (allFinals.length === 0) return 'To be Finalized';
   if (allFinals.some(g => g < passingGrade)) return 'To be Finalized';

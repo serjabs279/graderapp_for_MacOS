@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AdviserClass, GlobalSettings } from '../../types';
 import { GradeMatrix, StudentGradeRow, computeAttendanceSummary } from '../../utils/adviserUtils';
 import { getCalendar } from '../../calendar/academicCalendar';
+import { isAndroid } from '../../utils/platform';
 import {
   X,
   Printer,
@@ -49,6 +50,8 @@ export default function SF9PreviewModal({
   const observed = adviserClass.observedValues?.find((v) => v.studentLRN === currentStudent.lrn);
 
   const schoolName = globalSettings.schoolName || 'SAN ROQUE PARISH HIGH SCHOOL';
+  const region = adviserClass.region || globalSettings.region || '';
+  const division = adviserClass.division || globalSettings.division || '';
   const depedLogo = adviserClass.depedLogoBase64 || globalSettings.depedLogoBase64;
   const schoolLogo = adviserClass.schoolLogoBase64 || globalSettings.schoolLogoBase64;
   const isSHS = adviserClass.workspace === 'SHS';
@@ -66,82 +69,69 @@ export default function SF9PreviewModal({
 
   const currentStudentObj = adviserClass.students.find(s => s.lrn === currentStudent.lrn);
   const currentStudentTrack = currentStudentObj?.trackStrand || currentStudent.trackStrand || adviserClass.trackStrand || 'SHS';
+  const hasAnySubjectGrade = currentStudent.subjects.some(
+    s => Object.values(s.quarters).some(v => v !== null && v !== undefined)
+  );
 
   const handlePrint = () => {
+    if (isAndroid()) {
+      onDownloadPDF();
+      return;
+    }
     window.print();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-6xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[96vh] overflow-hidden">
+    <div className="ui-dialog-overlay">
+      <div role="dialog" aria-modal="true" aria-label="SF-9 report card preview" className="ui-dialog max-w-6xl">
         
         {/* ── Toolbar Header ── */}
-        <div className="p-3 sm:px-6 bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm sm:text-base leading-tight">
-                  SF-9 Report Card Preview
-                </h3>
-                <span className="text-[11px] bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded-full">
-                  HTML View
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {currentStudent.name} <span className="font-mono text-[11px]">({currentStudent.lrn})</span>
+        <div className="ui-dialog-header flex-col items-stretch">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="ui-section-title flex items-center gap-2">
+                <FileText className="size-5 shrink-0 text-amber-600" /> SF-9 report card preview
+              </h3>
+              <p className="ui-description mt-1 break-words">
+                {currentStudent.name} <span className="tabular-nums">({currentStudent.lrn})</span>
               </p>
             </div>
+            <button onClick={onClose} className="ui-icon-button" aria-label="Close report card preview">
+              <X className="size-5" />
+            </button>
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2 ml-auto sm:ml-0">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Sheet Selector (Cover vs Inside) */}
-            <div className="flex items-center bg-slate-200/70 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-semibold">
+            <div className="adviser-periods border-b-0 pb-0">
               <button
                 onClick={() => setActiveSheet('inside')}
-                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                  activeSheet === 'inside'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
+                aria-pressed={activeSheet === 'inside'}
+                className="adviser-period flex items-center gap-2 whitespace-normal text-left"
               >
-                <Layers className="w-3.5 h-3.5" /> Inside (Grades & Values)
+                <Layers className="size-4 shrink-0" /> Inside (Grades & Values)
               </button>
               <button
                 onClick={() => setActiveSheet('cover')}
-                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                  activeSheet === 'cover'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
+                aria-pressed={activeSheet === 'cover'}
+                className="adviser-period flex items-center gap-2 whitespace-normal text-left"
               >
-                <FileText className="w-3.5 h-3.5" /> Cover & Attendance
+                <FileText className="size-4 shrink-0" /> Cover & Attendance
               </button>
             </div>
-
-            <button
-              onClick={onDownloadPDF}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
-              title="Save as official PDF"
-            >
-              <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span> PDF
-            </button>
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition cursor-pointer"
-              title="Print"
-            >
-              <Printer className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={onDownloadPDF}
+                className="adviser-button-primary"
+                title="Save as official PDF"
+              >
+                <Download className="size-4" /> Download PDF
+              </button>
+              <button onClick={handlePrint} className="adviser-button" title="Print">
+                <Printer className="size-4" /> Print
+              </button>
+            </div>
           </div>
         </div>
 
@@ -208,8 +198,9 @@ export default function SF9PreviewModal({
                         </thead>
                         <tbody>
                           {currentStudent.subjects.map((subj, idx) => {
+                            const hasAnyQuarterGrade = Object.values(subj.quarters).some(v => v !== null && v !== undefined);
                             const remarks = subj.finalGrade === null
-                              ? ''
+                              ? (hasAnyQuarterGrade ? 'Incomplete' : '')
                               : (subj.finalGrade >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
                             return (
                               <React.Fragment key={idx}>
@@ -233,7 +224,7 @@ export default function SF9PreviewModal({
                                     {subj.finalGrade ?? ''}
                                   </td>
                                   <td className={`border border-slate-300 text-center text-[10px] font-bold py-1 ${
-                                    remarks === 'Passed' ? 'text-emerald-700' : remarks === 'Failed' ? 'text-rose-700' : ''
+                                    remarks === 'Passed' ? 'text-emerald-700' : remarks === 'Failed' ? 'text-rose-700' : remarks === 'Incomplete' ? 'text-amber-600' : ''
                                   }`}>
                                     {remarks}
                                   </td>
@@ -247,12 +238,14 @@ export default function SF9PreviewModal({
                                     const q2 = compQ[quarters[1] as string] ?? null;
                                     const q3 = compQ[quarters[2] as string] ?? null;
                                     const q4 = compQ[quarters[3] as string] ?? null;
-                                    const valid = [q1, q2, q3, q4].filter((g): g is number => g !== null && !isNaN(g));
-                                    const cFinal = valid.length > 0
-                                      ? Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 100) / 100
+                                    const compGrades = [q1, q2, q3, q4];
+                                    const compComplete = compGrades.every((g) => g !== null && !isNaN(g));
+                                    const compTotal = compGrades.reduce((sum: number, g) => sum + (g ?? 0), 0);
+                                    const cFinal = compComplete
+                                      ? Math.round((compTotal / 4) * 100) / 100
                                       : null;
                                     const cRemarks = cFinal === null
-                                      ? ''
+                                      ? (compGrades.some((g) => g !== null && !isNaN(g)) ? 'Incomplete' : '')
                                       : (cFinal >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
 
                                     return (
@@ -278,12 +271,16 @@ export default function SF9PreviewModal({
                             <td className="border border-slate-400 px-2 py-1.5 uppercase">General Average</td>
                             <td className="border border-slate-400" colSpan={4}></td>
                             <td className="border border-slate-400 text-center py-1.5 text-xs text-amber-700">
-                              {currentStudent.generalAverage ?? ''}
+                              {currentStudent.generalAverage ?? (hasAnySubjectGrade ? 'Incomplete' : '')}
                             </td>
                             <td className={`border border-slate-400 text-center py-1.5 text-[10px] ${
-                              currentStudent.promotionStatus === 'Promoted' ? 'text-emerald-700' : 'text-rose-700'
+                              currentStudent.promotionStatus === 'Promoted' ? 'text-emerald-700' : currentStudent.promotionStatus === 'Retained' ? 'text-rose-700' : 'text-amber-600'
                             }`}>
-                              {currentStudent.promotionStatus === 'Promoted' ? 'Passed' : (currentStudent.promotionStatus === 'Retained' ? 'Failed' : '')}
+                              {currentStudent.promotionStatus === 'Promoted'
+                                ? 'Passed'
+                                : (currentStudent.promotionStatus === 'Retained'
+                                  ? 'Failed'
+                                  : (hasAnySubjectGrade ? 'Incomplete' : ''))}
                             </td>
                           </tr>
                         </tbody>
@@ -311,9 +308,13 @@ export default function SF9PreviewModal({
                               .map((subj, idx) => {
                                 const q1 = subj.quarters[quarters[0] as string];
                                 const q2 = subj.quarters[quarters[1] as string];
-                                const vals = [q1, q2].filter((g): g is number => g !== null);
-                                const f = vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
-                                const rem = f === null ? '' : (f >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
+                                // A semester final needs both quarters; one quarter is incomplete.
+                                const f = q1 !== null && q1 !== undefined && q2 !== null && q2 !== undefined
+                                  ? Math.round((q1 + q2) / 2)
+                                  : null;
+                                const rem = f === null
+                                  ? ((q1 !== null && q1 !== undefined) || (q2 !== null && q2 !== undefined) ? 'Incomplete' : '')
+                                  : (f >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
                                 return (
                                   <tr key={idx}>
                                     <td className="border border-slate-300 px-2 py-1 font-semibold">{subj.subjectName}</td>
@@ -347,9 +348,12 @@ export default function SF9PreviewModal({
                               .map((subj, idx) => {
                                 const q3 = subj.quarters[quarters[2] as string];
                                 const q4 = subj.quarters[quarters[3] as string];
-                                const vals = [q3, q4].filter((g): g is number => g !== null);
-                                const f = vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
-                                const rem = f === null ? '' : (f >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
+                                const f = q3 !== null && q3 !== undefined && q4 !== null && q4 !== undefined
+                                  ? Math.round((q3 + q4) / 2)
+                                  : null;
+                                const rem = f === null
+                                  ? ((q3 !== null && q3 !== undefined) || (q4 !== null && q4 !== undefined) ? 'Incomplete' : '')
+                                  : (f >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
                                 return (
                                   <tr key={idx}>
                                     <td className="border border-slate-300 px-2 py-1 font-semibold">{subj.subjectName}</td>
@@ -559,7 +563,8 @@ export default function SF9PreviewModal({
                     <div className="flex-1">
                       <p className="text-[10px] text-slate-600 uppercase font-semibold">Republic of the Philippines</p>
                       <p className="text-[11px] font-bold text-slate-800 uppercase">Department of Education</p>
-                      <p className="text-[10px] text-slate-600">Region X Northern Mindanao</p>
+                      {region && <p className="text-[10px] text-slate-600">{region}</p>}
+                      {division && <p className="text-[10px] text-slate-600">{division}</p>}
                       <h4 className="text-xs font-black uppercase text-slate-900 mt-0.5">{schoolName}</h4>
                     </div>
                     <div className="w-12 h-12 flex items-center justify-center shrink-0">

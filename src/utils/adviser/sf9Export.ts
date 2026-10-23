@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import { getCalendar, getFirstPeriod } from '../../calendar/academicCalendar';
 import autoTable from 'jspdf-autotable';
 import { AdviserClass, GlobalSettings } from '../../types';
-import { GradeMatrix, computeAttendanceSummary } from '../adviserUtils';
+import { GradeMatrix, calculateAge, computeAttendanceSummary } from '../adviserUtils';
 
 export function generateSF9(
   adviserClass: AdviserClass,
@@ -19,6 +19,9 @@ export function generateSF9(
   if (students.length === 0) return doc;
 
   const schoolName = globalSettings.schoolName;
+  const region = adviserClass.region || globalSettings.region || '';
+  const division = adviserClass.division || globalSettings.division || '';
+  const district = adviserClass.district || globalSettings.district || '';
 
   students.forEach((student, idx) => {
     if (idx > 0) doc.addPage();
@@ -212,14 +215,16 @@ export function generateSF9(
     doc.text("Department of Education", rx + 64, 15, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text("Region X Northern Mindanao", rx + 64, 19, { align: 'center' });
-    doc.text("Schools Division Office of Misamis Oriental", rx + 64, 23, { align: 'center' });
+    if (region) doc.text(region, rx + 64, 19, { align: 'center' });
+    if (division) doc.text(division, rx + 64, 23, { align: 'center' });
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.text(schoolName.toUpperCase(), rx + 64, 28, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text("Bacoy St. Poblacion, Magsaysay, Misamis Oriental", rx + 64, 32, { align: 'center' });
+    if (district) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.text(district, rx + 64, 32, { align: 'center' });
+    }
 
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.4);
@@ -259,7 +264,9 @@ export function generateSF9(
       // Grade 7 -> 13, Grade 8 -> 14, Grade 9 -> 15, Grade 10 -> 16, Grade 11 -> 17, Grade 12 -> 18
       return num >= 7 && num <= 12 ? num + 6 : 16;
     };
-    const displayAge = student.age && student.age > 0 ? student.age : defaultAgeByGrade(adviserClass.gradeLevel);
+    const displayAge = student.age && student.age > 0
+      ? student.age
+      : calculateAge(student.birthdate) ?? defaultAgeByGrade(adviserClass.gradeLevel);
 
     bioY += 6;
     doc.setFont('helvetica', 'normal');
@@ -371,8 +378,15 @@ export function generateSF9(
       const bodyRows: any[][] = [];
       const subRowIndices = new Set<number>();
 
+      const hasAnySubjectGrade = student.subjects.some(
+        s => Object.values(s.quarters).some(v => v !== null && v !== undefined)
+      );
+
       student.subjects.forEach(subj => {
-        const remarks = subj.finalGrade === null ? '' : (subj.finalGrade >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
+        const hasAnyQuarterGrade = Object.values(subj.quarters).some(v => v !== null && v !== undefined);
+        const remarks = subj.finalGrade === null
+          ? (hasAnyQuarterGrade ? 'Incomplete' : '')
+          : (subj.finalGrade >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
         const parentRowIndex = bodyRows.length;
         bodyRows.push([
           subj.subjectName,
@@ -393,11 +407,15 @@ export function generateSF9(
             const q3 = compQuarters[getCalendar().periods[2]?.id as string] ?? null;
             const q4 = compQuarters[getCalendar().periods[3]?.id as string] ?? null;
 
-            const validGrades = [q1, q2, q3, q4].filter((g): g is number => g !== null && !isNaN(g));
-            const compFinal = validGrades.length > 0
-              ? Math.round((validGrades.reduce((a, b) => a + b, 0) / validGrades.length) * 100) / 100
+            const compGrades = [q1, q2, q3, q4];
+            const compComplete = compGrades.every((g) => g !== null && !isNaN(g));
+            const compTotal = compGrades.reduce((sum: number, g) => sum + (g ?? 0), 0);
+            const compFinal = compComplete
+              ? Math.round((compTotal / 4) * 100) / 100
               : null;
-            const compRemarks = compFinal === null ? '' : (compFinal >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
+            const compRemarks = compFinal === null
+              ? (compGrades.some((g) => g !== null && !isNaN(g)) ? 'Incomplete' : '')
+              : (compFinal >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
 
             subRowIndices.add(bodyRows.length);
             bodyRows.push([
@@ -418,8 +436,10 @@ export function generateSF9(
       bodyRows.push([
         'General Average',
         '', '', '', '',
-        student.generalAverage ?? '',
-        student.promotionStatus === 'Promoted' ? 'Passed' : (student.promotionStatus === 'Retained' ? 'Failed' : '')
+        student.generalAverage ?? (hasAnySubjectGrade ? 'Incomplete' : ''),
+        student.promotionStatus === 'Promoted'
+          ? 'Passed'
+          : (student.promotionStatus === 'Retained' ? 'Failed' : (hasAnySubjectGrade ? 'Incomplete' : ''))
       ]);
 
       autoTable(doc, {
@@ -478,9 +498,12 @@ export function generateSF9(
         // Average of Q1 and Q2
         const q1 = subj.quarters[getCalendar().periods[0]?.id as string];
         const q2 = subj.quarters[getCalendar().periods[1]?.id as string];
-        const vals = [q1, q2].filter((g): g is number => g !== null);
-        const finalGrade = vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
-        const remarks = finalGrade === null ? '' : (finalGrade >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
+        const finalGrade = q1 !== null && q1 !== undefined && q2 !== null && q2 !== undefined
+          ? Math.round((q1 + q2) / 2)
+          : null;
+        const remarks = finalGrade === null
+          ? ((q1 !== null && q1 !== undefined) || (q2 !== null && q2 !== undefined) ? 'Incomplete' : '')
+          : (finalGrade >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
         return [
           subj.subjectName,
           q1 ?? '',
@@ -490,14 +513,17 @@ export function generateSF9(
         ];
       });
 
-      // Calculate Sem 1 General Average
+      // Calculate Sem 1 General Average — only when every semester subject is complete
+      const sem1Incomplete = sem1Subjects.length > 0 && sem1Body.some(row => row[3] === '');
       const sem1Grades = sem1Body.map(row => Number(row[3])).filter(g => !isNaN(g) && g > 0);
-      const sem1Avg = sem1Grades.length > 0 ? Math.round(sem1Grades.reduce((a, b) => a + b, 0) / sem1Grades.length) : '';
+      const sem1Avg = !sem1Incomplete && sem1Grades.length > 0
+        ? Math.round(sem1Grades.reduce((a, b) => a + b, 0) / sem1Grades.length)
+        : '';
       sem1Body.push([
         'General Average for the Semester',
         '', '',
         sem1Avg,
-        sem1Avg ? (Number(sem1Avg) >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed') : ''
+        sem1Incomplete ? 'Incomplete' : (sem1Avg ? (Number(sem1Avg) >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed') : '')
       ]);
 
       const t1 = autoTable(doc, {
@@ -536,9 +562,12 @@ export function generateSF9(
         // Average of Q3 and Q4
         const q3 = subj.quarters[getCalendar().periods[2]?.id as string];
         const q4 = subj.quarters[getCalendar().periods[3]?.id as string];
-        const vals = [q3, q4].filter((g): g is number => g !== null);
-        const finalGrade = vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
-        const remarks = finalGrade === null ? '' : (finalGrade >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
+        const finalGrade = q3 !== null && q3 !== undefined && q4 !== null && q4 !== undefined
+          ? Math.round((q3 + q4) / 2)
+          : null;
+        const remarks = finalGrade === null
+          ? ((q3 !== null && q3 !== undefined) || (q4 !== null && q4 !== undefined) ? 'Incomplete' : '')
+          : (finalGrade >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed');
         return [
           subj.subjectName,
           q3 ?? '',
@@ -548,14 +577,17 @@ export function generateSF9(
         ];
       });
 
-      // Calculate Sem 2 General Average
+      // Calculate Sem 2 General Average — only when every semester subject is complete
+      const sem2Incomplete = sem2Subjects.length > 0 && sem2Body.some(row => row[3] === '');
       const sem2Grades = sem2Body.map(row => Number(row[3])).filter(g => !isNaN(g) && g > 0);
-      const sem2Avg = sem2Grades.length > 0 ? Math.round(sem2Grades.reduce((a, b) => a + b, 0) / sem2Grades.length) : '';
+      const sem2Avg = !sem2Incomplete && sem2Grades.length > 0
+        ? Math.round(sem2Grades.reduce((a, b) => a + b, 0) / sem2Grades.length)
+        : '';
       sem2Body.push([
         'General Average for the Semester',
         '', '',
         sem2Avg,
-        sem2Avg ? (Number(sem2Avg) >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed') : ''
+        sem2Incomplete ? 'Incomplete' : (sem2Avg ? (Number(sem2Avg) >= adviserClass.promotionPassingGrade ? 'Passed' : 'Failed') : '')
       ]);
 
       autoTable(doc, {
@@ -664,7 +696,7 @@ export function generateSF9(
       ['Outstanding', '90 - 100', 'Passed'],
       ['Very Satisfactory', '85 - 89', 'Passed'],
       ['Satisfactory', '80 - 84', 'Passed'],
-      ['Fairly Satisfactory', '75 - 74', 'Passed'],
+      ['Fairly Satisfactory', '75 - 79', 'Passed'],
       ['Did Not Meet Expectation', 'Below 75', 'Failed']
     ];
 

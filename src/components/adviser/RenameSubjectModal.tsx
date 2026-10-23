@@ -38,43 +38,43 @@ export default function RenameSubjectModal({ adviserClass, subjectName, onClose 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+    <div className="ui-dialog-overlay">
+      <div role="dialog" aria-modal="true" aria-label="Rename subject" className="ui-dialog max-w-md">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4.5 border-b border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
+        <div className="ui-dialog-header">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400">
               <Edit3 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+              <h3 className="text-base font-medium text-slate-800 dark:text-slate-100 text-balance">
                 Rename Subject
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-slate-500 dark:text-slate-400 text-pretty">
                 Updates everywhere (Grade Matrix, SF-9, and subject records)
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="adviser-button"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSave} className="p-6 space-y-4">
+        <form onSubmit={handleSave} className="ui-dialog-body space-y-4">
           {error && (
-            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400 text-xs font-medium">
+            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400 text-sm font-medium">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <label className="ui-label">
               Current Subject Name
             </label>
             <div className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold">
@@ -83,7 +83,7 @@ export default function RenameSubjectModal({ adviserClass, subjectName, onClose 
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            <label className="ui-label">
               New Subject Name <span className="text-amber-500">*</span>
             </label>
             <input
@@ -95,26 +95,26 @@ export default function RenameSubjectModal({ adviserClass, subjectName, onClose 
               }}
               placeholder="e.g. Science, Oral Communication, General Mathematics"
               autoFocus
-              className="w-full px-3.5 py-2.5 text-sm bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold"
+              className="ui-field"
             />
           </div>
 
-          <p className="text-xs text-slate-500 dark:text-slate-400 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 p-3 rounded-xl">
+          <p className="text-sm text-slate-500 dark:text-slate-400 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 p-3 rounded-xl text-pretty">
             💡 Renaming will preserve all imported scores, quarter grades, and locks under this new subject title.
           </p>
 
           {/* Footer Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-150 dark:border-slate-800">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+              className="adviser-button"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 active:bg-amber-800 rounded-xl shadow-xs transition-colors cursor-pointer"
+              className="adviser-button-primary"
             >
               <Check className="w-4 h-4" /> Save New Name
             </button>

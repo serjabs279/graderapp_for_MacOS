@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Keep release signing credentials out of version control.
+keystore.properties

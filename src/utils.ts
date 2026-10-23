@@ -47,6 +47,16 @@ export function transmuteGrade(initialGrade: number): number {
   return 60;
 }
 
+/**
+ * MATATAG adjusted transmutation applies starting SY 2027-2028.
+ * Earlier school years keep the 0-based DO 8 s. 2015 table.
+ */
+export function getDefaultDepedPolicy(schoolYear?: string): '2015' | '2027' {
+  const match = (schoolYear || '').match(/(\d{4})\s*-\s*(\d{4})/);
+  const startYear = match ? parseInt(match[1], 10) : NaN;
+  return Number.isFinite(startYear) && startYear >= 2027 ? '2027' : '2015';
+}
+
 // DepEd MATATAG SY 2027-2028 Adjusted Transmutation Table (Table 4. Adjusted Transmutation Table)
 export function transmuteGrade2027(initialGrade: number): number {
   const rounded = Math.round(initialGrade * 100) / 100;

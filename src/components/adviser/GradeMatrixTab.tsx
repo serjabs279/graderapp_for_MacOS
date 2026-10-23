@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AdviserClass } from '../../types';
-import { GradeMatrix, StudentGradeRow, getQuarterKeys, computeAttendanceSummary } from '../../utils/adviserUtils';
-import { TableProperties, Printer, Edit3, Check, X, AlertCircle, Eye, Download } from 'lucide-react';
+import { GradeMatrix, StudentGradeRow, getQuarterKeys, computeAttendanceSummary, computeSubjectFinal } from '../../utils/adviserUtils';
+import { Edit3, Check, X, AlertCircle, Eye, Download } from 'lucide-react';
 import StudentGradesModal from './StudentGradesModal';
 import RenameSubjectModal from './RenameSubjectModal';
 import { globalToast } from '../../context/ToastContext';
@@ -16,7 +16,19 @@ interface Props {
 export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
   const { overrideStudentGrade, globalSettings } = useApp();
   const quarterKeys = getQuarterKeys(adviserClass.workspace);
-  const [activeQuarter, setActiveQuarter] = useState<string>('Final');
+
+  // Final grades stay null until every quarter is imported, so open on the
+  // latest quarter that actually has data instead of an all-blank Final view.
+  const latestQuarterWithData = [...quarterKeys].reverse().find(qk =>
+    gradeMatrix.some(row => row.subjects.some(s => s.quarters[qk] !== null))
+  );
+  const hasPartialData = gradeMatrix.some(row =>
+    row.subjects.some(s => s.finalGrade === null && quarterKeys.some(qk => s.quarters[qk] !== null))
+  );
+
+  const [activeQuarter, setActiveQuarter] = useState<string>(
+    hasPartialData && latestQuarterWithData ? latestQuarterWithData : 'Final'
+  );
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
   // Student grades view modal
@@ -120,13 +132,11 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
   };
 
   return (
-    <div className="p-8 space-y-6 max-w-[1400px] mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="adviser-page">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <TableProperties className="h-5 w-5 text-amber-500" /> Class Performance Matrix
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Consolidated view of official grades. Click any cell during active quarter views to manually override grades.</p>
+          <h2 className="adviser-heading">Grade matrix</h2>
+          <p className="adviser-description">Review grades by quarter. Select a learner to see their record, or a grade to make a correction.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -143,21 +153,30 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
               }
             }}
             disabled={isExporting || gradeMatrix.length === 0}
-            className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+            className="adviser-button-primary"
             title="Export consolidated grades and attendance as JSON for SF-10 generator"
           >
-            <Download className="h-3.5 w-3.5" />
-            <span>{isExporting ? 'Exporting...' : 'Export Matrix JSON (for SF-10)'}</span>
+            <Download className="size-4" aria-hidden="true" />
+            <span>{isExporting ? 'Exporting...' : 'Export for SF-10'}</span>
           </button>
         </div>
       </div>
 
-      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
+      {activeQuarter === 'Final' && hasPartialData && (
+        <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl">
+          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 leading-relaxed">
+            Some subjects are only partially graded, so their final grades show as — until every quarter is imported.
+            The imported grades are available under the quarter tabs above.
+          </p>
+        </div>
+      )}
+
+      <div className="adviser-periods" role="group" aria-label="Grading period">
         <button
           onClick={() => setActiveQuarter('Final')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-            activeQuarter === 'Final' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
+          aria-pressed={activeQuarter === 'Final'}
+          className="adviser-period"
         >
           Final Grades
         </button>
@@ -165,43 +184,41 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
           <button
             key={q}
             onClick={() => setActiveQuarter(q)}
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-              activeQuarter === q ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
+            aria-pressed={activeQuarter === q}
+            className="adviser-period"
           >
             {q}
           </button>
         ))}
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+      <div className="adviser-panel">
+        <div className="overflow-x-auto" role="region" aria-label="Grade matrix table" tabIndex={0}>
+          <table className="w-full min-w-3xl text-left border-collapse text-sm">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
-                <th className="px-4 py-3 font-bold text-slate-500 sticky left-0 bg-slate-50 dark:bg-slate-950 z-10 w-8 text-center border-r border-slate-200 dark:border-slate-800">No.</th>
-                <th className="px-4 py-3 font-bold text-slate-500 sticky left-8 bg-slate-50 dark:bg-slate-950 z-10 min-w-[200px] border-r border-slate-200 dark:border-slate-800">Learner Name</th>
+                <th scope="col" className="px-3 py-3 font-medium text-slate-500 dark:text-slate-400 w-12 text-center border-r border-slate-200 dark:border-slate-800">No.</th>
+                <th scope="col" className="px-4 py-3 font-medium text-slate-500 dark:text-slate-400 sm:sticky sm:left-0 bg-slate-50 dark:bg-slate-950 z-10 min-w-64 border-r border-slate-200 dark:border-slate-800">Learner Name</th>
                 
                 {columns.map((col, cIdx) => (
-                  <th key={cIdx} className={`px-3 py-3 text-center min-w-[90px] border-r border-slate-200 dark:border-slate-800 group/hdr ${
-                    col.isComposite && col.isMain ? 'font-black text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30' : 'font-bold text-slate-700 dark:text-slate-300'
-                  }`}>
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="truncate max-w-[80px]" title={col.label}>{col.label}</div>
+                  <th key={cIdx} scope="col" className="min-w-28 border-r border-slate-200 px-3 py-3 text-center font-medium text-slate-600 dark:border-slate-800 dark:text-slate-400">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>{col.label}</span>
                       {col.isMain && (
                         <button
                           onClick={() => setRenamingSubject(col.label)}
                           title={`Rename subject "${col.label}"`}
-                          className="opacity-0 group-hover/hdr:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
+                          aria-label={`Rename subject "${col.label}"`}
+                          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                         >
-                          <Edit3 className="w-2.5 h-2.5" />
+                          <Edit3 className="size-3.5" aria-hidden="true" />
                         </button>
                       )}
                     </div>
                   </th>
                 ))}
 
-                <th className="px-4 py-3 font-black text-amber-700 dark:text-amber-500 text-center bg-amber-50 dark:bg-amber-950/30 border-r border-slate-200 dark:border-slate-800 min-w-[80px]">GEN AVG</th>
+                <th scope="col" className="px-4 py-3 text-center font-semibold text-amber-800 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-r border-slate-200 dark:border-slate-800 min-w-[80px]">General average</th>
                 
                 {activeQuarter === 'Final' && (
                   <>
@@ -233,19 +250,19 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
                 
                 return (
                   <tr key={row.lrn} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors ${isRetained && activeQuarter === 'Final' ? 'bg-red-50/30 dark:bg-red-900/10' : ''}`}>
-                    <td className="px-4 py-2.5 text-center text-slate-400 font-mono sticky left-0 bg-white dark:bg-slate-900 z-10 border-r border-slate-100 dark:border-slate-800">
+                    <td className="px-3 py-2.5 text-center text-slate-500 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
                       {idx + 1}
                     </td>
-                    <td className={`px-4 py-2.5 font-bold sticky left-8 bg-white dark:bg-slate-900 z-10 border-r border-slate-100 dark:border-slate-800 group/name ${isRetained && activeQuarter === 'Final' ? 'text-red-700 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                    <td className={`px-4 py-2.5 font-medium sm:sticky sm:left-0 bg-white dark:bg-slate-900 z-10 border-r border-slate-100 dark:border-slate-800 ${isRetained && activeQuarter === 'Final' ? 'text-red-700 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>
                       <button
                         onClick={() => setViewingStudent(row)}
-                        className="flex items-start gap-1 text-left w-full cursor-pointer hover:underline decoration-amber-400"
+                        className="flex min-h-8 items-center gap-2 text-left w-full cursor-pointer hover:underline decoration-amber-400"
                         title={`View ${row.name}'s grades`}
                       >
-                        <span className="truncate">{row.name}</span>
-                        <Eye className="w-3 h-3 mt-0.5 shrink-0 opacity-0 group-hover/name:opacity-100 transition-opacity text-amber-500" />
+                        <span>{row.name}</span>
+                        <Eye className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
                       </button>
-                      <div className="text-[9px] font-mono font-normal text-slate-400">{row.lrn}</div>
+                      <div className="text-xs font-normal text-slate-500 dark:text-slate-400">{row.lrn}</div>
                     </td>
 
                     {row.subjects.map((subj, sIdx) => {
@@ -255,8 +272,9 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
                             {subj.languageComponents.map((comp, cIdx) => {
                               let compGrade = null;
                               if (activeQuarter === 'Final') {
-                                const qGrades = Object.values(subj.languageQuarters?.[comp] || {}).filter(g => g !== null) as number[];
-                                compGrade = qGrades.length > 0 ? Math.round((qGrades.reduce((a,b)=>a+b,0)/qGrades.length)*100)/100 : null;
+                                // Component finals follow the same completeness rule as the composite,
+                                // so a partial subject never shows an average pretending to be a final.
+                                compGrade = computeSubjectFinal(subj.languageQuarters?.[comp] || {}, adviserClass.workspace);
                               } else {
                                 compGrade = subj.languageQuarters?.[comp]?.[activeQuarter] ?? null;
                               }
@@ -273,7 +291,7 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
                                 </td>
                               );
                             })}
-                            <td className="px-3 py-2.5 text-center font-mono font-black border-r border-blue-100 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400">
+                            <td className="px-3 py-2.5 text-center font-semibold border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 text-slate-800 dark:text-slate-200">
                               {activeQuarter === 'Final' ? subj.finalGrade ?? '—' : subj.quarters[activeQuarter] ?? '—'}
                             </td>
                           </React.Fragment>
@@ -297,7 +315,7 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
                       }
                     })}
 
-                    <td className={`px-4 py-2.5 text-center font-mono font-black border-r border-slate-100 dark:border-slate-800 bg-amber-50/30 dark:bg-amber-950/10 ${
+                    <td className={`px-4 py-2.5 text-center font-mono font-semibold tabular-nums border-r border-slate-100 dark:border-slate-800 bg-amber-50/30 dark:bg-amber-950/10 ${
                       genAvgToDisplay === null ? 'text-slate-300' :
                       (genAvgToDisplay < adviserClass.promotionPassingGrade ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-500')
                     }`}>
@@ -306,17 +324,17 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
 
                     {activeQuarter === 'Final' && (
                       <>
-                        <td className="px-4 py-2.5 text-center font-mono text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
+                        <td className="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
                           {row.rank ?? '—'}
                         </td>
-                        <td className="px-4 py-2.5 font-bold text-amber-600 dark:text-amber-400 text-[11px] uppercase tracking-wide border-r border-slate-100 dark:border-slate-800">
+                        <td className="px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400 border-r border-slate-100 dark:border-slate-800">
                           {row.honorsLabel}
                         </td>
                         <td className="px-4 py-2.5 border-r border-slate-100 dark:border-slate-800">
-                           <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                             row.promotionStatus === 'Promoted' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-450' :
-                             row.promotionStatus === 'Retained' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-450' :
-                             'bg-slate-100 text-slate-650 dark:bg-slate-800 dark:text-slate-400'
+                           <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${
+                             row.promotionStatus === 'Promoted' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400' :
+                             row.promotionStatus === 'Retained' ? 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400' :
+                             'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                            }`}>
                              {row.promotionStatus}
                            </span>
@@ -336,90 +354,81 @@ export default function GradeMatrixTab({ adviserClass, gradeMatrix }: Props) {
 
       {/* Manual Grade Override Modal */}
       {editingCell && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md flex flex-col shadow-2xl overflow-hidden">
-            
-            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
-              <h3 className="font-sans font-black text-sm text-slate-850 dark:text-slate-200 uppercase tracking-wider">
-                Manual Grade Override
-              </h3>
-              <button onClick={() => setEditingCell(null)} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-450 transition-colors">
-                <X className="h-5 w-5" />
+        <div className="ui-dialog-overlay">
+          <div role="dialog" aria-modal="true" aria-label="Manual grade override" className="ui-dialog max-w-md">
+            <div className="ui-dialog-header">
+              <h3 className="ui-section-title">Manual Grade Override</h3>
+              <button type="button" onClick={() => setEditingCell(null)} aria-label="Close override dialog" className="ui-icon-button">
+                <X className="size-5" aria-hidden="true" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="ui-dialog-body space-y-4">
               {modalError && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-2.5 text-xs text-red-800 dark:text-red-400 font-semibold">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{modalError}</span>
+                <div role="alert" className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+                  <AlertCircle className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-pretty">{modalError}</span>
                 </div>
               )}
 
-              <div className="space-y-1">
-                <div className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Student Name</div>
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">{editingCell.studentName}</div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Subject & Period</div>
-                <div className="text-xs font-bold text-slate-850 dark:text-slate-250">
-                  {editingCell.subjectName} • {editingCell.quarterKey}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="ui-label">Student</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{editingCell.studentName}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="ui-label">Subject &amp; period</p>
+                  <p className="text-sm text-slate-900 dark:text-slate-100">
+                    {editingCell.subjectName} • {editingCell.quarterKey}
+                  </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] text-slate-450 dark:text-slate-500 uppercase font-black tracking-wider">Current Grade</label>
-                  <div className="bg-slate-50 dark:bg-slate-950 border border-transparent rounded-xl px-3 py-2 text-xs font-mono font-black text-slate-450">
+                  <label htmlFor="override-current-grade" className="ui-label">Current grade</label>
+                  <output id="override-current-grade" className="ui-field flex items-center bg-slate-50 font-mono tabular-nums text-slate-500 dark:bg-slate-950 dark:text-slate-400">
                     {editingCell.currentGrade || '—'}
-                  </div>
+                  </output>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] text-slate-450 dark:text-slate-500 uppercase font-black tracking-wider">New Grade</label>
+                  <label htmlFor="override-new-grade" className="ui-label">New grade</label>
                   <input
+                    id="override-new-grade"
                     type="number"
                     min={0}
                     max={100}
                     value={overrideValue}
                     onChange={e => setOverrideValue(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-black focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="ui-field font-mono tabular-nums"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] text-slate-455 dark:text-slate-500 uppercase font-black tracking-wider">
-                  Override Reason <span className="text-red-500">*</span>
+                <label htmlFor="override-reason" className="ui-label">
+                  Override reason <span className="text-red-600 dark:text-red-400">*</span>
                 </label>
                 <textarea
+                  id="override-reason"
                   value={overrideReason}
                   onChange={e => setOverrideReason(e.target.value)}
                   placeholder="e.g., Incorrect raw grade imported / Late enrollee assessment adjustment"
                   rows={3}
-                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold"
+                  className="ui-field"
                 />
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/40 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-end gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => setEditingCell(null)}
-                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200 text-xs font-black rounded-xl cursor-pointer"
-              >
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setEditingCell(null)} className="ui-button">
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={handleSaveOverride}
-                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-sm flex items-center gap-1.5"
-              >
-                <Check className="h-4 w-4" /> Save Override
+              <button type="button" onClick={handleSaveOverride} className="ui-button ui-button-primary">
+                <Check className="size-4" aria-hidden="true" /> Save override
               </button>
             </div>
-
           </div>
         </div>
       )}

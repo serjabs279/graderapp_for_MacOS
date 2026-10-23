@@ -1,16 +1,17 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { globalToast } from '../context/ToastContext';
-import { SubjectType, ArchiveFile, ArchiveValidationResult, ARCHIVE_VERSION } from '../types';
-import { 
-  Building2, 
-  RotateCcw, 
-  Database, 
-  FileCode, 
-  Upload, 
-  BookOpen, 
-  GraduationCap, 
-  ShieldCheck, 
+import { SubjectType, ArchiveFile, APP_VERSION } from '../types';
+import { validateArchive } from '../utils/archiveValidation';
+import {
+  Building2,
+  RotateCcw,
+  Database,
+  FileCode,
+  Upload,
+  BookOpen,
+  GraduationCap,
+  ShieldCheck,
   AlertTriangle,
   Download,
   CheckCircle,
@@ -26,13 +27,14 @@ import {
   Link
 } from 'lucide-react';
 import DevErrorLogModal from './DevErrorLogModal';
+import DangerConfirmModal, { TypeToConfirmField } from './DangerConfirmModal';
 import { errorLogger } from '../utils/errorLogger';
 import { exportFile } from '../utils/fileExportAdapter';
 
 export default function SettingsView() {
-  const { 
-    globalSettings, 
-    updateGlobalSettings, 
+  const {
+    globalSettings,
+    updateGlobalSettings,
     resetDatabase,
     backupData,
     restoreData,
@@ -46,6 +48,7 @@ export default function SettingsView() {
 
   const [schoolName, setSchoolName] = useState(globalSettings.schoolName);
   const [teacherName, setTeacherName] = useState(globalSettings.teacherName);
+  const [principalName, setPrincipalName] = useState(globalSettings.principalName || '');
   const [defaultPassingGrade, setDefaultPassingGrade] = useState(globalSettings.defaultPassingGrade);
   const [theme, setTheme] = useState(globalSettings.theme);
   const [language, setLanguage] = useState(globalSettings.language);
@@ -70,12 +73,17 @@ export default function SettingsView() {
   const [rolloverCalendar, setRolloverCalendar] = useState<'Quarter' | 'Trimester'>('Quarter');
   const [rolloverError, setRolloverError] = useState<string | null>(null);
   const [backupDownloaded, setBackupDownloaded] = useState(false);
+  const [showRolloverConfirm, setShowRolloverConfirm] = useState(false);
+
+  // Database reset gate
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Archive Restore States
   const [pendingArchive, setPendingArchive] = useState<ArchiveFile | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreSuccess, setRestoreSuccess] = useState(false);
+  const [restoreConfirmText, setRestoreConfirmText] = useState('');
 
   // New states for custom credentials
   const [newUsername, setNewUsername] = useState(authUsername);
@@ -151,6 +159,7 @@ export default function SettingsView() {
     updateGlobalSettings({
       schoolName: schoolName.toUpperCase(),
       teacherName,
+      principalName: principalName.trim() || undefined,
       defaultPassingGrade,
       theme,
       language,
@@ -181,7 +190,7 @@ export default function SettingsView() {
     try {
       const jsonStr = backupData();
       const exportFileDefaultName = `srphs_grading_backup_${new Date().toISOString().split('T')[0]}.json`;
-      
+
       const saved = await exportFile({
         filename: exportFileDefaultName,
         content: jsonStr,
@@ -195,43 +204,6 @@ export default function SettingsView() {
       console.error('Backup download error:', err);
       globalToast.error('Failed to create backup: ' + (err.message || String(err)), 'Backup Export Failed');
     }
-  };
-
-  // ─── Archive Validation ────────────────────────────────────────────────────
-  const validateArchive = (text: string): ArchiveValidationResult => {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      return { valid: false, archive: null, error: 'Invalid JSON: The file could not be parsed. Please make sure it is a valid archive file.' };
-    }
-
-    const obj = parsed as Record<string, unknown>;
-
-    if (!obj.metadata) {
-      return { valid: false, archive: null, error: 'Missing metadata block. This does not appear to be a versioned SRPHS archive. It may be an older backup format.' };
-    }
-
-    const meta = obj.metadata as Record<string, unknown>;
-    const required = ['archiveVersion', 'schoolYear', 'calendarType', 'createdAt', 'createdBy'];
-    for (const field of required) {
-      if (!meta[field]) {
-        return { valid: false, archive: null, error: `Missing required metadata field: "${field}". The archive may be corrupted.` };
-      }
-    }
-
-    if (meta.archiveVersion !== ARCHIVE_VERSION) {
-      return {
-        valid: false, archive: null,
-        error: `Unsupported archive version: "${meta.archiveVersion}". This application supports version "${ARCHIVE_VERSION}" archives only.`
-      };
-    }
-
-    if (!Array.isArray(obj.projects)) {
-      return { valid: false, archive: null, error: 'Archive is missing the "projects" array. The file may be incomplete or corrupted.' };
-    }
-
-    return { valid: true, archive: obj as unknown as ArchiveFile, error: null };
   };
 
   // ─── Archive Upload Handler ───────────────────────────────────────────────
@@ -254,6 +226,7 @@ export default function SettingsView() {
         return;
       }
       setPendingArchive(result.archive);
+      setRestoreConfirmText('');
       setShowRestoreModal(true);
       if (result.archive) {
         globalToast.info(`Archive verified: S.Y. ${result.archive.metadata.schoolYear} (${result.archive.projects.length} classes). Confirm to restore.`, 'Archive Ready');
@@ -265,6 +238,7 @@ export default function SettingsView() {
   // ─── Confirm Restore ─────────────────────────────────────────────────────
   const handleConfirmRestore = () => {
     if (!pendingArchive) return;
+    if (restoreConfirmText.trim() !== 'INITIATE') return;
     const success = restoreArchive(pendingArchive);
     if (success) {
       setRestoreSuccess(true);
@@ -275,6 +249,17 @@ export default function SettingsView() {
       setArchiveError('Restore failed unexpectedly. Please try again.');
       globalToast.error('Restore failed unexpectedly. Please try again.', 'Restore Failed');
       setShowRestoreModal(false);
+    }
+  };
+
+  // ─── Confirm Year Rollover ───────────────────────────────────────────────
+  const executeRollover = () => {
+    setShowRolloverConfirm(false);
+    const success = rolloverAcademicYear(rolloverYear, rolloverCalendar);
+    if (success) {
+      window.location.reload();
+    } else {
+      setRolloverError('Rollover failed. Please try again.');
     }
   };
 
@@ -327,17 +312,17 @@ CREATE TABLE IF NOT EXISTS grading_projects (
 );`;
 
   return (
-    <div className="space-y-8 animate-fade-in pb-12">
+    <div className="ui-page pb-12">
       {/* Title */}
-      <div className="border-b border-slate-100 dark:border-slate-850 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="border-b border-slate-100 dark:border-slate-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">System Settings</h2>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium">Manage default school information, DepEd assessment weight matrices, and local database backup tools.</p>
+          <h2 className="ui-heading">System Settings</h2>
+          <p className="ui-description">Manage default school information, DepEd assessment weight matrices, and local database backup tools.</p>
         </div>
         <button
           type="button"
           onClick={() => setActiveRoute('portal-select')}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-850 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition border border-slate-200 dark:border-slate-800 cursor-pointer self-start sm:self-auto shrink-0 shadow-xs"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition border border-slate-200 dark:border-slate-800 cursor-pointer self-start sm:self-auto shrink-0 shadow-xs"
         >
           <ArrowLeft className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           <span>Back to Portal Selection</span>
@@ -345,80 +330,90 @@ CREATE TABLE IF NOT EXISTS grading_projects (
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid min-w-0 grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Main Config columns (Col 1 & 2) */}
-          <div className="lg:col-span-2 space-y-6">
-            
+          <div className="min-w-0 xl:col-span-2 space-y-6">
+
             {/* General Settings */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-6">
-              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-emerald-600 animate-pulse" />
+            <div className="ui-panel min-w-0 p-4 sm:p-6 space-y-6">
+              <h3 className="ui-section-title flex items-start gap-2 [&>svg]:shrink-0">
+                <Building2 className="h-5 w-5 text-emerald-600 " />
                 School & Teacher Defaults
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">Default School Name</label>
+                  <label className="ui-label">Default School Name</label>
                   <input
                     type="text"
                     required
                     value={schoolName}
                     onChange={(e) => setSchoolName(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-extrabold uppercase"
+                    className="ui-field mt-1.5 font-extrabold uppercase"
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">Default Teacher Name</label>
+                  <label className="ui-label">Default Teacher Name</label>
                   <input
                     type="text"
                     required
                     value={teacherName}
                     onChange={(e) => setTeacherName(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5 font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">DepEd School ID (6 Digits)</label>
+                  <label className="ui-label">School Principal / Head Teacher</label>
+                  <input
+                    type="text"
+                    value={principalName}
+                    onChange={(e) => setPrincipalName(e.target.value)}
+                    placeholder="e.g. Juan D. Dela Cruz, MAEM"
+                    className="ui-field mt-1.5 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="ui-label">DepEd School ID (6 Digits)</label>
                   <input
                     type="text"
                     value={schoolId}
                     onChange={(e) => setSchoolId(e.target.value)}
                     placeholder="e.g. 301234"
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-mono font-bold"
+                    className="ui-field mt-1.5 font-mono font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">DepEd Division</label>
+                  <label className="ui-label">DepEd Division</label>
                   <input
                     type="text"
                     value={division}
                     onChange={(e) => setDivision(e.target.value)}
                     placeholder="e.g. Division of Bohol"
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5 font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">DepEd Region</label>
+                  <label className="ui-label">DepEd Region</label>
                   <input
                     type="text"
                     value={region}
                     onChange={(e) => setRegion(e.target.value)}
                     placeholder="e.g. Region VII - Central Visayas"
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5 font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">District (Optional)</label>
+                  <label className="ui-label">District (Optional)</label>
                   <input
                     type="text"
                     value={district}
                     onChange={(e) => setDistrict(e.target.value)}
                     placeholder="e.g. Talibon II"
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5 font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">Default Passing Grade</label>
+                  <label className="ui-label">Default Passing Grade</label>
                   <input
                     type="number"
                     required
@@ -426,37 +421,37 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     max={100}
                     value={defaultPassingGrade}
                     onChange={(e) => setDefaultPassingGrade(parseInt(e.target.value) || 75)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-mono font-bold"
+                    className="ui-field mt-1.5 font-mono font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">System Theme</label>
+                  <label className="ui-label">System Theme</label>
                   <select
                     value={theme}
                     onChange={(e) => setTheme(e.target.value as any)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5 font-bold"
                   >
                     <option value="light">Light Aesthetic</option>
                     <option value="dark">Dark Aesthetic</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">System Language</label>
+                  <label className="ui-label">System Language</label>
                   <select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value as any)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5 font-bold"
                   >
                     <option value="English">English</option>
                     <option value="Filipino">Filipino (Tagalog)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">Default Transmutation Policy</label>
+                  <label className="ui-label">Default Transmutation Policy</label>
                   <select
                     value={depedPolicy}
                     onChange={(e) => setDepedPolicy(e.target.value as any)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5 font-bold"
                   >
                     <option value="2015">0-Based Grading (0=0, 70=70, 100=100)</option>
                     <option value="2027">MATATAG Adjusted Transmutation (SY 2027-2028 onwards)</option>
@@ -464,11 +459,11 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400">Academic Calendar Mode (JHS Only)</label>
+                  <label className="ui-label">Academic Calendar Mode (JHS Only)</label>
                   <select
                     value={calendarType}
                     onChange={(e) => setCalendarType(e.target.value as 'Quarter' | 'Trimester')}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3.5 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5 font-bold"
                   >
                     <option value="Quarter">Quarter Calendar (4 Terms)</option>
                     <option value="Trimester">Trimester Calendar (3 Terms)</option>
@@ -479,7 +474,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
               {/* Logo Uploads */}
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400 block mb-2">
+                  <label className="ui-label block mb-2">
                     Default School Logo
                   </label>
                   <div className="flex items-center gap-4">
@@ -510,9 +505,9 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     </label>
                   </div>
                 </div>
-                
+
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-450 dark:text-slate-400 block mb-2">
+                  <label className="ui-label block mb-2">
                     Default DepEd Logo
                   </label>
                   <div className="flex items-center gap-4">
@@ -548,19 +543,19 @@ CREATE TABLE IF NOT EXISTS grading_projects (
             </div>
 
             {/* Assessment Weights Configuration */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-6">
+            <div className="ui-panel min-w-0 p-4 sm:p-6 space-y-6">
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
-                  <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <h3 className="ui-section-title flex items-start gap-2 [&>svg]:shrink-0">
                     <GraduationCap className="h-5 w-5 text-emerald-600" />
                     Default DepEd Weights Matrix
                   </h3>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
+                  <p className="text-sm text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
                     Define the default ratios of student assessments. Ratios must sum to 100% per subject row.
                   </p>
                 </div>
                 {!isAllWeightsValid && (
-                  <span className="text-[9px] text-rose-600 bg-rose-50 dark:bg-rose-950/20 px-2 py-0.5 rounded-lg font-mono font-bold animate-pulse border border-rose-200">
+                  <span className="text-xs text-red-600 bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded-lg font-mono font-bold  border border-red-200">
                     Sum mismatch!
                   </span>
                 )}
@@ -569,7 +564,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[500px]">
                   <thead>
-                    <tr className="border-b border-slate-100 dark:border-slate-850 text-[9px] font-mono text-slate-450 uppercase tracking-widest font-bold">
+                    <tr className="border-b border-slate-100 dark:border-slate-800 text-xs font-mono text-slate-600 text-pretty font-bold">
                       <th className="py-2.5">Subject</th>
                       <th className="py-2.5 text-center w-24">WOW (%)</th>
                       <th className="py-2.5 text-center w-24">PPT (%)</th>
@@ -577,14 +572,14 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                       <th className="py-2.5 text-center w-28">Validation Sum</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {(Object.keys(subjects) as SubjectType[]).map((subj) => {
                       const wObj = getSubjectWeightObj(subj);
                       const sum = getSubjectSum(subj);
                       const isValid = sum === 100;
                       return (
-                        <tr key={subj} className="hover:bg-slate-50/40 dark:hover:bg-slate-850/40 transition-colors">
-                          <td className="py-3 text-xs font-black text-slate-800 dark:text-slate-200">
+                        <tr key={subj} className="hover:bg-slate-50/40 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className="py-3 text-xs font-semibold text-slate-800 dark:text-slate-200">
                             {subj}
                           </td>
                           <td className="py-3 px-1 text-center">
@@ -594,7 +589,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                               max={100}
                               value={isNaN(wObj.wow) ? '' : Math.round(wObj.wow * 100)}
                               onChange={(e) => handleWeightChange(subj, 'wow', e.target.value)}
-                              className="w-16 text-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-lg py-1 px-1.5 font-mono text-xs font-bold focus:outline-hidden"
+                              className="w-16 text-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-lg py-1 px-1.5 font-mono text-xs font-bold focus:outline-hidden"
                             />
                           </td>
                           <td className="py-3 px-1 text-center">
@@ -604,7 +599,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                               max={100}
                               value={isNaN(wObj.ppt) ? '' : Math.round(wObj.ppt * 100)}
                               onChange={(e) => handleWeightChange(subj, 'ppt', e.target.value)}
-                              className="w-16 text-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-lg py-1 px-1.5 font-mono text-xs font-bold focus:outline-hidden"
+                              className="w-16 text-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-lg py-1 px-1.5 font-mono text-xs font-bold focus:outline-hidden"
                             />
                           </td>
                           <td className="py-3 px-1 text-center">
@@ -614,14 +609,14 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                               max={100}
                               value={isNaN(wObj.qste) ? '' : Math.round(wObj.qste * 100)}
                               onChange={(e) => handleWeightChange(subj, 'qste', e.target.value)}
-                              className="w-16 text-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-lg py-1 px-1.5 font-mono text-xs font-bold focus:outline-hidden"
+                              className="w-16 text-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-lg py-1 px-1.5 font-mono text-xs font-bold focus:outline-hidden"
                             />
                           </td>
                           <td className="py-3 text-center">
-                            <span className={`text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-md inline-block ${
-                              isValid 
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-450' 
-                                : 'bg-rose-50 text-rose-700 dark:bg-rose-950/20 dark:text-rose-450 animate-pulse'
+                            <span className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-md inline-block ${
+                              isValid
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400'
+                                : 'bg-red-50 text-red-700 dark:bg-red-950/20 dark:text-red-400 '
                             }`}>
                               {sum}% {isValid ? 'OK' : 'FAIL'}
                             </span>
@@ -635,21 +630,21 @@ CREATE TABLE IF NOT EXISTS grading_projects (
             </div>
 
             {/* Action Buttons */}
-            <div className="flex justify-end gap-3 items-center bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-150 dark:border-slate-850">
+            <div className="flex justify-end gap-3 items-center bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
               {saved && (
-                <span className="text-[10px] text-emerald-600 font-mono font-bold flex items-center gap-1.5 mr-auto">
+                <span className="text-sm text-emerald-600 font-mono font-bold flex items-center gap-1.5 mr-auto">
                   <ShieldCheck className="h-4 w-4" /> Global defaults updated!
                 </span>
               )}
               {!isAllWeightsValid && (
-                <span className="text-[10px] text-rose-500 font-mono font-bold flex items-center gap-1.5 mr-auto animate-pulse">
+                <span className="text-sm text-red-500 font-mono font-bold flex items-center gap-1.5 mr-auto ">
                   <AlertTriangle className="h-4 w-4" /> Errors in weights matrix.
                 </span>
               )}
               <button
                 type="submit"
                 disabled={!isAllWeightsValid}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 dark:disabled:bg-slate-850 disabled:text-slate-400 text-white font-black rounded-xl text-xs transition-colors cursor-pointer"
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 text-white font-semibold rounded-xl text-xs transition-colors cursor-pointer"
               >
                 Save System Defaults
               </button>
@@ -660,17 +655,17 @@ CREATE TABLE IF NOT EXISTS grading_projects (
           <div className="space-y-6">
 
             {/* ─── Google Drive Integration Card ─── */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
-              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <Cloud className="h-5 w-5 text-blue-500" />
+            <div className="ui-panel min-w-0 p-4 sm:p-6 space-y-4">
+              <h3 className="ui-section-title flex items-start gap-2 [&>svg]:shrink-0">
+                <Cloud className="h-5 w-5 text-emerald-500" />
                 Cloud Share Destination
               </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
+              <p className="ui-description">
                 Paste your Google Drive folder link below. After exporting a JSON, the <span className="text-slate-700 dark:text-slate-300">Downloaded File Locator</span> pop-up will have a direct <strong>Upload to Drive</strong> button pointing here.
               </p>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                <label className="text-sm font-mono font-bold text-pretty text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
                   <Link className="w-3 h-3" /> Google Drive Folder URL
                 </label>
                 <input
@@ -678,10 +673,10 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                   value={googleDriveLink}
                   onChange={(e) => setGoogleDriveLink(e.target.value)}
                   placeholder="https://drive.google.com/drive/folders/..."
-                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3.5 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-blue-400/30 placeholder:text-slate-400"
+                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3.5 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-emerald-400/30 placeholder:text-slate-400"
                 />
                 {googleDriveLink && !googleDriveLink.startsWith('https://drive.google.com') && (
-                  <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+                  <p className="text-sm text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" /> Link should be a Google Drive URL.
                   </p>
                 )}
@@ -690,26 +685,26 @@ CREATE TABLE IF NOT EXISTS grading_projects (
               <button
                 type="button"
                 onClick={handleSaveDriveLink}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-3xs"
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-all cursor-pointer shadow-3xs"
               >
                 {driveLinkSaved ? <CheckCircle className="h-4 w-4" /> : <Cloud className="h-4 w-4" />}
                 {driveLinkSaved ? 'Drive Link Saved!' : 'Save Drive Folder Link'}
               </button>
 
               {globalSettings.googleDriveLink && (
-                <div className="bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-xl p-2.5 text-[10px] text-blue-700 dark:text-blue-300 font-mono truncate">
+                <div className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-2.5 text-sm text-emerald-700 dark:text-emerald-300 font-mono truncate">
                   ✓ {globalSettings.googleDriveLink}
                 </div>
               )}
             </div>
 
             {/* Account Credentials Card */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
-              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+            <div className="ui-panel min-w-0 p-4 sm:p-6 space-y-4">
+              <h3 className="ui-section-title flex items-start gap-2 [&>svg]:shrink-0">
                 <ShieldCheck className="h-5 w-5 text-emerald-600" />
                 Customize Portal Login
               </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
+              <p className="ui-description">
                 Configure your custom username and password to secure your local offline records.
               </p>
 
@@ -721,7 +716,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
 
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-sans font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                  <label className="text-sm font-sans font-bold text-slate-400 dark:text-slate-500 text-pretty">
                     Login Username
                   </label>
                   <input
@@ -729,12 +724,12 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
                     placeholder="Enter username"
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3.5 text-xs font-bold focus:outline-hidden"
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3.5 text-xs font-bold focus:outline-hidden"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-sans font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                  <label className="text-sm font-sans font-bold text-slate-400 dark:text-slate-500 text-pretty">
                     New Password
                   </label>
                   <input
@@ -742,12 +737,12 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Enter new password"
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3.5 text-xs font-bold focus:outline-hidden"
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3.5 text-xs font-bold focus:outline-hidden"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-sans font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                  <label className="text-sm font-sans font-bold text-slate-400 dark:text-slate-500 text-pretty">
                     Confirm Password
                   </label>
                   <input
@@ -755,7 +750,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm password"
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3.5 text-xs font-bold focus:outline-hidden"
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3.5 text-xs font-bold focus:outline-hidden"
                   />
                 </div>
 
@@ -775,52 +770,52 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     setCredMessage("✓ Credentials updated successfully!");
                     setTimeout(() => setCredMessage(null), 3000);
                   }}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-3xs mt-2"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-all cursor-pointer shadow-3xs mt-2"
                 >
                   Update Credentials
                 </button>
               </div>
             </div>
-            
+
             {/* Phase 9: Backup and Restore Card */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
-              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+            <div className="ui-panel min-w-0 p-4 sm:p-6 space-y-4">
+              <h3 className="ui-section-title flex items-start gap-2 [&>svg]:shrink-0">
                 <Database className="h-5 w-5 text-emerald-600" />
                 Backup & Restore (Phase 9)
               </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
+              <p className="ui-description">
                 Export all custom grading projects, student rosters, and records to a physical `.json` backup file.
               </p>
 
               <button
                 type="button"
                 onClick={handleBackupDownload}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-black rounded-xl transition-colors cursor-pointer border border-slate-200 dark:border-slate-800"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-xl transition-colors cursor-pointer border border-slate-200 dark:border-slate-800"
               >
                 <Download className="h-4 w-4" /> Export Backup File
               </button>
 
               {/* Archive Restore Section */}
-              <div className="border-t border-slate-100 dark:border-slate-850 pt-4 space-y-3">
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
                 <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold">
                   Restore a previous academic year from an archive file:
                 </p>
 
                 {archiveError && (
-                  <div className="flex items-start gap-2 p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-xl">
-                    <AlertTriangle className="h-4 w-4 text-rose-500 mt-0.5 shrink-0" />
-                    <p className="text-[11px] text-rose-700 dark:text-rose-400 font-bold leading-normal">{archiveError}</p>
+                  <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-xl">
+                    <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                    <p className="text-sm text-red-700 dark:text-red-400 font-bold leading-normal">{archiveError}</p>
                   </div>
                 )}
 
                 {restoreSuccess && (
                   <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl">
                     <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">Restore successful! Reloading portal...</p>
+                    <p className="text-sm text-emerald-700 dark:text-emerald-400 font-bold">Restore successful! Reloading portal...</p>
                   </div>
                 )}
 
-                <label className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-black rounded-xl transition-colors cursor-pointer border border-dashed border-emerald-200 dark:border-emerald-900/60">
+                <label className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-semibold rounded-xl transition-colors cursor-pointer border border-dashed border-emerald-200 dark:border-emerald-900/60">
                   <FileUp className="h-4 w-4" />
                   <span>Select Archive File (.json)</span>
                   <input type="file" accept=".json" onChange={handleArchiveUpload} className="hidden" />
@@ -829,62 +824,57 @@ CREATE TABLE IF NOT EXISTS grading_projects (
             </div>
 
             {/* Academic Year Rollover Card */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
-              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <Archive className="h-5 w-5 text-indigo-500" />
+            <div className="ui-panel min-w-0 p-4 sm:p-6 space-y-4">
+              <h3 className="ui-section-title flex items-start gap-2 [&>svg]:shrink-0">
+                <Archive className="h-5 w-5 text-emerald-500" />
                 Academic Year Rollover
               </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
+              <p className="ui-description">
                 Officially close the current academic year. Generates an archive, then resets all active data to prepare for the new year.
               </p>
-              
+
               <button
                 type="button"
                 onClick={() => setShowRolloverModal(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 text-xs font-black rounded-xl transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-900/50"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-semibold rounded-xl transition-colors cursor-pointer border border-emerald-200 dark:border-emerald-900/50"
               >
                 Initiate Year Rollover
               </button>
             </div>
 
             {/* Database Purge/Reset Card */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
-              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <RotateCcw className="h-5 w-5 text-rose-500" />
+            <div className="ui-panel min-w-0 p-4 sm:p-6 space-y-4">
+              <h3 className="ui-section-title flex items-start gap-2 [&>svg]:shrink-0">
+                <RotateCcw className="h-5 w-5 text-red-500" />
                 Reset System DB
               </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
+              <p className="ui-description">
                 Purges all active projects, student profiles, and grade sheets from local storage, reloading seed data.
               </p>
 
-              <div className="bg-rose-50 dark:bg-rose-950/10 p-3 rounded-xl border border-rose-100 dark:border-rose-900/30">
-                <div className="text-[10px] text-rose-700 dark:text-rose-400 font-bold leading-normal uppercase">
+              <div className="bg-red-50 dark:bg-red-950/10 p-3 rounded-xl border border-red-100 dark:border-red-900/30">
+                <div className="text-sm text-red-700 dark:text-red-400 font-bold leading-normal uppercase">
                   ⚡ Warning: This action cannot be undone. All custom records will be deleted.
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm("Are you sure you want to completely wipe the local storage? All projects, students, and recorded scores will be lost!")) {
-                    resetDatabase();
-                    window.location.reload();
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer"
+                onClick={() => setShowResetConfirm(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
               >
                 Reset Offline Storage
               </button>
             </div>
 
             {/* SQLite Schema Blueprints Card */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
-              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+            <div className="ui-panel min-w-0 p-4 sm:p-6 space-y-4">
+              <h3 className="ui-section-title flex items-start gap-2 [&>svg]:shrink-0">
                 <FileCode className="h-5 w-5 text-emerald-600" />
                 SQLite3 DDL Schema
               </h3>
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-900">
-                <pre className="text-[8px] font-mono text-slate-350 leading-normal max-h-[150px] overflow-y-auto whitespace-pre-wrap select-all">
+                <pre className="text-xs font-mono text-slate-300 leading-normal max-h-[150px] overflow-y-auto whitespace-pre-wrap select-all">
                   {sqliteSchema}
                 </pre>
               </div>
@@ -895,24 +885,24 @@ CREATE TABLE IF NOT EXISTS grading_projects (
 
       {/* ── Developer-Only Section (hidden, unlocked via version badge 5-tap) ── */}
       {devUnlocked && (
-        <div className="mt-6 bg-slate-950 border border-rose-900/40 rounded-2xl overflow-hidden">
+        <div className="mt-6 bg-slate-950 border border-red-900/40 rounded-2xl overflow-hidden">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-rose-900/30 bg-black/40 flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-red-900/30 bg-black/40 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
-                <Terminal className="w-4 h-4 text-rose-400" />
+              <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <Terminal className="w-4 h-4 text-red-400" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-rose-300 tracking-tight flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-red-300 tracking-tight flex items-center gap-2">
                   Developer Console
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400">PRIVATE</span>
+                  <span className="text-sm px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">PRIVATE</span>
                 </h3>
-                <p className="text-[10px] text-slate-500">Error traceback & anomaly log — not visible to users</p>
+                <p className="text-sm text-slate-500">Error traceback & anomaly log — not visible to users</p>
               </div>
             </div>
             <button
               onClick={() => setDevUnlocked(false)}
-              className="text-slate-600 hover:text-rose-400 transition cursor-pointer"
+              className="text-slate-600 hover:text-red-400 transition cursor-pointer"
               title="Lock developer console"
             >
               <X className="w-4 h-4" />
@@ -922,20 +912,20 @@ CREATE TABLE IF NOT EXISTS grading_projects (
           {/* Log Summary Stats */}
           <div className="p-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Critical', value: devSummary.critical, color: 'text-rose-400' },
+              { label: 'Critical', value: devSummary.critical, color: 'text-red-400' },
               { label: 'Errors', value: devSummary.errors, color: 'text-orange-400' },
               { label: 'Warnings', value: devSummary.warnings, color: 'text-amber-400' },
               { label: 'Total Entries', value: devSummary.total, color: 'text-slate-300' },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-black/40 border border-slate-800 rounded-xl p-3.5">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</div>
-                <div className={`text-2xl font-black mt-1 ${color}`}>{value}</div>
+                <div className="text-sm font-bold text-slate-500 text-prettyr">{label}</div>
+                <div className={`text-2xl font-semibold mt-1 ${color}`}>{value}</div>
               </div>
             ))}
           </div>
 
           {/* Session Info */}
-          <div className="px-6 pb-3 text-[11px] text-slate-600 font-mono">
+          <div className="px-6 pb-3 text-sm text-slate-600 font-mono">
             Session ID: <span className="text-slate-400">{devSummary.sessionId}</span>
             {devSummary.oldestEntry && (
               <span className="ml-4">Oldest: <span className="text-slate-400">{new Date(devSummary.oldestEntry).toLocaleString()}</span></span>
@@ -946,7 +936,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
           <div className="px-6 pb-6 flex flex-wrap gap-2">
             <button
               onClick={() => setShowDevLog(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-xl transition cursor-pointer"
             >
               <Bug className="w-4 h-4" /> Open Error Log Console
             </button>
@@ -986,10 +976,10 @@ CREATE TABLE IF NOT EXISTS grading_projects (
           onClick={handleDevTap}
           title=""
         >
-          <p className="text-[9px] text-slate-700 dark:text-slate-700 font-mono">
-            v1.0.2 Stable · AR-Tech Solutions 2025
+          <p className="text-xs text-slate-700 dark:text-slate-700 font-mono">
+            v{APP_VERSION} Stable · AR-Tech Solutions 2025
             {devClickCount > 0 && devClickCount < 5 && (
-              <span className="ml-2 text-rose-800">{5 - devClickCount} more tap{5 - devClickCount !== 1 ? 's' : ''}...</span>
+              <span className="ml-2 text-red-800">{5 - devClickCount} more tap{5 - devClickCount !== 1 ? 's' : ''}...</span>
             )}
           </p>
         </div>
@@ -1000,8 +990,8 @@ CREATE TABLE IF NOT EXISTS grading_projects (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden border border-slate-200 dark:border-slate-800">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
-              <h3 className="font-black text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <Archive className="h-4 w-4 text-indigo-500" />
+              <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <Archive className="h-4 w-4 text-emerald-500" />
                 Academic Year Rollover
               </h3>
               <button onClick={() => {
@@ -1011,29 +1001,29 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-5">
               {rolloverError && (
-                <div className="p-3 bg-rose-50 text-rose-700 text-xs font-bold rounded-xl border border-rose-100">
+                <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-100">
                   {rolloverError}
                 </div>
               )}
-              
+
               <div className="space-y-4">
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-800 dark:text-indigo-300 text-xs font-semibold rounded-xl border border-indigo-100 dark:border-indigo-900/30">
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 text-xs font-semibold rounded-xl border border-emerald-100 dark:border-emerald-900/30">
                   Step 1: Download backup archive of current academic year before proceeding.
                 </div>
                 <button
                   type="button"
                   onClick={handleBackupDownload}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-black rounded-lg transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
                 >
                   <Download className="h-4 w-4" /> Download Backup Archive
                 </button>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                <label className="text-sm font-bold text-slate-500 text-pretty">
                   New Academic Year (e.g. 2026-2027)
                 </label>
                 <input
@@ -1049,7 +1039,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                <label className="text-sm font-bold text-slate-500 text-pretty">
                   Calendar Type
                 </label>
                 <select
@@ -1083,16 +1073,9 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     setRolloverError('Invalid format. Please use YYYY-YYYY format (e.g. 2026-2027).');
                     return;
                   }
-                  if (confirm('Are you sure you want to execute rollover? All current data will be wiped.')) {
-                    const success = rolloverAcademicYear(rolloverYear, rolloverCalendar);
-                    if (success) {
-                      window.location.reload();
-                    } else {
-                      setRolloverError('Rollover failed. Please try again.');
-                    }
-                  }
+                  setShowRolloverConfirm(true);
                 }}
-                className={`px-4 py-2 text-xs font-black rounded-lg transition-colors shadow-sm ${backupDownloaded ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer' : 'bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-600 cursor-not-allowed'}`}
+                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors shadow-sm ${backupDownloaded ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' : 'bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-600 cursor-not-allowed'}`}
               >
                 Confirm and Rollover
               </button>
@@ -1107,12 +1090,12 @@ CREATE TABLE IF NOT EXISTS grading_projects (
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
             {/* Header */}
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
-              <h3 className="font-black text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <Archive className="h-4 w-4 text-emerald-500" />
                 Restore Archive — Preview
               </h3>
               <button
-                onClick={() => { setShowRestoreModal(false); setPendingArchive(null); }}
+                onClick={() => { setShowRestoreModal(false); setPendingArchive(null); setRestoreConfirmText(''); }}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
               >
                 <X className="h-5 w-5" />
@@ -1125,7 +1108,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                 The following academic year archive will be restored. Review the details carefully before confirming.
               </p>
 
-              <div className="bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+              <div className="bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-300 dark:border-slate-800 overflow-hidden">
                 <table className="w-full text-xs">
                   <tbody>
                     {[
@@ -1140,7 +1123,7 @@ CREATE TABLE IF NOT EXISTS grading_projects (
                     ].map(({ label, value }, i) => (
                       <tr key={label} className={i % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-950'}>
                         <td className="py-2 px-4 font-bold text-slate-500 dark:text-slate-400 w-40">{label}</td>
-                        <td className="py-2 px-4 font-black text-slate-800 dark:text-slate-200 font-mono">{value}</td>
+                        <td className="py-2 px-4 font-semibold text-slate-800 dark:text-slate-200 font-mono">{value}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1150,17 +1133,24 @@ CREATE TABLE IF NOT EXISTS grading_projects (
               {/* Danger Warning */}
               <div className="flex items-start gap-2.5 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl">
                 <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-bold leading-normal">
-                  <span className="uppercase tracking-wide">Warning:</span> This will permanently replace all current academic year data — projects, students, assessments, scores, adviser classes, and settings. This action cannot be undone.
+                <p className="text-sm text-amber-800 dark:text-amber-300 font-bold leading-normal">
+                  <span className="text-pretty">Warning:</span> This will permanently replace all current academic year data — projects, students, assessments, scores, adviser classes, and settings. This action cannot be undone.
                 </p>
               </div>
+
+              <TypeToConfirmField
+                value={restoreConfirmText}
+                onChange={setRestoreConfirmText}
+                inputId="restore-archive-confirm"
+                onEnter={handleConfirmRestore}
+              />
             </div>
 
             {/* Footer Actions */}
             <div className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => { setShowRestoreModal(false); setPendingArchive(null); }}
+                onClick={() => { setShowRestoreModal(false); setPendingArchive(null); setRestoreConfirmText(''); }}
                 className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
               >
                 Cancel
@@ -1168,7 +1158,12 @@ CREATE TABLE IF NOT EXISTS grading_projects (
               <button
                 type="button"
                 onClick={handleConfirmRestore}
-                className="px-4 py-2 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm cursor-pointer"
+                disabled={restoreConfirmText.trim() !== 'INITIATE'}
+                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors shadow-sm ${
+                  restoreConfirmText.trim() === 'INITIATE'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                }`}
               >
                 Restore Archive
               </button>
@@ -1176,6 +1171,41 @@ CREATE TABLE IF NOT EXISTS grading_projects (
           </div>
         </div>
       )}
+
+      <DangerConfirmModal
+        isOpen={showResetConfirm}
+        title="Reset Offline Storage"
+        confirmLabel="Wipe and Reset"
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={() => {
+          setShowResetConfirm(false);
+          resetDatabase();
+          window.location.reload();
+        }}
+      >
+        Every grading project, learner roster, adviser section, imported grade, and recorded score stored on this device
+        will be erased and replaced with sample seed data. Files you already saved in the Download folder are not affected.
+        <span className="block mt-2 font-semibold text-pretty text-red-600 dark:text-red-400">
+          This cannot be undone and there is no automatic backup.
+        </span>
+      </DangerConfirmModal>
+
+      <DangerConfirmModal
+        isOpen={showRolloverConfirm}
+        title="Academic Year Rollover"
+        confirmLabel="Wipe and Advance Year"
+        onClose={() => setShowRolloverConfirm(false)}
+        onConfirm={executeRollover}
+      >
+        All grading projects, adviser sections, imported grades, overrides, and attendance records for SY{' '}
+        <span className="font-semibold text-slate-700 dark:text-slate-200">{globalSettings.activeSchoolYear}</span> will be
+        erased, and the app will restart empty on SY{' '}
+        <span className="font-semibold text-slate-700 dark:text-slate-200">{rolloverYear}</span>. Confirm that the backup
+        archive you downloaded is saved somewhere safe before proceeding.
+        <span className="block mt-2 font-semibold text-pretty text-red-600 dark:text-red-400">
+          This cannot be undone.
+        </span>
+      </DangerConfirmModal>
 
       {/* Developer Error Log Console Modal */}
       {showDevLog && (

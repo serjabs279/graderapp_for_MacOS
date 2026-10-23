@@ -59,6 +59,12 @@ export interface ImportedSubjectGrades {
   directEntryTeacher?: string;       // Optional name of part-time teacher
 }
 
+export interface GradebookSnapshot {
+  schemaVersion: 1;
+  exportedAt: string;
+  project: Project;
+}
+
 export interface SubjectGradeExportJSON {
   version: '1.0';
   exportType: 'SRPHS_SUBJECT_GRADES';
@@ -79,6 +85,8 @@ export interface SubjectGradeExportJSON {
       status?: 'Active' | 'Transferred' | 'Dropped';
     }[];
   }[];
+  /** Full raw gradebook included so the same file can restore this section. */
+  gradebookSnapshot?: GradebookSnapshot;
 }
 
 export interface OverrideLogEntry {
@@ -235,6 +243,7 @@ export interface Project {
 export interface GlobalSettings {
   schoolName: string;
   teacherName: string;
+  principalName?: string;    // School Principal / Head Teacher shown on printed reports
   defaultPassingGrade: number;
   theme: 'light' | 'dark';
   language: 'English' | 'Filipino';
@@ -262,7 +271,10 @@ export interface GlobalSettings {
 // ─── Archive System ──────────────────────────────────────────────────────────
 
 export const ARCHIVE_VERSION = '1.0';
-export const APP_VERSION = '2.0';
+export const APP_VERSION = '2.0.0';
+// Keep older versions listed here whenever ARCHIVE_VERSION is bumped, so old
+// archives stay readable. Shape changes need a normalizer in archiveValidation.
+export const SUPPORTED_ARCHIVE_VERSIONS: readonly string[] = ['1.0'];
 
 export interface ArchiveMetadata {
   archiveVersion: string;   // ARCHIVE_VERSION — used for compatibility checks

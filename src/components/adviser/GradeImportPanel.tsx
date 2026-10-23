@@ -285,7 +285,7 @@ export default function GradeImportPanel({ adviserClass }: Props) {
       });
       globalToast.success(`Imported ${Object.keys(parsed.grades).length} student grades for "${resolvedName}" (${otherQuarter}).`, 'Grade Import Successful');
 
-      setSuccessMsg(`✅ Successfully imported ${Object.keys(parsed.grades).length} student grades for "${resolvedName}" (${otherQuarter}).`);
+      setSuccessMsg(`✅ Successfully imported ${Object.keys(parsed.grades).length} student grades for "${resolvedName}" (${otherQuarter}). Open Grade Matrix → ${otherQuarter} to review them.`);
       resetForm();
     } catch (err: any) {
       console.error('[GradeImport] Import failed:', err);
@@ -410,16 +410,16 @@ export default function GradeImportPanel({ adviserClass }: Props) {
   };
 
   return (
-    <div className="p-8 space-y-8 max-w-5xl mx-auto">
+    <div className="adviser-page">
       <div>
-        <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-          <Upload className="h-5 w-5 text-amber-500" /> Grade Import Engine
+        <h2 className="adviser-heading">
+          <Upload className="h-5 w-5 shrink-0 text-amber-600" /> Import grades
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Upload official Final Quarter Grades exported by subject teachers.</p>
+        <p className="adviser-description">Upload official final quarter grades exported by subject teachers.</p>
       </div>
 
       {/* Import Panel - always visible, no quarter gating */}
-      <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 rounded-xl p-6">
 
         {errorMsg && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-3">
@@ -429,27 +429,27 @@ export default function GradeImportPanel({ adviserClass }: Props) {
         )}
 
         {successMsg && (
-          <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl flex items-start gap-3">
-            <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-            <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">{successMsg}</div>
+          <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-950/30 border border-slate-200 dark:border-slate-900/50 rounded-xl flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-slate-500 shrink-0 mt-0.5" />
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-300">{successMsg}</div>
           </div>
         )}
 
         <div className="grid md:grid-cols-2 gap-8">
           {/* Subject Type Selector */}
           <div className="space-y-4">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Select Subject Type</label>
+            <label className="ui-label">Select Subject Type</label>
             
             {adviserClass.languageGroups.length > 0 && (
               <label className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${
-                subjectType === 'languages' ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-sm' : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850/50'
-              }`}>
+                subjectType === "languages" ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20" : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+              } `}>
                 <input type="radio" name="subjectType" checked={subjectType === 'languages'} onChange={() => { setSubjectType('languages'); resetForm(); }} className="w-4 h-4 text-amber-600 focus:ring-amber-500" />
                 <div>
-                  <div className="font-bold text-slate-800 dark:text-slate-200">
+                  <div className="font-medium text-slate-800 dark:text-slate-200">
                     {adviserClass.workspace === 'JHS' ? 'Composite MAPEH' : 'Composite Languages'}
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">
+                  <div className="text-sm text-slate-500 mt-0.5">
                     {adviserClass.workspace === 'JHS'
                       ? 'Upload both component files (Music & Arts and PE & Health) together'
                       : 'Upload both language files (e.g., English & Filipino) to merge'}
@@ -459,29 +459,29 @@ export default function GradeImportPanel({ adviserClass }: Props) {
             )}
             
             <label className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${
-              subjectType === 'other' ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-sm' : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850/50'
-            }`}>
+              subjectType === "other" ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20" : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+            } `}>
               <input type="radio" name="subjectType" checked={subjectType === 'other'} onChange={() => { setSubjectType('other'); resetForm(); }} className="w-4 h-4 text-amber-600 focus:ring-amber-500" />
               <div>
-                <div className="font-bold text-slate-800 dark:text-slate-200">Standard Subject</div>
-                <div className="text-xs text-slate-500 mt-0.5">Upload a single subject excel export</div>
+                <div className="font-medium text-slate-800 dark:text-slate-200">Standard Subject</div>
+                <div className="text-sm text-slate-500 mt-0.5">Upload a single subject excel export</div>
               </div>
             </label>
           </div>
 
           {/* Upload Forms */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-100 dark:border-slate-800">
-            {!subjectType && <div className="text-center text-sm text-slate-400 py-12">Select a subject type to continue</div>}
+          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-300 dark:border-slate-800">
+            {!subjectType && <div className="text-center text-sm text-slate-500 py-12">Select a subject type to continue</div>}
             
             {subjectType === 'other' && (
-              <div className="space-y-5 animate-in fade-in duration-200">
+              <div className="space-y-5">
                 {/* Quarter Selector inline */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Quarter <span className="text-red-500">*</span></label>
+                  <label className="ui-label">Quarter <span className="text-red-500">*</span></label>
                   <select
                     value={otherQuarter}
                     onChange={e => setOtherQuarter(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="ui-field"
                   >
                     {quarterKeys.map(q => (
                       <option key={q} value={q}>{q}</option>
@@ -489,35 +489,35 @@ export default function GradeImportPanel({ adviserClass }: Props) {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  <label className="ui-label">
                     Subject Name
-                    <span className="ml-1 font-normal text-slate-400">(optional — auto-read from file)</span>
+                    <span className="ml-1 font-normal text-slate-500">(optional — auto-read from file)</span>
                   </label>
                   <input
                     type="text"
                     value={subjectName}
                     onChange={e => setSubjectName(e.target.value)}
                     placeholder="Leave blank to use name from the Excel file"
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="ui-field"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Grade File (JSON / Excel) <span className="text-red-500">*</span></label>
+                  <label className="ui-label">Grade File (JSON / Excel) <span className="text-red-500">*</span></label>
                   <input
                     type="file"
                     ref={fileOneRef}
                     accept=".json, .xlsx, .xls"
                     onChange={e => setFileOne(e.target.files?.[0] || null)}
-                    className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
+                    className="block min-h-10 w-full min-w-0 text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 dark:file:bg-slate-800 dark:file:text-slate-200"
                   />
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-sm text-slate-500 text-pretty">
                     Upload the JSON (or Excel) file exported from the Teacher Gradebook.
                   </p>
                 </div>
                 <button
                   onClick={handleImportOther}
                   disabled={!fileOne}
-                  className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl transition-colors mt-4 flex items-center justify-center gap-2 text-sm"
+                  className="adviser-button-primary w-full"
                 >
                   <FileCode className="h-4 w-4" /> Import Standard Subject
                 </button>
@@ -525,14 +525,14 @@ export default function GradeImportPanel({ adviserClass }: Props) {
             )}
 
             {subjectType === 'languages' && (
-              <div className="space-y-5 animate-in fade-in duration-200">
+              <div className="space-y-5">
                 {/* Quarter Selector inline */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Quarter <span className="text-red-500">*</span></label>
+                  <label className="ui-label">Quarter <span className="text-red-500">*</span></label>
                   <select
                     value={langQuarter}
                     onChange={e => setLangQuarter(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="ui-field"
                   >
                     {quarterKeys.map(q => (
                       <option key={q} value={q}>{q}</option>
@@ -540,11 +540,11 @@ export default function GradeImportPanel({ adviserClass }: Props) {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">{adviserClass.workspace === 'JHS' ? 'MAPEH Group' : 'Language Group'}</label>
+                  <label className="ui-label">{adviserClass.workspace === 'JHS' ? 'MAPEH Group' : 'Language Group'}</label>
                   <select
                     value={selectedLanguageGroup}
                     onChange={e => setSelectedLanguageGroup(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="ui-field"
                   >
                     <option value="">Select Group...</option>
                     {adviserClass.languageGroups.map(lg => (
@@ -558,29 +558,29 @@ export default function GradeImportPanel({ adviserClass }: Props) {
                   return (
                     <>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-600 dark:text-slate-400">{lg.subjects[0]} File (JSON / Excel)</label>
+                        <label className="ui-label">{lg.subjects[0]} File (JSON / Excel)</label>
                         <input
                           type="file"
                           ref={fileOneRef}
                           accept=".json, .xlsx, .xls"
                           onChange={e => setFileOne(e.target.files?.[0] || null)}
-                          className="block w-full text-sm text-slate-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                          className="block min-h-10 w-full min-w-0 text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 dark:file:bg-slate-800 dark:file:text-slate-200"
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-600 dark:text-slate-400">{lg.subjects[1]} File (JSON / Excel)</label>
+                        <label className="ui-label">{lg.subjects[1]} File (JSON / Excel)</label>
                         <input
                           type="file"
                           ref={fileTwoRef}
                           accept=".json, .xlsx, .xls"
                           onChange={e => setFileTwo(e.target.files?.[0] || null)}
-                          className="block w-full text-sm text-slate-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100"
+                          className="block min-h-10 w-full min-w-0 text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 dark:file:bg-slate-800 dark:file:text-slate-200"
                         />
                       </div>
                       <button
                         onClick={handleImportLanguage}
                         disabled={!fileOne || !fileTwo}
-                        className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl transition-colors mt-4 flex items-center justify-center gap-2 text-sm"
+                        className="adviser-button-primary w-full"
                       >
                         <FileSpreadsheet className="h-4 w-4" /> Import Composite Group
                       </button>
@@ -595,10 +595,10 @@ export default function GradeImportPanel({ adviserClass }: Props) {
 
       {/* Imported Subject Summaries */}
       <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-        <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg">Imported Subjects Log</h3>
+        <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-lg text-balance">Imported Subjects Log</h3>
         
         {adviserClass.importedGrades.length === 0 ? (
-          <div className="p-8 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl text-center text-slate-500 text-sm">
+          <div className="p-8 border border-dashed border-slate-300 dark:border-slate-700 rounded-xl text-center text-slate-500 text-sm">
             No subjects have been imported yet.
           </div>
         ) : (
@@ -610,57 +610,52 @@ export default function GradeImportPanel({ adviserClass }: Props) {
                 const deleteKey = `${g.subjectUID}|${g.quarterKey}`;
                 const isConfirmingDelete = pendingDeleteKey === deleteKey;
                 return (
-                  <div key={cardKey} className={`bg-white dark:bg-slate-900 border rounded-xl p-4 flex flex-col relative group shadow-sm transition-all ${
+                  <div key={cardKey} className={`bg-white dark:bg-slate-900 border rounded-xl p-4 flex flex-col relative group transition-colors ${
                     isConfirmingDelete
-                      ? 'border-red-400 dark:border-red-700 ring-2 ring-red-200 dark:ring-red-900/40'
-                      : 'border-slate-200 dark:border-slate-800'
-                  }`}>
+                      ? "border-red-400 dark:border-red-700 ring-2 ring-red-200 dark:ring-red-900/40"
+                      : "border-slate-200 dark:border-slate-800"
+                  } `}>
                     {/* Lock / Unlock button */}
-                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => handleLockToggle(g)}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          g.isLocked
-                            ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400 hover:bg-red-100'
-                            : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-100'
-                        }`}
+                        className="adviser-button"
+                        aria-pressed={g.isLocked}
                         title={g.isLocked ? 'Unlock Subject' : 'Lock Subject'}
                       >
                         {g.isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                        {g.isLocked ? 'Unlock' : 'Lock'}
                       </button>
                       <button
                         onClick={() => handleDeleteSubject(g)}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          isConfirmingDelete
-                            ? 'bg-red-500 text-white hover:bg-red-600'
-                            : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-400'
-                        }`}
+                        className="adviser-button text-red-700 dark:text-red-400"
                         title={isConfirmingDelete ? 'Click again to confirm deletion' : 'Delete this imported subject'}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" /> {isConfirmingDelete ? 'Confirm delete' : 'Delete'}
                       </button>
                     </div>
 
-                    <div className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest">{g.quarterKey}</div>
-                    <div
-                      className="font-bold text-slate-800 dark:text-slate-100 text-base mt-0.5 pr-16 truncate cursor-pointer hover:text-amber-600 hover:underline"
+                    <div className="text-sm font-semibold text-amber-600 dark:text-amber-500">{g.quarterKey}</div>
+                    <button
+                      type="button"
+                      className="mt-1 min-h-10 break-words text-left text-base font-semibold text-slate-800 hover:text-amber-700 hover:underline dark:text-slate-100 dark:hover:text-amber-400"
                       title={g.subjectName}
                       onClick={() => !isConfirmingDelete && setSelectedSubjectRecord(g)}
                     >
                       {g.subjectName}
-                    </div>
-                    <div className="text-[10px] font-mono text-slate-400 mt-1">{g.subjectUID}</div>
+                    </button>
+                    <div className="mt-1 break-all text-xs tabular-nums text-slate-500">{g.subjectUID}</div>
 
                     {/* Confirm-delete banner */}
                     {isConfirmingDelete && (
                       <div className="mt-3 flex items-start gap-2 p-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
                         <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                         <div className="flex-1">
-                          <div className="text-[11px] font-black text-red-700 dark:text-red-400">Delete this subject?</div>
-                          <div className="text-[10px] text-red-600 dark:text-red-500 mt-0.5">This removes it from the grade matrix. Click the delete icon again to confirm, or</div>
+                          <div className="text-sm font-semibold text-red-700 dark:text-red-400">Delete this subject?</div>
+                          <div className="text-sm text-red-600 dark:text-red-500 mt-0.5">This removes it from the grade matrix. Click the delete icon again to confirm, or</div>
                           <button
                             onClick={() => setPendingDeleteKey(null)}
-                            className="text-[10px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline mt-1 cursor-pointer"
+                            className="adviser-button"
                           >
                             Cancel
                           </button>
@@ -670,7 +665,7 @@ export default function GradeImportPanel({ adviserClass }: Props) {
 
                     <div className="flex-1" />
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-500">
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-sm text-slate-500">
                       <div>{Object.keys(g.grades).length} Students</div>
                       <div>{new Date(g.importedAt).toLocaleDateString()}</div>
                     </div>
@@ -691,22 +686,22 @@ export default function GradeImportPanel({ adviserClass }: Props) {
 
       {/* Inline Confirm Modal (macOS Tauri-safe, replaces window.confirm) */}
       {pendingConfirm && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 max-w-sm w-full space-y-4">
             <div className="flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{pendingConfirm.message}</p>
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 text-pretty">{pendingConfirm.message}</p>
             </div>
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
-                className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer"
+                className="adviser-button-primary flex-1"
               >
                 Yes, Replace
               </button>
               <button
                 onClick={() => setPendingConfirm(null)}
-                className="py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                className="adviser-button"
               >
                 Cancel
               </button>

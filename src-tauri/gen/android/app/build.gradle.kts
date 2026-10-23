@@ -1,3 +1,4 @@
+import java.io.File
 import java.util.Properties
 
 plugins {
@@ -8,6 +9,15 @@ plugins {
 
 val tauriProperties = Properties().apply {
     val propFile = file("tauri.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+
+// Release signing credentials live outside the source tree.
+// File: ~/.srphsi/keystore.properties
+val signingProperties = Properties().apply {
+    val propFile = File(System.getProperty("user.home"), ".srphsi/keystore.properties")
     if (propFile.exists()) {
         propFile.inputStream().use { load(it) }
     }
@@ -26,10 +36,10 @@ android {
     }
     signingConfigs {
         create("release") {
-            storeFile = file("../../srphsi-release.keystore")
-            storePassword = "srphsi2024"
-            keyAlias = "srphsi"
-            keyPassword = "srphsi2024"
+            storeFile = file(signingProperties.getProperty("storeFile", "../../srphsi-release.keystore"))
+            storePassword = signingProperties.getProperty("storePassword")
+            keyAlias = signingProperties.getProperty("keyAlias")
+            keyPassword = signingProperties.getProperty("keyPassword")
         }
     }
     buildTypes {

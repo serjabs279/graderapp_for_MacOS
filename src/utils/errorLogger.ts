@@ -8,6 +8,8 @@
  * This is a DEVELOPER-ONLY utility. Logs are hidden behind credentials in Settings.
  */
 
+import { APP_VERSION } from '../types';
+
 export type LogLevel = 'error' | 'warning' | 'info' | 'critical';
 export type LogCategory = 'runtime' | 'promise' | 'manual' | 'calculation' | 'persistence' | 'render' | 'network';
 
@@ -27,8 +29,23 @@ export interface LogEntry {
 }
 
 const STORAGE_KEY = 'srphs_dev_error_log';
-const MAX_LOG_ENTRIES = 500;
-const APP_VERSION = '1.0.2';
+const MAX_LOG_ENTRIES = 200;
+const MAX_MESSAGE_CHARS = 2000;
+const MAX_STACK_CHARS = 6000;
+const MAX_CONSOLE_ARG_CHARS = 500;
+
+function truncate(value: string | undefined, max: number): string | undefined {
+  if (!value || value.length <= max) return value;
+  return `${value.slice(0, max)}…[truncated]`;
+}
+
+function describeArg(arg: unknown): string {
+  if (arg instanceof Error) return arg.message;
+  if (typeof arg === 'object') {
+    try { return truncate(JSON.stringify(arg), MAX_CONSOLE_ARG_CHARS) ?? String(arg); } catch { return String(arg); }
+  }
+  return truncate(String(arg), MAX_CONSOLE_ARG_CHARS) ?? String(arg);
+}
 
 // Unique session ID per page load
 const SESSION_ID = `sess_${Date.now().toString(36)}`;
@@ -78,7 +95,13 @@ class ErrorLogger {
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this._entries));
     } catch {
-      // localStorage full or unavailable — silent fail
+      // Quota exhausted: keep a short tail so logging never blocks app data.
+      try {
+        this._entries = this._entries.slice(-50);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this._entries));
+      } catch {
+        // localStorage unavailable — silent fail
+      }
     }
   }
 
@@ -130,13 +153,7 @@ class ErrorLogger {
     const originalConsoleError = console.error.bind(console);
     console.error = (...args: unknown[]) => {
       originalConsoleError(...args);
-      const message = args.map(a => {
-        if (a instanceof Error) return a.message;
-        if (typeof a === 'object') {
-          try { return JSON.stringify(a); } catch { return String(a); }
-        }
-        return String(a);
-      }).join(' ');
+      const message = args.map(describeArg).join(' ');
 
       // Avoid duplicate tracking of our own logger calls
       if (message.includes('[ErrorLogger]')) return;
@@ -156,7 +173,7 @@ class ErrorLogger {
     const originalConsoleWarn = console.warn.bind(console);
     console.warn = (...args: unknown[]) => {
       originalConsoleWarn(...args);
-      const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+      const message = args.map(describeArg).join(' ');
       if (message.includes('[ErrorLogger]')) return;
 
       this._push({
@@ -187,9 +204,9 @@ class ErrorLogger {
       category: options.category,
       timestamp: now,
       relativeTime: 'just now',
-      message: options.message,
+      message: truncate(options.message, MAX_MESSAGE_CHARS) ?? options.message,
       source: options.source,
-      stack: options.stack,
+      stack: truncate(options.stack, MAX_STACK_CHARS),
       context: options.context,
       userAgent: navigator.userAgent,
       appVersion: APP_VERSION,
@@ -289,7 +306,7 @@ class ErrorLogger {
   /** Clear all stored logs */
   clearAll(): void {
     this._entries = [];
-    localStorage.removeItem(STORAGE_KEY);
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
     this.info('Log history cleared by developer', 'errorLogger.ts');
   }
 

@@ -44,103 +44,108 @@ export default function TeacherExcelExportModal({ project, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+    <div className="ui-dialog-overlay">
+      <div role="dialog" aria-modal="true" aria-labelledby="teacher-export-title" aria-describedby="teacher-export-description" className="ui-dialog max-w-lg">
 
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 rounded-xl">
-              {exportFormat === 'json' ? <FileCode className="h-5 w-5" /> : <FileSpreadsheet className="h-5 w-5 text-emerald-600" />}
+        <div className="ui-dialog-header">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+              {exportFormat === 'json' ? <FileCode className="size-5" /> : <FileSpreadsheet className="size-5" />}
             </div>
-            <div>
-              <h3 className="font-black text-slate-800 dark:text-slate-100 text-base">Export Grades for Adviser</h3>
-              <p className="text-[11px] text-slate-500 font-medium">
+            <div className="min-w-0">
+              <h3 id="teacher-export-title" className="ui-section-title text-balance">Export grades for adviser</h3>
+              <p className="mt-1 break-words text-sm text-slate-600 dark:text-slate-400">
                 {project.subject} · {project.gradeLevel} - {project.section}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
-            <X className="h-5 w-5 text-slate-500" />
+          <button type="button" onClick={onClose} aria-label="Close export dialog" className="ui-icon-button">
+            <X className="size-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5">
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Select the quarters and format to export. The file will be downloaded for import into the Adviser Portal.
+        <div className="ui-dialog-body space-y-5">
+          <p id="teacher-export-description" className="text-pretty text-sm text-slate-600 dark:text-slate-400">
+            Select the quarters and format to export. Import the downloaded file into the Adviser Portal.
           </p>
 
+          {exportFormat === 'json' && (
+            <div className="ui-notice">
+              <p>The JSON file also includes a full gradebook backup with all quarters, scores, and assessments. Keep it to recover this section using <strong className="font-semibold">Restore Backup</strong>.</p>
+            </div>
+          )}
+
           {/* Format Toggle */}
-          <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+          <div className="ui-tabs" role="group" aria-label="Export format">
             <button
               type="button"
               onClick={() => setExportFormat('json')}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                exportFormat === 'json'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
+              aria-pressed={exportFormat === 'json'}
+              className="ui-tab flex-1 whitespace-normal"
             >
-              <FileCode className="h-4 w-4 text-indigo-500" /> JSON (Adviser Portal)
+              <FileCode className="size-4 shrink-0" /> JSON (Adviser Portal)
             </button>
             <button
               type="button"
               onClick={() => setExportFormat('excel')}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                exportFormat === 'excel'
-                  ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-300 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
+              aria-pressed={exportFormat === 'excel'}
+              className="ui-tab flex-1 whitespace-normal"
             >
-              <FileSpreadsheet className="h-4 w-4 text-emerald-500" /> Excel (.xlsx)
+              <FileSpreadsheet className="size-4 shrink-0" /> Excel (.xlsx)
             </button>
           </div>
 
           {/* Quarter Selection */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+          <fieldset className="min-w-0 space-y-2">
+            <legend className="ui-label mb-2">Quarters to include</legend>
+            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50">
               <input
                 type="checkbox"
-                className="w-4 h-4 text-indigo-600 rounded border-slate-300"
+                className="size-4 shrink-0 rounded border-slate-300 accent-emerald-700"
                 checked={selected.length === allQuarters.length && allQuarters.length > 0}
                 onChange={handleSelectAll}
               />
-              <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">Select All (Consolidated)</span>
+              <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Select all (consolidated)</span>
             </label>
 
-            <div className="h-px bg-slate-100 dark:bg-slate-800 my-1 w-full" />
+            <div className="my-1 h-px w-full bg-slate-100 dark:bg-slate-800" />
 
             {allQuarters.map(q => (
-              <label key={q} className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+              <label key={q} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50">
                 <input
                   type="checkbox"
-                  className="w-4 h-4 text-indigo-600 rounded border-slate-300"
+                  className="size-4 shrink-0 rounded border-slate-300 accent-emerald-700"
                   checked={selected.includes(q)}
                   onChange={() => handleToggle(q)}
                 />
-                <span className="font-semibold text-slate-700 dark:text-slate-300 text-sm">{q}</span>
+                <span className="text-sm text-slate-700 dark:text-slate-300">{q}</span>
               </label>
             ))}
-          </div>
+          </fieldset>
+          <p className="text-sm tabular-nums text-slate-600 dark:text-slate-400" aria-live="polite">
+            {selected.length === 0 ? 'Select at least one quarter to download.' : `${selected.length} of ${allQuarters.length} quarters selected.`}
+          </p>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center shrink-0">
+        <div className="ui-dialog-footer">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+            className="ui-button"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleExport}
             disabled={selected.length === 0}
-            className="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+            className="ui-button-primary"
           >
-            <Download className="h-4 w-4" />
+            <Download className="size-4 shrink-0" />
             Download {exportFormat === 'json' ? 'JSON' : 'Excel'}
-            {selected.length > 0 ? ` (${selected.length} Quarter${selected.length !== 1 ? 's' : ''})` : ''}
           </button>
         </div>
       </div>

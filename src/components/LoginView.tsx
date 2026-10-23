@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import { KeyRound, ShieldAlert, User, Eye, EyeOff, Lock, Sparkles, UserPlus, CheckCircle } from 'lucide-react';
+import { KeyRound, ShieldAlert, User, Eye, EyeOff, Lock, UserPlus, CheckCircle } from 'lucide-react';
 
 export default function LoginView() {
   const { login, bypassLogin, updateCredentials } = useApp();
@@ -97,122 +97,105 @@ export default function LoginView() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 font-sans transition-colors duration-200">
-      
-      {/* Visual background accents */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-200/20 dark:bg-emerald-900/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-teal-200/20 dark:bg-teal-950/10 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Main Login Card */}
-      <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden transition-all duration-300">
-        
-        {/* Card Header Banner */}
-        <div className="bg-slate-50 dark:bg-slate-950/50 p-6 text-center border-b border-slate-100 dark:border-slate-850 relative">
-          <div className="inline-flex w-12 h-12 bg-emerald-600 text-white rounded-2xl items-center justify-center font-black text-xl shadow-md mb-3 animate-pulse">
-            SR
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-slate-100 p-4 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:p-6">
+      <main className="ui-panel w-full max-w-md overflow-hidden">
+        <header className="border-b border-slate-200 p-5 dark:border-slate-800 sm:p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-base font-semibold text-white" aria-hidden="true">
+              SR
+            </div>
+            <div>
+              <p className="text-pretty text-sm font-semibold">SRPHS Grading System</p>
+              <p className="text-pretty text-xs text-slate-500 dark:text-slate-400">Your offline grading workspace</p>
+            </div>
           </div>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
-            SRPHS GRADING SYSTEM
-          </h2>
-          <p className="text-[10px] text-slate-450 dark:text-slate-500 font-sans font-bold uppercase tracking-widest mt-1">
-            SECURE ACADEMIC GATEWAY
+          <h1 className="ui-heading text-balance">
+            {regSuccess ? 'You’re ready to begin' : showBypass ? 'Recover your account' : activeTab === 'login' ? 'Welcome back' : 'Create your account'}
+          </h1>
+          <p className="ui-description">
+            {regSuccess ? 'Your account has been created.' : showBypass ? 'Use superuser recovery to regain access to your workspace.' : activeTab === 'login' ? 'Sign in to continue with your classes and grade records.' : 'Set the username and password for this local workspace.'}
           </p>
-        </div>
+        </header>
 
-        {/* Tab Selector */}
         {!showBypass && !regSuccess && (
-          <div className="flex border-b border-slate-100 dark:border-slate-850 p-2 bg-slate-50/50 dark:bg-slate-950/20">
+          <div className="ui-tabs px-5 pt-3 sm:px-6" aria-label="Account access">
             <button
+              type="button"
               onClick={() => {
                 setActiveTab('login');
                 setError(null);
                 setRegError(null);
               }}
-              className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                activeTab === 'login'
-                  ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-150 dark:border-slate-700/60'
-                  : 'text-slate-450 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-350'
-              }`}
+              className="ui-tab flex-1"
+              aria-pressed={activeTab === 'login'}
             >
-              <KeyRound className="h-3.5 w-3.5" />
+              <KeyRound className="size-4" aria-hidden="true" />
               Log In
             </button>
             <button
+              type="button"
               onClick={() => {
                 setActiveTab('register');
                 setError(null);
                 setRegError(null);
               }}
-              className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                activeTab === 'register'
-                  ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-150 dark:border-slate-700/60'
-                  : 'text-slate-450 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-350'
-              }`}
+              className="ui-tab flex-1"
+              aria-pressed={activeTab === 'register'}
             >
-              <UserPlus className="h-3.5 w-3.5" />
+              <UserPlus className="size-4" aria-hidden="true" />
               Create Account
             </button>
           </div>
         )}
 
-        {/* Card Body */}
-        <div className="p-8">
+        <div className="p-5 sm:p-6">
           {regSuccess ? (
-            <div className="text-center py-6 space-y-4 animate-fade-in">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-400 rounded-full">
-                <CheckCircle className="h-8 w-8" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-black text-slate-900 dark:text-white">Account Created!</h3>
-                <p className="text-xs text-slate-450 dark:text-slate-500 font-medium">
-                  Signing you in automatically to your new workspace...
-                </p>
-              </div>
+            <div className="space-y-3 py-3 text-center" role="status">
+              <CheckCircle className="mx-auto size-9 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
+              <h2 className="ui-section-title text-balance">Account created</h2>
+              <p className="text-pretty text-sm text-slate-600 dark:text-slate-400">Signing you in automatically to your new workspace...</p>
             </div>
           ) : showBypass ? (
-            // Superuser Bypass Screen
-            <form onSubmit={handleBypassSubmit} className="space-y-5 animate-fade-in">
-              <div className="p-4 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/20 text-amber-800 dark:text-amber-400 rounded-2xl space-y-2">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="h-4.5 w-4.5 text-amber-650" />
-                  <span className="text-[11px] font-black uppercase tracking-wider">Superuser Recovery Mode</span>
-                </div>
-                <p className="text-[10px] font-bold leading-relaxed opacity-90">
-                  Forgot your credentials? Enter the secure emergency Superuser Password to bypass normal authentication, log in, and reset your custom username and password.
+            <form onSubmit={handleBypassSubmit} className="space-y-5">
+              <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                <h2 className="flex items-center gap-2 text-balance text-sm font-semibold">
+                  <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
+                  Superuser recovery
+                </h2>
+                <p className="text-pretty text-sm leading-relaxed">
+                  Enter the emergency Superuser Password to bypass normal authentication. Once signed in, you can reset your username and password in System Settings.
                 </p>
-                <div className="text-[10px] bg-amber-100/40 dark:bg-amber-950/40 px-2.5 py-1.5 rounded-lg border border-amber-200/50 dark:border-amber-900/30 font-mono flex items-center justify-between mt-2 select-all">
-                  <span>BYPASS CODE:</span>
-                  <span className="font-extrabold text-amber-900 dark:text-amber-300">SRPHS_SUPER_BYPASS_2026</span>
+                <div className="space-y-1 border-t border-amber-200 pt-3 dark:border-amber-900">
+                  <span className="block text-xs font-medium">Bypass code</span>
+                  <code className="block select-all break-all text-sm tabular-nums">SRPHS_SUPER_BYPASS_2026</code>
                 </div>
               </div>
 
               {bypassError && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/30 text-red-700 dark:text-red-400 text-xs font-bold rounded-xl flex items-center gap-2.5">
-                  <ShieldAlert className="h-4.5 w-4.5 shrink-0" />
+                <div id="recovery-error" role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-pretty text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                  <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                   <span>{bypassError}</span>
                 </div>
               )}
 
-              {/* Bypass input */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-sans font-black text-slate-450 dark:text-slate-500 uppercase tracking-wider">
-                  Superuser Password
-                </label>
+              <div className="space-y-2">
+                <label htmlFor="recovery-password" className="ui-label">Superuser password</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-amber-500" />
-                  </div>
+                  <Lock className="pointer-events-none absolute left-3 top-3 size-4 text-slate-400" aria-hidden="true" />
                   <input
+                    id="recovery-password"
                     type="password"
                     value={bypassPass}
                     onChange={(e) => setBypassPass(e.target.value)}
                     placeholder="Enter bypass password"
-                    className="w-full bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold transition-all focus:outline-none focus:border-amber-550 focus:ring-1 focus:ring-amber-550"
+                    aria-invalid={Boolean(bypassError)}
+                    aria-describedby={bypassError ? 'recovery-error' : undefined}
+                    className="ui-field pl-10"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row">
                 <button
                   type="button"
                   onClick={() => {
@@ -220,180 +203,161 @@ export default function LoginView() {
                     setBypassPass('');
                     setBypassError(null);
                   }}
-                  className="py-3 bg-slate-100 hover:bg-slate-150 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-750 dark:text-slate-350 text-xs font-black rounded-2xl transition-all cursor-pointer"
+                  className="ui-button flex-1"
                 >
                   Back to Login
                 </button>
-                <button
-                  type="submit"
-                  className="py-3 bg-amber-600 hover:bg-amber-650 text-white text-xs font-black rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Sparkles className="h-4 w-4" /> Bypass Lock
+                <button type="submit" className="ui-button-primary flex-1">
+                  <KeyRound className="size-4" aria-hidden="true" /> Recover access
                 </button>
               </div>
             </form>
           ) : activeTab === 'login' ? (
-            // LOG IN FORM
             <form onSubmit={handleSubmit} className="space-y-5">
-              {error && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/30 text-red-700 dark:text-red-400 text-xs font-bold rounded-xl flex items-center gap-2.5">
-                  <ShieldAlert className="h-4.5 w-4.5 shrink-0" />
-                  <span>{error}</span>
+              {(error || regError) && (
+                <div id="login-error" role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-pretty text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                  <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  <span>{error || regError}</span>
                 </div>
               )}
 
-              {/* Username field */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-sans font-black text-slate-450 dark:text-slate-500 uppercase tracking-wider">
-                  Username
-                </label>
+              <div className="space-y-2">
+                <label htmlFor="login-username" className="ui-label">Username</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <User className="h-4 w-4 text-slate-400" />
-                  </div>
+                  <User className="pointer-events-none absolute left-3 top-3 size-4 text-slate-400" aria-hidden="true" />
                   <input
+                    id="login-username"
                     type="text"
+                    autoComplete="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Enter your username"
-                    className="w-full bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 border border-slate-150 dark:border-slate-800 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold transition-all focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error || regError ? 'login-error' : undefined}
+                    className="ui-field pl-10"
                   />
                 </div>
               </div>
 
-              {/* Password field */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-sans font-black text-slate-450 dark:text-slate-500 uppercase tracking-wider">
-                  Password
-                </label>
+              <div className="space-y-2">
+                <label htmlFor="login-password" className="ui-label">Password</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-slate-400" />
-                  </div>
+                  <Lock className="pointer-events-none absolute left-3 top-3 size-4 text-slate-400" aria-hidden="true" />
                   <input
-                    type={showPassword ? "text" : "password"}
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
-                    className="w-full bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 border border-slate-150 dark:border-slate-800 rounded-2xl py-3 pl-11 pr-11 text-xs font-bold transition-all focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error || regError ? 'login-error' : undefined}
+                    className="ui-field pl-10 pr-12"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 cursor-pointer"
+                    className="ui-icon-button absolute right-0 top-0"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
+                    aria-controls="login-password"
                   >
-                    {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                    {showPassword ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
                   </button>
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-black rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
-              >
-                <KeyRound className="h-4 w-4" /> Secure Log In
+              <button type="submit" className="ui-button-primary w-full">
+                <KeyRound className="size-4" aria-hidden="true" /> Log In
               </button>
 
-              {/* Reset Helper link */}
-              <div className="pt-2 text-center">
-                <button
-                  type="button"
-                  onClick={() => setShowBypass(true)}
-                  className="text-[10px] font-sans font-bold text-slate-450 hover:text-emerald-600 dark:text-slate-500 dark:hover:text-emerald-400 transition-colors cursor-pointer"
-                >
-                  Forgot credentials? Bypass security
-                </button>
-              </div>
+              <button type="button" onClick={() => setShowBypass(true)} className="ui-button w-full">
+                Forgot your credentials?
+              </button>
             </form>
           ) : (
-            // REGISTER / CREATE ACCOUNT FORM
-            <form onSubmit={handleRegisterSubmit} className="space-y-4 animate-fade-in">
+            <form onSubmit={handleRegisterSubmit} className="space-y-5">
               {regError && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/30 text-red-700 dark:text-red-400 text-xs font-bold rounded-xl flex items-center gap-2.5">
-                  <ShieldAlert className="h-4.5 w-4.5 shrink-0" />
+                <div id="register-error" role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-pretty text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                  <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                   <span>{regError}</span>
                 </div>
               )}
 
-              {/* New Username */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-sans font-black text-slate-450 dark:text-slate-500 uppercase tracking-wider">
-                  Create Username
-                </label>
+              <div className="space-y-2">
+                <label htmlFor="register-username" className="ui-label">Create username</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <User className="h-4 w-4 text-slate-400" />
-                  </div>
+                  <User className="pointer-events-none absolute left-3 top-3 size-4 text-slate-400" aria-hidden="true" />
                   <input
+                    id="register-username"
                     type="text"
+                    autoComplete="username"
                     value={regUsername}
                     onChange={(e) => setRegUsername(e.target.value)}
                     placeholder="Set username"
-                    className="w-full bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 border border-slate-150 dark:border-slate-800 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold transition-all focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    aria-describedby={regError ? 'register-error' : undefined}
+                    className="ui-field pl-10"
                   />
                 </div>
               </div>
 
-              {/* New Password */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-sans font-black text-slate-450 dark:text-slate-500 uppercase tracking-wider">
-                  Create Password
-                </label>
+              <div className="space-y-2">
+                <label htmlFor="register-password" className="ui-label">Create password</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-slate-400" />
-                  </div>
+                  <Lock className="pointer-events-none absolute left-3 top-3 size-4 text-slate-400" aria-hidden="true" />
                   <input
-                    type={showRegPassword ? "text" : "password"}
+                    id="register-password"
+                    type={showRegPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Set secure password"
-                    className="w-full bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 border border-slate-150 dark:border-slate-800 rounded-2xl py-3 pl-11 pr-11 text-xs font-bold transition-all focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    placeholder="Set password"
+                    aria-describedby={regError ? 'register-password-help register-error' : 'register-password-help'}
+                    className="ui-field pl-10 pr-12"
                   />
                   <button
                     type="button"
                     onClick={() => setShowRegPassword(!showRegPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 cursor-pointer"
+                    className="ui-icon-button absolute right-0 top-0"
+                    aria-label={showRegPassword ? 'Hide both passwords' : 'Show both passwords'}
+                    aria-pressed={showRegPassword}
+                    aria-controls="register-password register-confirm-password"
                   >
-                    {showRegPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                    {showRegPassword ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
                   </button>
                 </div>
+                <p id="register-password-help" className="text-pretty text-xs text-slate-500 dark:text-slate-400">Use at least 4 characters.</p>
               </div>
 
-              {/* Confirm Password */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-sans font-black text-slate-450 dark:text-slate-500 uppercase tracking-wider">
-                  Confirm Password
-                </label>
+              <div className="space-y-2">
+                <label htmlFor="register-confirm-password" className="ui-label">Confirm password</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-slate-400" />
-                  </div>
+                  <Lock className="pointer-events-none absolute left-3 top-3 size-4 text-slate-400" aria-hidden="true" />
                   <input
-                    type={showRegPassword ? "text" : "password"}
+                    id="register-confirm-password"
+                    type={showRegPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
                     value={regConfirmPassword}
                     onChange={(e) => setRegConfirmPassword(e.target.value)}
                     placeholder="Repeat password"
-                    className="w-full bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 border border-slate-150 dark:border-slate-800 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold transition-all focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    aria-describedby={regError ? 'register-error' : undefined}
+                    className="ui-field pl-10"
                   />
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-black rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
-              >
-                <UserPlus className="h-4 w-4" /> Register & Sign In
+              <button type="submit" className="ui-button-primary w-full">
+                <UserPlus className="size-4" aria-hidden="true" /> Register & Sign In
               </button>
             </form>
           )}
         </div>
-      </div>
+      </main>
 
-      {/* Info helper footer */}
-      <div className="mt-8 text-center text-[10px] text-slate-400 font-bold max-w-sm leading-relaxed">
-        SRPHS Grader System SY 2026-2027 &copy; All Rights Reserved. Secure local data storage protocol initialized.
-      </div>
+      <footer className="mt-6 max-w-sm text-center text-pretty text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+        SRPHS Grader System · <span className="tabular-nums">SY 2026–2027</span><br />
+        Offline workspace. Data is stored on this device.
+      </footer>
     </div>
   );
 }

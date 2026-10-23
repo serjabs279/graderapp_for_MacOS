@@ -1,18 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { runDataIntegrityCheck, IntegrityIssue, IssueSeverity } from '../utils/dataIntegrity';
-import {
-  ShieldAlert,
-  ShieldCheck,
-  AlertTriangle,
-  Info,
-  RefreshCw,
-  X,
-  CheckCircle2,
-  AlertCircle,
-  FileCheck2,
-  Sparkles
-} from 'lucide-react';
+import { runDataIntegrityCheck, IssueSeverity } from '../utils/dataIntegrity';
+import { ShieldAlert, ShieldCheck, AlertTriangle, Info, RefreshCw, X, CheckCircle2, AlertCircle, FileCheck2 } from 'lucide-react';
 
 interface DataIntegrityModalProps {
   isOpen: boolean;
@@ -25,9 +14,7 @@ export default function DataIntegrityModal({ isOpen, onClose }: DataIntegrityMod
   const [isScanning, setIsScanning] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Compute live report
   const report = useMemo(() => {
-    // refreshTrigger is a dependency to force re-computation
     void refreshTrigger;
     return runDataIntegrityCheck(projects, adviserClasses);
   }, [projects, adviserClasses, refreshTrigger]);
@@ -48,250 +35,101 @@ export default function DataIntegrityModal({ isOpen, onClose }: DataIntegrityMod
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in font-sans">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100">
-        
-        {/* Modal Header */}
-        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              report.criticalCount > 0
-                ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-                : report.warningCount > 0
-                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-            }`}>
-              {report.criticalCount > 0 ? (
-                <ShieldAlert className="w-5 h-5 animate-pulse" />
-              ) : report.warningCount > 0 ? (
-                <AlertTriangle className="w-5 h-5" />
-              ) : (
-                <ShieldCheck className="w-5 h-5" />
-              )}
-            </div>
-            <div>
-              <h2 className="text-base font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                Data Health & Corruption Monitor
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                  Real-time
-                </span>
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Audits all teacher assessments, scores, adviser matrix, and calculations.
-              </p>
-            </div>
+    <div className="ui-dialog-overlay">
+      <section role="dialog" aria-modal="true" aria-labelledby="data-health-title" aria-describedby="data-health-description" className="ui-dialog max-w-3xl text-slate-900 dark:text-slate-100">
+        <header className="ui-dialog-header items-start">
+          <div className="min-w-0">
+            <h2 id="data-health-title" className="ui-section-title">Data Health & Corruption Monitor</h2>
+            <p id="data-health-description" className="ui-description">Audits all teacher assessments, scores, adviser matrix, and calculations.</p>
           </div>
+          <button type="button" onClick={onClose} className="ui-icon-button" aria-label="Close data health monitor">
+            <X aria-hidden="true" className="size-5" />
+          </button>
+        </header>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleManualRescan}
-              disabled={isScanning}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl transition cursor-pointer"
-              title="Re-run Diagnostics"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin text-emerald-500' : ''}`} />
-              <span>{isScanning ? 'Scanning...' : 'Re-scan'}</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Status Summary Banner */}
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/20 dark:bg-slate-950/20">
-          <div className="p-3.5 rounded-xl bg-white dark:bg-slate-850/80 border border-slate-200/70 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Health Status</span>
-            <div className="flex items-center gap-1.5 mt-2">
-              {report.isHealthy ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">Healthy</span>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-4 h-4 text-rose-500" />
-                  <span className="text-sm font-black text-rose-600 dark:text-rose-400">Needs Attention</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div
-            onClick={() => setFilter('critical')}
-            className={`p-3.5 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
-              filter === 'critical'
-                ? 'bg-rose-500/10 border-rose-500/40 text-rose-600 dark:text-rose-400'
-                : 'bg-white dark:bg-slate-850/80 border-slate-200/70 dark:border-slate-800 hover:border-rose-400/40'
-            }`}
-          >
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Critical Issues</span>
-            <span className="text-xl font-black text-rose-600 dark:text-rose-400 mt-1">
-              {report.criticalCount}
-            </span>
-          </div>
-
-          <div
-            onClick={() => setFilter('warning')}
-            className={`p-3.5 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
-              filter === 'warning'
-                ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400'
-                : 'bg-white dark:bg-slate-850/80 border-slate-200/70 dark:border-slate-800 hover:border-amber-400/40'
-            }`}
-          >
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Warnings</span>
-            <span className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">
-              {report.warningCount}
-            </span>
-          </div>
-
-          <div
-            onClick={() => setFilter('info')}
-            className={`p-3.5 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
-              filter === 'info'
-                ? 'bg-sky-500/10 border-sky-500/40 text-sky-600 dark:text-sky-400'
-                : 'bg-white dark:bg-slate-850/80 border-slate-200/70 dark:border-slate-800 hover:border-sky-400/40'
-            }`}
-          >
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Notices</span>
-            <span className="text-xl font-black text-sky-600 dark:text-sky-400 mt-1">
-              {report.infoCount}
-            </span>
-          </div>
-        </div>
-
-        {/* Filter Bar */}
-        <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                filter === 'all'
-                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              All ({report.totalIssues})
-            </button>
-            <button
-              onClick={() => setFilter('critical')}
-              className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                filter === 'critical'
-                  ? 'bg-rose-600 text-white'
-                  : 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30'
-              }`}
-            >
-              Critical ({report.criticalCount})
-            </button>
-            <button
-              onClick={() => setFilter('warning')}
-              className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                filter === 'warning'
-                  ? 'bg-amber-600 text-white'
-                  : 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-              }`}
-            >
-              Warnings ({report.warningCount})
-            </button>
-            <button
-              onClick={() => setFilter('info')}
-              className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                filter === 'info'
-                  ? 'bg-sky-600 text-white'
-                  : 'text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30'
-              }`}
-            >
-              Notices ({report.infoCount})
+        <div className="ui-dialog-body space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="ui-badge">Real-time</span>
+            <button type="button" onClick={handleManualRescan} disabled={isScanning} className="ui-button" title="Re-run Diagnostics">
+              <RefreshCw aria-hidden="true" className="size-4" />
+              {isScanning ? 'Scanning...' : 'Re-scan'}
             </button>
           </div>
 
-          <span className="text-[11px] text-slate-400">
-            Last scan: {report.scannedAt}
-          </span>
-        </div>
-
-        {/* Issue List / Healthy State */}
-        <div className="p-6 overflow-y-auto space-y-3 flex-1">
-          {report.issues.length === 0 ? (
-            <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/10">
-                <FileCheck2 className="w-8 h-8" />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-slate-800 dark:text-slate-100 flex items-center justify-center gap-2">
-                  <span>Zero Anomalies Detected</span>
-                  <Sparkles className="w-4 h-4 text-emerald-500" />
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
-                  All student scores, formula inputs, highest possible scores, and advisory grade matrices pass integrity verification.
-                </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 tabular-nums">
+            <div className="ui-panel space-y-2 p-3">
+              <span className="ui-label">Health Status</span>
+              <div className="flex items-start gap-2 text-sm font-medium" role="status">
+                {report.isHealthy ? (
+                  <><CheckCircle2 aria-hidden="true" className="size-4 shrink-0 text-emerald-600" /><span>Healthy</span></>
+                ) : (
+                  <><AlertCircle aria-hidden="true" className="size-4 shrink-0 text-red-600" /><span>Needs Attention</span></>
+                )}
               </div>
             </div>
-          ) : filteredIssues.length === 0 ? (
-            <div className="py-10 text-center text-xs text-slate-400">
-              No issues matching the selected filter.
+            {[
+              { value: 'critical' as const, label: 'Critical Issues', count: report.criticalCount },
+              { value: 'warning' as const, label: 'Warnings', count: report.warningCount },
+              { value: 'info' as const, label: 'Notices', count: report.infoCount },
+            ].map(({ value, label, count }) => (
+              <button key={value} type="button" onClick={() => setFilter(value)} aria-pressed={filter === value} className="ui-panel p-3 text-left aria-pressed:border-emerald-600 aria-pressed:bg-emerald-50 dark:aria-pressed:bg-emerald-950/40">
+                <span className="ui-label">{label}</span>
+                <span className="mt-1 block text-xl font-semibold">{count}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            <div className="ui-tabs" aria-label="Issue severity">
+              <button type="button" onClick={() => setFilter('all')} className="ui-tab tabular-nums" aria-pressed={filter === 'all'}>All ({report.totalIssues})</button>
+              <button type="button" onClick={() => setFilter('critical')} className="ui-tab tabular-nums" aria-pressed={filter === 'critical'}>Critical ({report.criticalCount})</button>
+              <button type="button" onClick={() => setFilter('warning')} className="ui-tab tabular-nums" aria-pressed={filter === 'warning'}>Warnings ({report.warningCount})</button>
+              <button type="button" onClick={() => setFilter('info')} className="ui-tab tabular-nums" aria-pressed={filter === 'info'}>Notices ({report.infoCount})</button>
             </div>
-          ) : (
-            filteredIssues.map((issue) => (
-              <div
-                key={issue.id}
-                className={`p-4 rounded-xl border transition flex items-start gap-3.5 ${
-                  issue.severity === 'critical'
-                    ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 text-rose-900 dark:text-rose-200'
-                    : issue.severity === 'warning'
-                    ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200'
-                    : 'bg-sky-50/50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900/40 text-sky-900 dark:text-sky-200'
-                }`}
-              >
-                <div className="shrink-0 mt-0.5">
-                  {issue.severity === 'critical' ? (
-                    <ShieldAlert className="w-4 h-4 text-rose-500" />
-                  ) : issue.severity === 'warning' ? (
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
-                  ) : (
-                    <Info className="w-4 h-4 text-sky-500" />
-                  )}
+            <p className="text-xs text-slate-600 dark:text-slate-400 tabular-nums" role="status">Last scan: {report.scannedAt}</p>
+          </div>
+
+          <div className="space-y-3">
+            {report.issues.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <FileCheck2 aria-hidden="true" className="size-8 text-emerald-600" />
+                <h3 className="ui-section-title">Zero Anomalies Detected</h3>
+                <p className="ui-description max-w-sm">All student scores, formula inputs, highest possible scores, and advisory grade matrices pass integrity verification.</p>
+              </div>
+            ) : filteredIssues.length === 0 ? (
+              <div className="space-y-3 py-8 text-center">
+                <p className="text-pretty text-sm text-slate-600 dark:text-slate-400">No issues matching the selected filter.</p>
+                <button type="button" className="ui-button" onClick={() => setFilter('all')}>Show all issues</button>
+              </div>
+            ) : filteredIssues.map((issue) => (
+              <article key={issue.id} className="ui-panel flex items-start gap-3 p-4">
+                <div aria-hidden="true" className="mt-0.5 shrink-0">
+                  {issue.severity === 'critical' ? <ShieldAlert className="size-5 text-red-600 dark:text-red-400" />
+                    : issue.severity === 'warning' ? <AlertTriangle className="size-5 text-amber-600 dark:text-amber-400" />
+                    : <Info className="size-5 text-slate-500 dark:text-slate-400" />}
                 </div>
-
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-black tracking-tight">{issue.title}</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white/60 dark:bg-slate-900/60 border border-current/20">
-                      {issue.location}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    {issue.description}
-                  </p>
+                <div className="min-w-0 flex-1 space-y-2 break-words">
+                  <h3 className="text-balance text-sm font-semibold">{issue.title}</h3>
+                  <div className="flex flex-wrap gap-2"><span className="ui-badge">{issue.severity}</span><span className="ui-badge break-all">{issue.location}</span></div>
+                  <p className="text-pretty text-sm leading-relaxed text-slate-600 dark:text-slate-300">{issue.description}</p>
                   {issue.fixSuggestion && (
-                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1 pt-1 border-t border-current/10">
-                      <strong className="text-slate-700 dark:text-slate-200">Recommended fix: </strong>
-                      {issue.fixSuggestion}
+                    <p className="border-t border-slate-200 pt-2 text-pretty text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400">
+                      <strong className="font-medium text-slate-800 dark:text-slate-200">Recommended fix: </strong>{issue.fixSuggestion}
                     </p>
                   )}
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>Encrypted local storage audit. No data sent to external servers.</span>
+              </article>
+            ))}
           </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-black rounded-xl hover:opacity-90 transition cursor-pointer"
-          >
-            Dismiss
-          </button>
+          <p className="flex items-start gap-2 text-pretty text-xs text-slate-600 dark:text-slate-400">
+            <ShieldCheck aria-hidden="true" className="size-4 shrink-0 text-emerald-600" />
+            Encrypted local storage audit. No data sent to external servers.
+          </p>
         </div>
-      </div>
+        <footer className="ui-dialog-footer">
+          <button type="button" onClick={onClose} className="ui-button-primary">Dismiss</button>
+        </footer>
+      </section>
     </div>
   );
 }

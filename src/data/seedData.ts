@@ -6,7 +6,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   defaultPassingGrade: 75,
   theme: "light",
   language: "English",
-  depedPolicy: "2027",
+  depedPolicy: "2015",
   subjects: {
     English: { wow: 0.20, ppt: 0.50, qste: 0.30 },
     Filipino: { wow: 0.20, ppt: 0.50, qste: 0.30 },
@@ -37,7 +37,7 @@ export const SEED_PROJECTS: Project[] = [
     subject: "English",
     teacherName: "RICHMOND C. JABLA",
     passingGrade: 75,
-    depedPolicy: "2027",
+    depedPolicy: "2015",
     students: [
       { id: "s-101", lrn: "109827364512", name: "ALCANTARA, Miguel L.", sex: "Male", studentNumber: "2026-001", status: "Active" },
       { id: "s-102", lrn: "102938475610", name: "CORTEZ, Gabriella V.", sex: "Female", studentNumber: "2026-002", status: "Active" },
@@ -79,7 +79,7 @@ export const SEED_PROJECTS: Project[] = [
       "4th Quarter": { assessments: [], scores: {} }
     },
     createdAt: "2026-06-01T08:00:00Z",
-    updatedAt: "2026-07-20T10:30:00Z"
+    updatedAt: "2026-08-05T10:30:00Z"
   },
   {
     id: "proj-science-g10",

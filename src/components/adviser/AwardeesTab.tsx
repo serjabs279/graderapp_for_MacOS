@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AdviserClass, HonorsLabel } from '../../types';
-import { GradeMatrix } from '../../utils/adviserUtils';
+import { GradeMatrix, StudentGradeRow, getQuarterHonors, getQuarterKeys, getQuarterTrackedSubjects, isQuarterComplete } from '../../utils/adviserUtils';
 import { generateAcademicAchieverCertificates, getDefaultCertificateDate } from '../../utils/adviser/certificateGenerator';
 import { exportFile } from '../../utils/fileExportAdapter';
+import { isAndroid } from '../../utils/platform';
 import { globalToast } from '../../context/ToastContext';
-import { Star, Printer, Medal, Award, Eye, Download, FileText } from 'lucide-react';
+import { Star, Printer, Medal, Award, Eye, Download, AlertCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import CertificatePreviewModal from './CertificatePreviewModal';
@@ -17,28 +18,76 @@ interface Props {
 
 export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
   const { globalSettings } = useApp();
-  const [periodLabel, setPeriodLabel] = useState<string>('1st Quarter');
+  const quarterKeys = getQuarterKeys(adviserClass.workspace);
+  const latestQuarterWithData = [...quarterKeys].reverse().find(qk =>
+    gradeMatrix.some(row => row.subjects.some(s => s.quarters[qk] !== null))
+  );
+  const hasPartialData = gradeMatrix.some(row =>
+    row.subjects.some(s => s.finalGrade === null && quarterKeys.some(qk => s.quarters[qk] !== null))
+  );
+  const [activePeriod, setActivePeriod] = useState<string>(
+    hasPartialData && latestQuarterWithData ? latestQuarterWithData : 'Final'
+  );
+  const [periodLabel, setPeriodLabel] = useState<string>(
+    activePeriod === 'Final' ? 'Full Year' : activePeriod
+  );
   const [givenDate, setGivenDate] = useState<string>(() => {
     return getDefaultCertificateDate(globalSettings.schoolName || (adviserClass as any).schoolName || 'SAN ROQUE PARISH HIGH SCHOOL, INC.');
   });
   const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
 
+  const handlePeriodChange = (period: string) => {
+    setActivePeriod(period);
+    // Certificate wording follows the period whose awardees are on screen.
+    setPeriodLabel(period === 'Final' ? 'Full Year' : period);
+  };
+
   const awardees = useMemo(() => {
-    return gradeMatrix
-      .filter((s: import('../../utils/adviserUtils').StudentGradeRow) => s.honorsLabel !== null)
-      .sort((a: import('../../utils/adviserUtils').StudentGradeRow, b: import('../../utils/adviserUtils').StudentGradeRow) => {
-        const honorWeight = (h: HonorsLabel | null | undefined) => {
-          if (h === 'With Highest Honors') return 3;
-          if (h === 'With High Honors') return 2;
-          if (h === 'With Honors') return 1;
-          return 0;
-        };
-        const wA = honorWeight(a.honorsLabel);
-        const wB = honorWeight(b.honorsLabel);
-        if (wA !== wB) return wB - wA;
-        return (b.generalAverage ?? 0) - (a.generalAverage ?? 0);
+    const honorWeight = (h: HonorsLabel | undefined) => {
+      if (h === 'With Highest Honors') return 3;
+      if (h === 'With High Honors') return 2;
+      if (h === 'With Honors') return 1;
+      return 0;
+    };
+
+    let rows: StudentGradeRow[];
+    if (activePeriod === 'Final') {
+      rows = gradeMatrix.filter(s => Boolean(s.honorsLabel));
+    } else {
+      // A quarter award needs every subject graded so far that quarter; a
+      // learner with a missing subject or component is not yet eligible.
+      const trackedSubjects = getQuarterTrackedSubjects(gradeMatrix, activePeriod);
+      rows = gradeMatrix.flatMap(s => {
+        if (!isQuarterComplete(s, activePeriod, trackedSubjects)) return [];
+        const { average, honorsLabel } = getQuarterHonors(s, activePeriod, adviserClass.honorsCriteria);
+        if (average === null || honorsLabel === null) return [];
+        // The certificate and list PDFs read generalAverage, so carry the
+        // quarter average through it for quarter-scoped awardees.
+        return [{ ...s, generalAverage: average, honorsLabel }];
       });
-  }, [gradeMatrix]);
+    }
+
+    return rows.sort((a, b) => {
+      const wA = honorWeight(a.honorsLabel);
+      const wB = honorWeight(b.honorsLabel);
+      if (wA !== wB) return wB - wA;
+      return (b.generalAverage ?? 0) - (a.generalAverage ?? 0);
+    });
+  }, [gradeMatrix, activePeriod, adviserClass.honorsCriteria]);
+
+  const quarterCoverage = useMemo(() => {
+    if (activePeriod === 'Final') return { total: 0, graded: 0, incomplete: 0 };
+    const subjects = gradeMatrix[0]?.subjects ?? [];
+    const tracked = getQuarterTrackedSubjects(gradeMatrix, activePeriod);
+    const graded = subjects.filter(s => tracked.has(s.subjectName)).length;
+    const hasAnyGrade = (row: StudentGradeRow) => row.subjects.some(s => s.quarters[activePeriod] != null);
+    const incomplete = gradeMatrix.filter(row =>
+      hasAnyGrade(row) && !isQuarterComplete(row, activePeriod, tracked)
+    ).length;
+    return { total: subjects.length, graded, incomplete };
+  }, [gradeMatrix, activePeriod]);
+
+  const averageLabel = activePeriod === 'Final' ? 'Final Average' : 'Quarter Average';
 
   const highestHonors = awardees.filter(a => a.honorsLabel === 'With Highest Honors');
   const highHonors = awardees.filter(a => a.honorsLabel === 'With High Honors');
@@ -52,7 +101,8 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
     try {
       const doc = generateAcademicAchieverCertificates(adviserClass, awardees, globalSettings, {
         periodLabel,
-        givenDate
+        givenDate,
+        averageLabel: activePeriod === 'Final' ? 'General Average' : 'Quarter Average'
       });
       const filename = `Certificates_${adviserClass.gradeLevel}_${adviserClass.section}_${periodLabel.replace(/\s+/g, '_')}.pdf`;
       const pdfBytes = doc.output('arraybuffer');
@@ -79,6 +129,8 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
     try {
       const doc = new jsPDF({ format: 'a4', orientation: 'portrait' });
       const schoolName = globalSettings.schoolName || 'SAN ROQUE PARISH HIGH SCHOOL INCORPORATED';
+      const region = adviserClass.region || globalSettings.region || '';
+      const division = adviserClass.division || globalSettings.division || '';
       const depedLogo = adviserClass.depedLogoBase64 || globalSettings.depedLogoBase64;
       const schoolLogo = adviserClass.schoolLogoBase64 || globalSettings.schoolLogoBase64;
 
@@ -100,8 +152,14 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
       yPos += 4.5;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text("Region X Northern Mindanao", 105, yPos, { align: 'center' });
-      yPos += 4.5;
+      if (region) {
+        doc.text(region, 105, yPos, { align: 'center' });
+        yPos += 4.5;
+      }
+      if (division) {
+        doc.text(division, 105, yPos, { align: 'center' });
+        yPos += 4.5;
+      }
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
       doc.text(schoolName.toUpperCase(), 105, yPos, { align: 'center' });
@@ -118,7 +176,7 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
       yPos += 5.5;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.text(`Grade ${adviserClass.gradeLevel} - Section ${adviserClass.section}  |  School Year: ${adviserClass.schoolYear}  |  Period: ${periodLabel}`, 105, yPos, { align: 'center' });
+      doc.text(`Grade ${adviserClass.gradeLevel} - Section ${adviserClass.section}  |  School Year: ${adviserClass.schoolYear}  |  Period: ${periodLabel === 'Full Year' ? 'Full Academic Year' : periodLabel}`, 105, yPos, { align: 'center' });
       yPos += 6;
 
       const bodyData = awardees.map((row, idx) => [
@@ -131,7 +189,7 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
 
       autoTable(doc, {
         startY: yPos,
-        head: [['No.', 'LRN', 'Learner Name', 'Academic Honor', 'Final Average']],
+        head: [['No.', 'LRN', 'Learner Name', 'Academic Honor', averageLabel]],
         body: bodyData,
         theme: 'grid',
         headStyles: { fillColor: [180, 130, 20], halign: 'center', fontSize: 9, fontStyle: 'bold' },
@@ -185,98 +243,141 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
     }
   };
 
-  const Section = ({ title, data, iconColor, bgHeader }: { title: string; data: typeof awardees; iconColor: string; bgHeader: string }) => {
+  const Section = ({ title, data }: { title: string; data: typeof awardees }) => {
     if (data.length === 0) return null;
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden mb-8">
-        <div className={`px-6 py-4 ${bgHeader} border-b border-slate-200 dark:border-slate-800 flex items-center gap-3`}>
-          <Medal className={`h-6 w-6 ${iconColor}`} />
-          <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">{title}</h3>
-          <span className="ml-auto bg-white/50 dark:bg-black/20 text-slate-700 dark:text-slate-300 px-3 py-1 rounded-full text-xs font-bold">
-            {data.length} Learner(s)
+      <section className="adviser-panel">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+          <Medal className="size-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <h3 className="text-balance text-base font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
+          <span className="ml-auto text-xs tabular-nums text-slate-500 dark:text-slate-400">
+            {data.length} learners
           </span>
         </div>
-        <table className="w-full text-left border-collapse text-sm">
-          <thead>
-            <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
-              <th className="px-6 py-4 font-bold text-slate-500 w-16 text-center">No.</th>
-              <th className="px-6 py-4 font-bold text-slate-500">Learner Name</th>
-              <th className="px-6 py-4 font-bold text-slate-500 text-right w-32">Final Average</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {data.map((row, idx) => (
-              <tr key={row.lrn} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                <td className="px-6 py-4 text-center font-mono text-slate-400 border-r border-slate-100 dark:border-slate-800">{idx + 1}</td>
-                <td className="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">
-                  {row.name}
-                  <div className="text-[10px] font-mono font-normal text-slate-400 mt-0.5">{row.lrn}</div>
-                </td>
-                <td className="px-6 py-4 text-right font-mono font-black text-slate-700 dark:text-slate-200">
-                  {row.generalAverage?.toFixed(2)}
-                </td>
+        <div className="overflow-x-auto" role="region" aria-label={title} tabIndex={0}>
+          <table className="w-full min-w-xl text-left border-collapse text-sm">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
+                <th scope="col" className="px-5 py-3 font-medium text-slate-500 dark:text-slate-400 w-16 text-center">No.</th>
+                <th scope="col" className="px-5 py-3 font-medium text-slate-500 dark:text-slate-400">Learner Name</th>
+                <th scope="col" className="px-5 py-3 font-medium text-slate-500 dark:text-slate-400 text-right w-40">{averageLabel}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {data.map((row, idx) => (
+                <tr key={row.lrn} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                  <td className="px-5 py-3.5 text-center text-slate-500 dark:text-slate-400">{idx + 1}</td>
+                  <td className="px-5 py-3.5 font-medium text-slate-700 dark:text-slate-200">
+                    {row.name}
+                    <div className="mt-1 text-xs font-normal text-slate-500 dark:text-slate-400">LRN: {row.lrn}</div>
+                  </td>
+                  <td className="px-5 py-3.5 text-right font-semibold text-slate-700 dark:text-slate-200">
+                    {row.generalAverage?.toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     );
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4 mb-8">
+    <div className="adviser-page">
+      <div className="flex flex-col gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <Star className="h-5 w-5 text-amber-500 fill-amber-500" /> Academic Excellence Awardees
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">End of school year honors and recognition.</p>
+          <h2 className="adviser-heading">Academic awardees</h2>
+          <p className="adviser-description">
+            {activePeriod === 'Final'
+              ? 'Official school-year honors, awarded only once every subject has a complete final rating.'
+              : `Honors candidates for ${activePeriod}, based on the subjects already graded in that quarter.`}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-           <button 
-             onClick={() => setShowPreviewModal(true)}
-             disabled={awardees.length === 0}
-             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 disabled:opacity-50 rounded-xl shadow-sm cursor-pointer transition-all"
-           >
-              <Eye className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Preview & Edit Settings
-           </button>
-           <button 
-             onClick={handleGenerateCertificates}
-             disabled={awardees.length === 0}
-             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl shadow-sm cursor-pointer transition-all"
-           >
-              <Award className="h-4 w-4 text-amber-200" /> Generate Certificates (A4)
-           </button>
-           <button 
-             onClick={handleDownloadAwardeesListPDF}
-             disabled={awardees.length === 0}
-             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 text-slate-700 dark:text-slate-200 cursor-pointer transition-all"
-             title="Download Official Awardees List PDF"
-           >
-              <Download className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Download List PDF
-           </button>
-           <button 
-             onClick={() => window.print()}
-             className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 cursor-pointer"
-           >
-              <Printer className="h-4 w-4 text-slate-500" /> Print List
-           </button>
+          <button
+            onClick={handleGenerateCertificates}
+            disabled={awardees.length === 0}
+            className="adviser-button-primary"
+          >
+            <Award className="size-4" aria-hidden="true" /> Generate certificates (A4)
+          </button>
+          <button
+            onClick={() => setShowPreviewModal(true)}
+            disabled={awardees.length === 0}
+            className="adviser-button"
+          >
+            <Eye className="size-4" aria-hidden="true" /> Preview & settings
+          </button>
+          <button
+            onClick={handleDownloadAwardeesListPDF}
+            disabled={awardees.length === 0}
+            className="adviser-button"
+            title="Download Official Awardees List PDF"
+          >
+            <Download className="size-4" aria-hidden="true" /> Download list PDF
+          </button>
+          <button
+            onClick={() => { if (isAndroid()) handleDownloadAwardeesListPDF(); else window.print(); }}
+            className="adviser-button"
+          >
+            <Printer className="size-4" aria-hidden="true" /> Print list
+          </button>
         </div>
       </div>
 
+      <div className="adviser-periods" role="group" aria-label="Grading period">
+        <button
+          onClick={() => handlePeriodChange('Final')}
+          aria-pressed={activePeriod === 'Final'}
+          className="adviser-period"
+        >
+          Final Grades
+        </button>
+        {quarterKeys.map(q => (
+          <button
+            key={q}
+            onClick={() => handlePeriodChange(q)}
+            aria-pressed={activePeriod === q}
+            className="adviser-period"
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+
+      {activePeriod !== 'Final' && (quarterCoverage.graded < quarterCoverage.total || quarterCoverage.incomplete > 0) && (
+        <div className="flex items-start gap-3 p-4 mb-6 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl">
+          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 leading-relaxed">
+            {quarterCoverage.graded < quarterCoverage.total && (
+              <>Only {quarterCoverage.graded} of {quarterCoverage.total} subjects have {activePeriod} grades so far. </>
+            )}
+            {quarterCoverage.incomplete > 0 && (
+              <>{quarterCoverage.incomplete} learner(s) with grades are not listed because at least one subject or component is still incomplete for them. </>
+            )}
+            These lists update automatically once the missing grades are imported.
+          </p>
+        </div>
+      )}
+
       {awardees.length === 0 ? (
-        <div className="text-center py-16 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
-          <Star className="h-12 w-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-          <h3 className="text-lg font-bold text-slate-600 dark:text-slate-400">No Awardees Yet</h3>
-          <p className="text-sm text-slate-500 mt-2 max-w-sm mx-auto">
-            Honors are calculated based on the final general average and the minimum grade requirement in any subject.
+        <div className="adviser-panel px-4 py-12 text-center">
+          <Star className="size-8 mx-auto text-slate-400 dark:text-slate-500 mb-4" aria-hidden="true" />
+          <h3 className="text-balance text-base font-semibold text-slate-700 dark:text-slate-300">
+            {activePeriod === 'Final' ? 'No Awardees Yet' : `No ${activePeriod} Awardees Yet`}
+          </h3>
+          <p className="text-pretty text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-sm mx-auto">
+            {activePeriod === 'Final'
+              ? 'Honors are calculated from the final general average and the minimum grade requirement in any subject, once every subject has a complete final rating.'
+              : `No learner meets the honors criteria for ${activePeriod} based on the subjects graded so far.`}
           </p>
         </div>
       ) : (
         <>
-          <Section title="With Highest Honors" data={highestHonors} iconColor="text-yellow-500" bgHeader="bg-yellow-50 dark:bg-yellow-900/20" />
-          <Section title="With High Honors" data={highHonors} iconColor="text-slate-400" bgHeader="bg-slate-100 dark:bg-slate-800/50" />
-          <Section title="With Honors" data={honors} iconColor="text-amber-700" bgHeader="bg-amber-50 dark:bg-amber-900/10" />
+          <Section title="With Highest Honors" data={highestHonors} />
+          <Section title="With High Honors" data={highHonors} />
+          <Section title="With Honors" data={honors} />
         </>
       )}
 
@@ -289,9 +390,9 @@ export default function AwardeesTab({ adviserClass, gradeMatrix }: Props) {
           awardees={awardees}
           globalSettings={globalSettings}
           periodLabel={periodLabel}
-          onPeriodChange={setPeriodLabel}
           givenDate={givenDate}
           onGivenDateChange={setGivenDate}
+          averageLabel={activePeriod === 'Final' ? 'General Average' : 'Quarter Average'}
         />
       )}
     </div>

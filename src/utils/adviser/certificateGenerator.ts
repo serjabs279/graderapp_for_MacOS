@@ -5,6 +5,7 @@ import { StudentGradeRow } from '../adviserUtils';
 export interface CertificateOptions {
   periodLabel?: string; // e.g. "1st Quarter" or "Academic Year"
   givenDate?: string;   // e.g. "13th of September 2026 at San Roque Parish High School Incorporated."
+  averageLabel?: string; // e.g. "General Average" (final) or "Quarter Average"
 }
 
 export function getOrdinalSuffix(day: number): string {
@@ -178,9 +179,10 @@ export function generateAcademicAchieverCertificates(
 
     const honorText = student.honorsLabel || 'With Honors';
     const genAvg = student.generalAverage ? student.generalAverage.toFixed(2) : '';
+    const averageLabel = options?.averageLabel || 'General Average';
 
     doc.text(
-      `for obtaining an outstanding General Average of ${genAvg} and qualifying`,
+      `for obtaining an outstanding ${averageLabel} of ${genAvg} and qualifying`,
       pageWidth / 2,
       currentY,
       { align: 'center' }

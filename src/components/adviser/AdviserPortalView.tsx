@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { createDefaultAdviserClass, buildGradeMatrix, GradeMatrix } from '../../utils/adviserUtils';
+import { createDefaultAdviserClass, buildGradeMatrix } from '../../utils/adviserUtils';
 import { globalToast } from '../../context/ToastContext';
 import {
   GraduationCap, TableProperties, Trophy, Star, BarChart3, FileText, Settings2,
-  Plus, ChevronDown, Users, BookOpen, ClipboardList, ScrollText, History, AlertCircle,
-  Home, Activity, Trash2
+  Plus, Users, BookOpen, History, AlertCircle,
+  Home, Activity, Trash2, X
 } from 'lucide-react';
 import GradeMatrixTab from './GradeMatrixTab';
 import GradeImportPanel from './GradeImportPanel';
@@ -19,19 +19,19 @@ import OverrideLogTab from './OverrideLogTab';
 import DirectGradeEntryTab from './directGradeEntry/DirectGradeEntryTab';
 import { PenTool } from 'lucide-react';
 import DataIntegrityModal from '../DataIntegrityModal';
+import DangerConfirmModal from '../DangerConfirmModal';
 
 type PortalTab = 'masterlist' | 'matrix' | 'import' | 'direct-entry' | 'rankings' | 'awardees' | 'performance' | 'sf9' | 'settings' | 'logs';
 
 export default function AdviserPortalView() {
   const { adviserClasses, saveAdviserClass, deleteAdviserClass, globalSettings, setActiveAdviserClass, setActiveRoute } = useApp();
   const [showIntegrityModal, setShowIntegrityModal] = useState(false);
-  const [pendingDeleteClassId, setPendingDeleteClassId] = useState<string | null>(null);
+  const [classPendingDelete, setClassPendingDelete] = useState<typeof adviserClasses[0] | null>(null);
   
   const activeClassId = globalSettings.activeAdviserClassId;
   const activeAdviserClass = adviserClasses.find(c => c.id === activeClassId) || null;
 
   const [activeTab, setActiveTab] = useState<PortalTab>('matrix');
-  const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Form State for Create Section
@@ -47,23 +47,12 @@ export default function AdviserPortalView() {
     return buildGradeMatrix(activeAdviserClass);
   }, [activeAdviserClass]);
 
-  const handleSelectGroup = (id: string) => {
-    setActiveAdviserClass(id);
-    setShowClassDropdown(false);
-    setPendingDeleteClassId(null);
-  };
-
-  const handleDeleteClass = (e: React.MouseEvent, cls: typeof adviserClasses[0]) => {
-    e.stopPropagation();
-    if (pendingDeleteClassId === cls.id) {
-      // Confirmed — delete the section
-      deleteAdviserClass(cls.id);
-      if (activeClassId === cls.id) setActiveAdviserClass(null);
-      globalToast.success(`Section "${cls.gradeLevel} - ${cls.section} (${cls.schoolYear})" has been deleted.`, 'Section Deleted');
-      setPendingDeleteClassId(null);
-    } else {
-      setPendingDeleteClassId(cls.id);
-    }
+  const confirmDeleteClass = () => {
+    if (!classPendingDelete) return;
+    deleteAdviserClass(classPendingDelete.id);
+    if (activeClassId === classPendingDelete.id) setActiveAdviserClass(null);
+    globalToast.success(`Section "${classPendingDelete.gradeLevel} - ${classPendingDelete.section} (${classPendingDelete.schoolYear})" has been deleted.`, 'Section Deleted');
+    setClassPendingDelete(null);
   };
 
   const handleCreateSubmit = () => {
@@ -95,7 +84,7 @@ export default function AdviserPortalView() {
   const tabs: { id: PortalTab; label: string; icon: React.ReactNode; description: string }[] = [
     { id: 'masterlist', label: 'Masterlist', icon: <Users className="h-4 w-4" />, description: 'Manage students' },
     { id: 'import', label: 'Import Grades', icon: <BookOpen className="h-4 w-4" />, description: 'Upload subject grade files' },
-    { id: 'direct-entry', label: 'Direct Grade Entry', icon: <PenTool className="h-4 w-4 text-purple-500" />, description: 'Enter grades for part-time teachers' },
+    { id: 'direct-entry', label: 'Direct Grade Entry', icon: <PenTool className="size-4" aria-hidden="true" />, description: 'Enter grades for part-time teachers' },
     { id: 'matrix', label: 'Grade Matrix', icon: <TableProperties className="h-4 w-4" />, description: 'Consolidated grades per subject' },
     { id: 'rankings', label: 'Rankings', icon: <Trophy className="h-4 w-4" />, description: 'Quarterly & EOSY rankings' },
     { id: 'awardees', label: 'Awardees', icon: <Star className="h-4 w-4" />, description: 'Honors & recognition' },
@@ -106,178 +95,107 @@ export default function AdviserPortalView() {
   ];
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-slate-50 dark:bg-slate-950 relative">
-      {/* Class Selector Bar */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-6 py-3 flex items-center gap-4 shrink-0">
-        <div className="flex items-center gap-2">
-          <GraduationCap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-          <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">Advisory Class:</span>
-        </div>
-
-        <div className="relative">
-          <button
-            onClick={() => setShowClassDropdown(!showClassDropdown)}
-            className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl text-xs font-bold text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all cursor-pointer min-w-[240px]"
-          >
-            {activeAdviserClass ? (
-              <span className="flex-1 text-left">{activeAdviserClass.gradeLevel} - {activeAdviserClass.section} ({activeAdviserClass.schoolYear})</span>
-            ) : (
-              <span className="flex-1 text-left text-amber-500 dark:text-amber-500">Select a section...</span>
-            )}
-            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-          </button>
-
-          {showClassDropdown && (
-            <div className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden">
-              <div className="p-2 space-y-0.5 max-h-60 overflow-y-auto">
-                {adviserClasses.length === 0 && (
-                  <div className="px-3 py-4 text-center text-[11px] text-slate-400">No advisory classes found. Create one.</div>
-                )}
-                {adviserClasses.map(cls => {
-                  const isConfirmingDelete = pendingDeleteClassId === cls.id;
-                  return (
-                    <div
-                      key={cls.id}
-                      className={`group flex items-center gap-1 rounded-lg transition-all ${
-                        activeClassId === cls.id
-                          ? 'bg-amber-50 dark:bg-amber-950/30'
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-800'
-                      } ${isConfirmingDelete ? 'ring-2 ring-red-300 dark:ring-red-800 bg-red-50 dark:bg-red-950/30' : ''}`}
-                    >
-                      <button
-                        onClick={() => handleSelectGroup(cls.id)}
-                        className={`flex-1 text-left px-3 py-2.5 text-xs font-bold transition-all cursor-pointer ${
-                          activeClassId === cls.id
-                            ? 'text-amber-700 dark:text-amber-400'
-                            : 'text-slate-700 dark:text-slate-300'
-                        }`}
-                      >
-                        <div>{cls.gradeLevel} - {cls.section}</div>
-                        <div className="text-[10px] font-normal text-slate-400">{cls.schoolYear} · {cls.workspace} · {cls.students.length} Student(s)</div>
-                      </button>
-
-                      {isConfirmingDelete ? (
-                        <div className="flex items-center gap-1 pr-1.5 shrink-0">
-                          <button
-                            onClick={(e) => handleDeleteClass(e, cls)}
-                            className="px-2 py-1 text-[10px] font-black bg-red-500 hover:bg-red-600 text-white rounded-md cursor-pointer transition-colors whitespace-nowrap"
-                          >
-                            Confirm Delete
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setPendingDeleteClassId(null); }}
-                            className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={(e) => handleDeleteClass(e, cls)}
-                          className="mr-1.5 p-1.5 rounded-md text-slate-300 dark:text-slate-700 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 dark:hover:text-red-400 transition-colors cursor-pointer shrink-0 opacity-0 group-hover:opacity-100"
-                          title="Delete this section"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="p-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                <button
-                  onClick={() => { setShowClassDropdown(false); setShowCreateModal(true); }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Create My Section
-                </button>
-              </div>
+    <div className="adviser-portal relative flex h-full min-h-0 min-w-0 flex-col bg-slate-100 dark:bg-slate-950">
+      <header className="shrink-0 border-b border-slate-300 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              <GraduationCap className="size-5" aria-hidden="true" />
             </div>
-          )}
-        </div>
-
-        {activeAdviserClass && (
-          <div className="flex items-center gap-4 ml-2">
-            <div className="flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5 text-slate-400" />
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">{activeAdviserClass.students.length} students</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <BookOpen className="h-3.5 w-3.5 text-slate-400" />
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">{activeAdviserClass.importedGrades.length} grade files</span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Adviser Portal</p>
+              <p className="hidden truncate text-xs text-slate-500 sm:block dark:text-slate-400">{globalSettings.schoolName || 'Class records and reporting'}</p>
             </div>
           </div>
-        )}
-
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => setShowIntegrityModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200 dark:border-slate-700 text-xs font-bold transition cursor-pointer"
-            title="Inspect Data Health & Decay Protection"
-          >
-            <Activity className="h-3.5 w-3.5 text-indigo-500" />
-            <span className="hidden sm:inline">Data Health</span>
-          </button>
-
-          <button
-            id="adviser-btn-main-hub"
-            onClick={() => setActiveRoute('portal-select')}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white border border-amber-600 text-xs font-black transition cursor-pointer shadow-sm"
-            title="Return to Main Hub (Select Portals)"
-          >
-            <Home className="h-3.5 w-3.5 text-white" />
-            <span>Main Hub</span>
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button onClick={() => setShowIntegrityModal(true)} className="adviser-button" aria-label="Data Health" title="Inspect Data Health & Decay Protection">
+              <Activity className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Data Health</span>
+            </button>
+            <button id="adviser-btn-main-hub" onClick={() => setActiveRoute('portal-select')} className="adviser-button" title="Return to Main Hub (Select Portals)">
+              <Home className="size-4" aria-hidden="true" /> Main Hub
+            </button>
+          </div>
         </div>
-      </div>
+        <div className="flex flex-wrap items-end gap-3 border-t border-slate-100 px-4 py-3 sm:px-6 dark:border-slate-800">
+          <div className="min-w-0 flex-1 sm:max-w-sm">
+            <label htmlFor="adviser-section" className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">Advisory class</label>
+            <select id="adviser-section" value={activeAdviserClass?.id || ''} onChange={e => setActiveAdviserClass(e.target.value)} className="adviser-field">
+              <option value="" disabled>Select a section</option>
+              {adviserClasses.map(cls => (
+                <option key={cls.id} value={cls.id}>{cls.gradeLevel} - {cls.section} ({cls.schoolYear})</option>
+              ))}
+            </select>
+          </div>
+          <button onClick={() => setShowCreateModal(true)} className="adviser-button" aria-label="Create My Section" title="Create My Section">
+            <Plus className="size-4" aria-hidden="true" /><span className="hidden sm:inline">New section</span>
+          </button>
+          {activeAdviserClass && (
+            <>
+              <button onClick={() => setClassPendingDelete(activeAdviserClass)} className="adviser-button hover:text-red-600 dark:hover:text-red-400" aria-label={`Delete section ${activeAdviserClass.section}`} title="Delete selected section">
+                <Trash2 className="size-4" aria-hidden="true" />
+              </button>
+              <p className="hidden min-h-10 items-center gap-2 text-xs text-slate-500 tabular-nums xl:flex dark:text-slate-400">
+                <span>{activeAdviserClass.students.length} students</span>
+                <span aria-hidden="true">·</span>
+                <span>{new Set(activeAdviserClass.importedGrades.map(g => g.subjectUID || g.subjectName)).size} grade files</span>
+              </p>
+            </>
+          )}
+        </div>
+      </header>
 
       {/* No Class Selected State */}
       {!activeAdviserClass && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-5 text-center p-12">
-          <div className="w-20 h-20 rounded-3xl bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center shadow-inner">
-            <GraduationCap className="h-10 w-10 text-amber-500 dark:text-amber-400" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+          <div className="flex size-14 items-center justify-center rounded-xl bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+            <GraduationCap className="size-7" aria-hidden="true" />
           </div>
           <div>
-            <div className="text-xl font-black text-slate-800 dark:text-slate-100">Adviser Grade Consolidation</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
-              Consolidate official exported grades from subject teachers, generate class matrices, compute awards, and export Learner's Progress Report Cards (SF9).
-            </div>
+            <h2 className="text-balance text-lg font-semibold text-slate-900 dark:text-slate-100">Adviser grade consolidation</h2>
+            <p className="mx-auto mt-2 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              Consolidate grades exported by subject teachers, build the class matrix, compute awards, and produce Learner&apos;s Progress Report Cards (SF9).
+            </p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white text-sm font-black rounded-xl transition-all cursor-pointer shadow-md mt-4"
+            className="adviser-button adviser-button-primary mt-2"
           >
-            <Plus className="h-5 w-5" /> Create My Section
+            <Plus className="size-4" aria-hidden="true" /> Create advisory section
           </button>
         </div>
       )}
 
       {/* Tab Navigation + Content */}
       {activeAdviserClass && gradeMatrix && (
-        <div className="flex flex-col flex-1 min-h-0 animate-in fade-in duration-300">
-          {/* Tabs */}
-          <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-6 shrink-0 shadow-sm z-10">
-            <div className="flex gap-1 overflow-x-auto scrollbar-none">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-4 py-3.5 text-[11px] font-bold whitespace-nowrap border-b-[3px] transition-all cursor-pointer ${
-                    activeTab === tab.id
-                      ? 'border-amber-500 text-amber-700 dark:text-amber-400'
-                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700'
-                  }`}
-                  title={tab.description}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+          <nav aria-label="Adviser navigation" className="hidden w-56 shrink-0 space-y-6 overflow-y-auto border-r border-slate-300 bg-white p-4 lg:block dark:border-slate-800 dark:bg-slate-900">
+            {[
+              { label: 'Class records', items: tabs.slice(0, 4) },
+              { label: 'Results', items: tabs.slice(4, 7) },
+              { label: 'Reports & settings', items: tabs.slice(7) },
+            ].map(group => (
+              <div key={group.label}>
+                <p className="mb-2 px-3 text-xs font-medium text-slate-500 dark:text-slate-400">{group.label}</p>
+                <div className="space-y-1">
+                  {group.items.map(tab => (
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className="adviser-nav-button" aria-current={activeTab === tab.id ? 'page' : undefined} title={tab.description}>
+                      {tab.icon}{tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
+          <nav aria-label="Adviser navigation" className="flex shrink-0 items-center gap-3 border-b border-slate-300 bg-white px-4 py-3 lg:hidden dark:border-slate-800 dark:bg-slate-900">
+            <label htmlFor="adviser-view" className="shrink-0 text-sm text-slate-500 dark:text-slate-400">View</label>
+            <select id="adviser-view" value={activeTab} onChange={e => setActiveTab(e.target.value as PortalTab)} className="adviser-field">
+              {tabs.map(tab => <option key={tab.id} value={tab.id}>{tab.label}</option>)}
+            </select>
+          </nav>
 
           {/* Content Area */}
-          <div className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/50">
+          <main aria-label={tabs.find(tab => tab.id === activeTab)?.label} className="min-w-0 flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950">
             {activeTab === 'masterlist' && <AdviserStudentManager adviserClass={activeAdviserClass} gradeMatrix={gradeMatrix} />}
             {activeTab === 'matrix' && <GradeMatrixTab adviserClass={activeAdviserClass} gradeMatrix={gradeMatrix} />}
             {activeTab === 'import' && <GradeImportPanel adviserClass={activeAdviserClass} />}
@@ -288,45 +206,47 @@ export default function AdviserPortalView() {
             {activeTab === 'sf9' && <SF9Generator adviserClass={activeAdviserClass} gradeMatrix={gradeMatrix} />}
             {activeTab === 'logs' && <OverrideLogTab adviserClass={activeAdviserClass} />}
             {activeTab === 'settings' && <AdviserSettingsPanel adviserClass={activeAdviserClass} />}
-          </div>
+          </main>
         </div>
       )}
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-between">
-              <h3 className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Plus className="h-5 w-5 text-amber-500" /> Create My Section
-              </h3>
+        <div className="ui-dialog-overlay">
+          <div role="dialog" aria-modal="true" aria-label="Create advisory section" className="ui-dialog max-w-md">
+            <div className="ui-dialog-header">
+              <h3 className="ui-section-title">Create advisory section</h3>
+              <button type="button" onClick={() => setShowCreateModal(false)} aria-label="Close create dialog" className="ui-icon-button">
+                <X className="size-5" aria-hidden="true" />
+              </button>
             </div>
-            
-            <div className="p-6 space-y-5">
+
+            <div className="ui-dialog-body space-y-4">
               {createError && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl flex gap-2 items-start text-xs font-bold text-red-600 dark:text-red-400">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" /> {createError}
+                <div role="alert" className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+                  <AlertCircle className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-pretty">{createError}</span>
                 </div>
               )}
-              
+
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400">School Year</label>
-                <input type="text" value={newSy} onChange={e => setNewSy(e.target.value)} placeholder="e.g. 2026-2027" className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                <label htmlFor="section-school-year" className="ui-label">School year</label>
+                <input id="section-school-year" type="text" value={newSy} onChange={e => setNewSy(e.target.value)} placeholder="2026-2027" className="adviser-field" />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Grade Level</label>
-                <input type="text" value={newGrade} onChange={e => setNewGrade(e.target.value)} placeholder="e.g. Grade 10" className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                <label htmlFor="section-grade-level" className="ui-label">Grade level</label>
+                <input id="section-grade-level" type="text" value={newGrade} onChange={e => setNewGrade(e.target.value)} placeholder="Grade 10" className="adviser-field" />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Section Name</label>
-                <input type="text" value={newSection} onChange={e => setNewSection(e.target.value)} placeholder="e.g. Rizal" className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                <label htmlFor="section-name" className="ui-label">Section name</label>
+                <input id="section-name" type="text" value={newSection} onChange={e => setNewSection(e.target.value)} placeholder="Rizal" className="adviser-field" />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Curriculum / Workspace</label>
-                <select value={newWorkspace} onChange={e => setNewWorkspace(e.target.value as any)} className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <label htmlFor="section-workspace" className="ui-label">Curriculum / workspace</label>
+                <select id="section-workspace" value={newWorkspace} onChange={e => setNewWorkspace(e.target.value as any)} className="adviser-field">
                   <option value="JHS">Junior High School (JHS)</option>
                   <option value="SHS">Senior High School (SHS)</option>
                 </select>
@@ -334,28 +254,52 @@ export default function AdviserPortalView() {
 
               {newWorkspace === 'SHS' && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Track / Strand <span className="font-normal text-slate-400">(SHS only)</span></label>
+                  <label htmlFor="section-track-strand" className="ui-label">
+                    Track / strand <span className="font-normal text-slate-400 dark:text-slate-500">(SHS only)</span>
+                  </label>
                   <input
+                    id="section-track-strand"
                     type="text"
                     value={newTrackStrand}
                     onChange={e => setNewTrackStrand(e.target.value)}
-                    placeholder="e.g. Academic  or  Academic - HUMSS"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Academic - HUMSS"
+                    className="adviser-field"
                   />
-                  <p className="text-[10px] text-slate-400">New curriculum → Track only (e.g. "Academic"). Old curriculum → Track + Strand (e.g. "Academic - HUMSS").</p>
+                  <p className="text-pretty text-xs text-slate-500 dark:text-slate-400">
+                    New curriculum: track only (e.g. &ldquo;Academic&rdquo;). Old curriculum: track and strand (e.g. &ldquo;Academic - HUMSS&rdquo;).
+                  </p>
                 </div>
               )}
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
-              <button onClick={handleCreateSubmit} className="px-4 py-2 text-sm font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-sm transition-colors flex items-center gap-2">
-                <Plus className="h-4 w-4" /> Create Section
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowCreateModal(false)} className="ui-button">Cancel</button>
+              <button type="button" onClick={handleCreateSubmit} className="adviser-button adviser-button-primary">
+                <Plus className="size-4" aria-hidden="true" /> Create section
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Typed confirmation for permanent section deletion */}
+      <DangerConfirmModal
+        isOpen={classPendingDelete !== null}
+        title="Delete Advisory Section"
+        confirmLabel="Delete Section"
+        onClose={() => setClassPendingDelete(null)}
+        onConfirm={confirmDeleteClass}
+      >
+        {classPendingDelete && (
+          <>
+            You are about to permanently delete the advisory section{' '}
+            <span className="font-medium text-slate-900 dark:text-slate-100">
+              {classPendingDelete.gradeLevel} - {classPendingDelete.section} (SY {classPendingDelete.schoolYear})
+            </span>
+            . All {classPendingDelete.students.length} advisee(s), imported subject grades, manual overrides, and attendance records in this section will be erased. Subject teachers' own gradebooks are not affected.
+          </>
+        )}
+      </DangerConfirmModal>
 
       {/* Data Health & Integrity Modal */}
       <DataIntegrityModal

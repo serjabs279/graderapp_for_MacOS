@@ -23,6 +23,16 @@
     "fs:allow-document-write",
     "fs:allow-public-read",
     "fs:allow-public-write",
-    "dialog:default"
+    "dialog:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "content://com.android.externalstorage.documents/*" },
+        { "url": "content://com.android.providers.downloads.documents/*" },
+        { "url": "content://com.android.providers.media.documents/*" },
+        { "url": "content://com.google.android.apps.docs.storage/*" }
+      ]
+    }
   ]
 }

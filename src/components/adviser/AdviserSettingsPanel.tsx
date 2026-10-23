@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { AdviserClass, HonorsCriteria } from '../../types';
 import { Settings2, Save, Trash2, ShieldAlert, CheckCircle2, AlertTriangle, Calendar, Upload, Image as ImageIcon, ArrowUp, ArrowDown, ListOrdered, RotateCcw, Plus, GraduationCap, X, Sparkles } from 'lucide-react';
 import { DEFAULT_SHS_TRACKS_STRANDS } from '../../utils/adviserUtils';
+import DangerConfirmModal from '../DangerConfirmModal';
 
 interface Props {
   adviserClass: AdviserClass;
@@ -168,25 +169,25 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
   };
 
   const renderHonorsRow = (title: string, key: keyof HonorsCriteria) => (
-    <div className="flex flex-col gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-      <div className="font-extrabold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">{title}</div>
+    <div className="flex flex-col gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-300 dark:border-slate-800">
+      <div className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{title}</div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <label className="text-[9px] uppercase font-black text-slate-450 dark:text-slate-500 tracking-wider">Min Average</label>
+          <label className="ui-label">Min Average</label>
           <input
             type="number"
             value={honors[key].minAverage}
             onChange={e => setHonors(prev => ({ ...prev, [key]: { ...prev[key], minAverage: Number(e.target.value) } }))}
-            className="w-full px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-black focus:outline-none focus:ring-1 focus:ring-amber-500"
+            className="ui-field tabular-nums"
           />
         </div>
         <div className="space-y-1">
-          <label className="text-[9px] uppercase font-black text-slate-450 dark:text-slate-500 tracking-wider">Min Any Subject</label>
+          <label className="ui-label">Min Any Subject</label>
           <input
             type="number"
             value={honors[key].minAnySubject}
             onChange={e => setHonors(prev => ({ ...prev, [key]: { ...prev[key], minAnySubject: Number(e.target.value) } }))}
-            className="w-full px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-black focus:outline-none focus:ring-1 focus:ring-amber-500"
+            className="ui-field tabular-nums"
           />
         </div>
       </div>
@@ -194,17 +195,17 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
   );
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8 pb-32">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <Settings2 className="h-5 w-5 text-amber-500" /> Adviser Configuration
+    <div className="adviser-page">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="adviser-heading">
+            <Settings2 className="h-5 w-5 shrink-0 text-amber-600" /> Adviser settings
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Configure class details, academic thresholds, official logos, and attendance days.</p>
+          <p className="adviser-description">Configure class details, academic thresholds, official logos, and attendance days.</p>
         </div>
         <button
           onClick={handleSave}
-          className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-xl font-bold transition-all cursor-pointer shadow-sm"
+          className="adviser-button-primary"
         >
           {isSaved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
           {isSaved ? 'Saved!' : 'Save Settings'}
@@ -214,67 +215,67 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-6">
           {/* General Information */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
-            <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg border-b border-slate-100 dark:border-slate-800 pb-3">Signatories</h3>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-5">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg border-b border-slate-100 dark:border-slate-800 pb-3 text-balance">Signatories</h3>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Adviser Name</label>
+              <label className="ui-label">Adviser Name</label>
               <input
                 type="text"
                 value={adviserName}
                 onChange={e => setAdviserName(e.target.value)}
                 placeholder="e.g. Juan Dela Cruz"
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="ui-field"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Principal / Head Teacher Name</label>
+              <label className="ui-label">Principal / Head Teacher Name</label>
               <input
                 type="text"
                 value={principalName}
                 onChange={e => setPrincipalName(e.target.value)}
                 placeholder="e.g. Maria Clara"
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="ui-field"
               />
             </div>
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-slate-500">School ID</label>
+                <label className="ui-label">School ID</label>
                 <input
                   type="text"
                   value={schoolId}
                   onChange={e => setSchoolId(e.target.value)}
                   placeholder="e.g. 301234"
-                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="ui-field"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-slate-500">District</label>
+                <label className="ui-label">District</label>
                 <input
                   type="text"
                   value={district}
                   onChange={e => setDistrict(e.target.value)}
                   placeholder="e.g. Talibon II"
-                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="ui-field"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-slate-500">Division</label>
+                <label className="ui-label">Division</label>
                 <input
                   type="text"
                   value={division}
                   onChange={e => setDivision(e.target.value)}
                   placeholder="e.g. Division of Bohol"
-                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="ui-field"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-slate-500">Region</label>
+                <label className="ui-label">Region</label>
                 <input
                   type="text"
                   value={region}
                   onChange={e => setRegion(e.target.value)}
                   placeholder="e.g. Region VII - Central Visayas"
-                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="ui-field"
                 />
               </div>
             </div>
@@ -282,16 +283,16 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
 
           {/* SHS Track / Strand Configuration */}
           {adviserClass.workspace === 'SHS' && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-5">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
                   <GraduationCap className="h-5 w-5 text-amber-500" />
-                  <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">SHS Tracks &amp; Strands</h3>
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg text-balance">SHS Tracks &amp; Strands</h3>
                 </div>
                 <button
                   type="button"
                   onClick={handleResetTracks}
-                  className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  className="adviser-button"
                   title="Reset to official DepEd standard tracks & strands"
                 >
                   <RotateCcw className="h-3 w-3" /> Reset Defaults
@@ -300,14 +301,14 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
 
               {/* Section Default Strand */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                <label className="ui-label">
                   Default Track / Strand for Section
                 </label>
                 <div className="flex gap-2">
                   <select
                     value={trackStrand}
                     onChange={e => setTrackStrand(e.target.value)}
-                    className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="ui-field"
                   >
                     <option value="">— None (Set individually per student in SF9) —</option>
                     {availableTracks.map(t => (
@@ -315,7 +316,7 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
                     ))}
                   </select>
                 </div>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-sm text-slate-500 text-pretty">
                   Serves as the section fallback. Students can override this individually in their SF-9 assessment card.
                 </p>
               </div>
@@ -323,10 +324,10 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
               {/* Available Tracks & Strands Manager */}
               <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800/60">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <label className="ui-label">
                     Available Track &amp; Strand Options ({availableTracks.length})
                   </label>
-                  <span className="text-[10px] text-slate-400">Populates the SF-9 dropdown</span>
+                  <span className="text-sm text-slate-500">Populates the SF-9 dropdown</span>
                 </div>
 
                 {/* Add new track input */}
@@ -342,13 +343,13 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
                       }
                     }}
                     placeholder="Enter track/strand (e.g. Academic - STEM)"
-                    className="flex-1 px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="ui-field"
                   />
                   <button
                     type="button"
                     onClick={handleAddTrack}
                     disabled={!newTrackInput.trim()}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
+                    className="adviser-button-primary"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add
                   </button>
@@ -356,7 +357,7 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
 
                 {/* Quick Add Presets */}
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[10px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+                  <span className="text-sm font-medium text-slate-500 mr-1 flex items-center gap-1">
                     <Sparkles className="h-3 w-3 text-amber-500" /> Presets:
                   </span>
                   {[
@@ -377,7 +378,7 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
                           setAvailableTracks(prev => [...prev, preset]);
                           if (!trackStrand) setTrackStrand(preset);
                         }}
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-amber-50 dark:bg-slate-800 dark:hover:bg-amber-950/30 text-slate-600 hover:text-amber-700 dark:text-slate-300 dark:hover:text-amber-300 border border-slate-200/60 dark:border-slate-700 transition-colors cursor-pointer"
+                        className="adviser-button"
                       >
                         + {preset}
                       </button>
@@ -388,20 +389,20 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
                 {/* Current Tracks List / Pills */}
                 <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50/70 dark:bg-slate-950/40 rounded-xl border border-slate-200/80 dark:border-slate-800">
                   {availableTracks.length === 0 ? (
-                    <div className="text-xs text-slate-400 p-2 italic w-full text-center">
+                    <div className="text-sm text-slate-500 p-2 italic w-full text-center">
                       No tracks configured. Click "Reset Defaults" or type one above.
                     </div>
                   ) : (
                     availableTracks.map(track => (
                       <span
                         key={track}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-2xs"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"
                       >
                         <span className="truncate max-w-[220px]">{track}</span>
                         <button
                           type="button"
                           onClick={() => handleRemoveTrack(track)}
-                          className="text-slate-400 hover:text-red-500 p-0.5 rounded transition-colors cursor-pointer"
+                          className="adviser-button"
                           title="Remove option"
                         >
                           <X className="h-3 w-3" />
@@ -415,37 +416,37 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
           )}
 
           {/* Official Logos upload */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
-            <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg border-b border-slate-100 dark:border-slate-800 pb-3">Report Card Logos (SF9)</h3>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-5">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg border-b border-slate-100 dark:border-slate-800 pb-3 text-balance">Report Card Logos (SF9)</h3>
             
             <div className="grid grid-cols-2 gap-4">
               {/* DepEd Logo */}
-              <div className="flex flex-col items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl gap-3 text-center">
-                <span className="text-[10px] font-black uppercase text-slate-400">DepEd Logo</span>
-                <div className="w-16 h-16 rounded-2xl bg-slate-200/50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden">
+              <div className="flex flex-col items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl gap-3 text-center">
+                <span className="text-sm font-semibold text-slate-500">DepEd Logo</span>
+                <div className="w-16 h-16 rounded-xl bg-slate-200/50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden">
                   {depedLogo ? (
                     <img src={depedLogo} alt="DepEd Logo" className="w-full h-full object-contain" />
                   ) : (
-                    <ImageIcon className="h-6 w-6 text-slate-400" />
+                    <ImageIcon className="h-6 w-6 text-slate-500" />
                   )}
                 </div>
-                <label className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 text-[10px] font-black rounded-lg border border-amber-250 dark:border-amber-900/40 cursor-pointer transition-all flex items-center gap-1">
+                <label className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 text-sm font-semibold rounded-lg border border-amber-200 dark:border-amber-900/40 cursor-pointer transition-colors flex items-center gap-1">
                   <Upload className="h-3 w-3" /> Upload
                   <input type="file" accept="image/*" className="hidden" onChange={e => handleLogoUpload(e, 'deped')} />
                 </label>
               </div>
 
               {/* School Logo */}
-              <div className="flex flex-col items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl gap-3 text-center">
-                <span className="text-[10px] font-black uppercase text-slate-400">School Logo</span>
-                <div className="w-16 h-16 rounded-2xl bg-slate-200/50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden">
+              <div className="flex flex-col items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl gap-3 text-center">
+                <span className="text-sm font-semibold text-slate-500">School Logo</span>
+                <div className="w-16 h-16 rounded-xl bg-slate-200/50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden">
                   {schoolLogo ? (
                     <img src={schoolLogo} alt="School Logo" className="w-full h-full object-contain" />
                   ) : (
-                    <ImageIcon className="h-6 w-6 text-slate-400" />
+                    <ImageIcon className="h-6 w-6 text-slate-500" />
                   )}
                 </div>
-                <label className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 text-[10px] font-black rounded-lg border border-amber-250 dark:border-amber-900/40 cursor-pointer transition-all flex items-center gap-1">
+                <label className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 text-sm font-semibold rounded-lg border border-amber-200 dark:border-amber-900/40 cursor-pointer transition-colors flex items-center gap-1">
                   <Upload className="h-3 w-3" /> Upload
                   <input type="file" accept="image/*" className="hidden" onChange={e => handleLogoUpload(e, 'school')} />
                 </label>
@@ -454,22 +455,22 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
           </div>
 
           {/* Subject Display & SF9 Order */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <ListOrdered className="h-5 w-5 text-amber-500" />
-                <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">Subject Arrangement (SF9 & Matrix)</h3>
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg text-balance">Subject Arrangement (SF9 & Matrix)</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setSubjectOrderList(getInitialSubjectList())}
-                className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                className="adviser-button"
                 title="Reset to default subject sequence"
               >
                 <RotateCcw className="h-3 w-3" /> Reset Order
               </button>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-pretty">
               Customize the vertical sequence of learning areas printed on the generated SF9 Report Cards and shown on the Class Matrix.
             </p>
 
@@ -477,10 +478,10 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
               {subjectOrderList.map((subject, idx) => (
                 <div
                   key={subject}
-                  className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 transition-colors"
+                  className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-200 transition-colors"
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="w-5 h-5 flex items-center justify-center rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 text-[10px] font-black">
+                    <span className="w-5 h-5 flex items-center justify-center rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 text-sm font-semibold">
                       {idx + 1}
                     </span>
                     <span>{subject}</span>
@@ -491,7 +492,7 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
                       type="button"
                       disabled={idx === 0}
                       onClick={() => moveSubject(idx, 'up')}
-                      className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      className="adviser-button"
                       title="Move Up"
                     >
                       <ArrowUp className="h-3.5 w-3.5" />
@@ -500,7 +501,7 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
                       type="button"
                       disabled={idx === subjectOrderList.length - 1}
                       onClick={() => moveSubject(idx, 'down')}
-                      className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      className="adviser-button"
                       title="Move Down"
                     >
                       <ArrowDown className="h-3.5 w-3.5" />
@@ -514,7 +515,7 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
               <button
                 type="button"
                 onClick={handleSave}
-                className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+                className="adviser-button-primary"
               >
                 {isSaved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
                 {isSaved ? 'Arrangement Saved!' : 'Save Subject Order'}
@@ -523,28 +524,28 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
           </div>
 
           {/* Academic Policy */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-5">
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
               <ShieldAlert className="h-5 w-5 text-amber-500" />
-              <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">Academic Policy</h3>
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg text-balance">Academic Policy</h3>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Minimum Passing Grade</label>
+              <label className="ui-label">Minimum Passing Grade</label>
               <input
                 type="number"
                 value={passingGrade}
                 onChange={e => setPassingGrade(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="ui-field tabular-nums"
               />
-              <p className="text-[10px] text-slate-400">Any final subject grade below this value will mark the student as 'Retained'.</p>
+              <p className="text-sm text-slate-500 text-pretty">Any final subject grade below this value will mark the student as 'Retained'.</p>
             </div>
           </div>
         </div>
 
         <div className="space-y-6">
           {/* Honors Criteria */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
-            <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg border-b border-slate-100 dark:border-slate-800 pb-3">Honors Criteria (DepEd Standard)</h3>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg border-b border-slate-100 dark:border-slate-800 pb-3 text-balance">Honors Criteria (DepEd Standard)</h3>
             <div className="space-y-3">
               {renderHonorsRow("With Highest Honors", "highestHonors")}
               {renderHonorsRow("With High Honors", "highHonors")}
@@ -553,34 +554,34 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
           </div>
 
           {/* Attendance Configuration */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-5">
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
               <Calendar className="h-5 w-5 text-amber-500" />
-              <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">Attendance Calendar</h3>
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg text-balance">Attendance Calendar</h3>
             </div>
             
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Active Months (Comma separated)</label>
+              <label className="ui-label">Active Months (Comma separated)</label>
               <input
                 type="text"
                 value={monthsStr}
                 onChange={e => setMonthsStr(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="ui-field"
               />
-              <p className="text-[10px] text-slate-400">Changing this will update the school days table below upon saving.</p>
+              <p className="text-sm text-slate-500 text-pretty">Changing this will update the school days table below upon saving.</p>
             </div>
 
             <div className="space-y-2 mt-4">
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400">School Days per Month</label>
+              <label className="ui-label">School Days per Month</label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {Object.keys(schoolDays).map(month => (
-                  <div key={month} className="flex flex-col gap-1 bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">{month}</span>
+                  <div key={month} className="flex flex-col gap-1 bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-300 dark:border-slate-800">
+                    <span className="text-sm font-medium text-slate-500">{month}</span>
                     <input
                       type="number"
                       value={schoolDays[month]}
                       onChange={e => handleSchoolDayChange(month, e.target.value)}
-                      className="w-full px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded text-sm text-center font-mono focus:outline-none focus:border-amber-500"
+                      className="ui-field text-center tabular-nums"
                     />
                   </div>
                 ))}
@@ -591,52 +592,36 @@ export default function AdviserSettingsPanel({ adviserClass }: Props) {
       </div>
 
       {/* Danger Zone */}
-      <div className="mt-12 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-2xl p-6 shadow-sm">
+      <div className="mt-12 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-xl p-6">
         <div className="flex items-center gap-2 mb-4">
           <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-500" />
-          <h3 className="font-black text-red-800 dark:text-red-400 text-lg">Danger Zone</h3>
+          <h3 className="font-semibold text-red-800 dark:text-red-400 text-lg text-balance">Danger Zone</h3>
         </div>
-        <p className="text-sm text-red-700 dark:text-red-300 mb-6">
+        <p className="text-sm text-red-700 dark:text-red-300 mb-6 text-pretty">
           Deleting this configuration will remove all imported grades, manual overrides, attendance records, and observed values. This action is irreversible. The original gradebooks of subject teachers will not be affected.
         </p>
         <button
           onClick={handleDelete}
-          className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-bold transition-all cursor-pointer shadow-sm"
+          className="ui-button-danger"
         >
           <Trash2 className="h-4 w-4" /> Delete Adviser Configuration
         </button>
       </div>
 
-      {/* Inline Delete Confirm Modal (macOS Tauri-safe) */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/50 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-red-50 dark:bg-red-950/30 text-red-600 rounded-xl shrink-0">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="font-black text-red-800 dark:text-red-300 text-sm">Delete Adviser Configuration?</h3>
-                <p className="text-xs text-slate-500 mt-0.5">All imported grades, overrides, and attendance records will be permanently lost. This cannot be undone.</p>
-              </div>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={confirmDelete}
-                className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer"
-              >
-                Yes, Delete Permanently
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Typed confirmation for permanent adviser configuration deletion */}
+      <DangerConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Delete Adviser Configuration"
+        confirmLabel="Delete Configuration"
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+      >
+        You are about to permanently delete the adviser configuration for{' '}
+        <span className="font-semibold text-slate-700 dark:text-slate-200">
+          {adviserClass.gradeLevel} - {adviserClass.section} (SY {adviserClass.schoolYear})
+        </span>
+        . All imported grades, manual overrides, attendance records, and observed values will be lost. Subject teachers' original gradebooks are not affected.
+      </DangerConfirmModal>
     </div>
   );
 }

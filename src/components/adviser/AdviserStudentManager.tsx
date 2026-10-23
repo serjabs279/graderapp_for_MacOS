@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AdviserClass, AdviserStudent } from '../../types';
-import { GradeMatrix } from '../../utils/adviserUtils';
+import { GradeMatrix, calculateAge } from '../../utils/adviserUtils';
 import { globalToast } from '../../context/ToastContext';
 import {
   Users, Plus, Pencil, Trash2, Check, X, AlertCircle,
@@ -118,7 +118,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
   const handleAddSubmit = () => {
     if (!lrn || !name || !reason) { setErrorMsg('All fields are required.'); return; }
     if (adviserClass.students.some(s => s.lrn === lrn)) { setErrorMsg('Student with this LRN already exists.'); return; }
-    const parsedAge = age ? parseInt(age, 10) : undefined;
+    const parsedAge = age ? parseInt(age, 10) : calculateAge(birthdate);
     updateAdviserClass(adviserClass.id, cls => ({
       ...cls,
       students: [...cls.students, { lrn, name, sex, age: parsedAge, birthdate: birthdate.trim() || undefined }].sort((a, b) => a.name.localeCompare(b.name))
@@ -134,7 +134,7 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
     if (!lrn || !name || !reason) { setErrorMsg('All fields are required.'); return; }
     if (oldLrn !== lrn && adviserClass.students.some(s => s.lrn === lrn)) { setErrorMsg('LRN already in use.'); return; }
     const oldStudent = adviserClass.students.find(s => s.lrn === oldLrn);
-    const parsedAge = age ? parseInt(age, 10) : undefined;
+    const parsedAge = age ? parseInt(age, 10) : calculateAge(birthdate);
     const updatedStudent: AdviserStudent = { ...oldStudent, lrn, name, sex, age: parsedAge, birthdate: birthdate.trim() || undefined };
     updateAdviserClass(adviserClass.id, cls => ({
       ...cls,
@@ -174,7 +174,8 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
   };
 
   const startEdit = (s: AdviserStudent) => {
-    setEditingLrn(s.lrn); setLrn(s.lrn); setName(s.name); setSex(s.sex); setAge(s.age !== undefined ? String(s.age) : '');
+    setEditingLrn(s.lrn); setLrn(s.lrn); setName(s.name); setSex(s.sex);
+    setAge(s.age !== undefined ? String(s.age) : calculateAge(s.birthdate)?.toString() ?? '');
     setBirthdate(s.birthdate || '');
     setReason('Approved correction'); setErrorMsg(''); setShowAdd(false); setShowBulk(false);
   };
@@ -200,115 +201,111 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-6">
+    <div className="adviser-page">
 
       {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <Users className="h-5 w-5 text-amber-500" /> Masterlist Manager
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Manage the official student masterlist for this section.
-            <span className="ml-2 text-xs font-bold text-amber-600 dark:text-amber-400">{adviserClass.students.length} students enrolled</span>
-          </p>
+          <h2 className="adviser-heading">Student masterlist</h2>
+          <p className="adviser-description">Manage learner details and view individual grades.</p>
+          <p className="mt-2 text-xs text-slate-500 tabular-nums dark:text-slate-400">{adviserClass.students.length} students enrolled</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => { resetForm(); setShowBulk(prev => !prev); }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-black rounded-xl transition-all shadow-sm"
+            className="adviser-button"
+            aria-expanded={showBulk}
           >
             <ClipboardList className="h-4 w-4" />
-            Bulk Paste
+            Bulk paste
             {showBulk ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
           <button
             onClick={() => { resetBulk(); resetForm(); setShowAdd(prev => !prev); }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl transition-all shadow-sm"
+            className="adviser-button-primary"
+            aria-expanded={showAdd}
           >
-            <Plus className="h-4 w-4" /> Add Student
+            <Plus className="h-4 w-4" /> Add student
           </button>
         </div>
       </div>
 
       {/* ── Bulk Paste Panel ── */}
       {showBulk && (
-        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between">
+        <div className="ui-panel">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
             <div>
-              <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 text-amber-500" />
-                Bulk Student Import
+              <h3 className="ui-section-title flex items-center gap-2">
+                <ClipboardList className="size-4 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+                Bulk student import
               </h3>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Paste student names from Excel, Google Sheets, or any list. Accepts tab-separated, comma-separated, or name-only lists.
+              <p className="mt-1 text-pretty text-sm text-slate-600 dark:text-slate-400">
+                Paste names from Excel, Google Sheets, or any list. Tab-separated, comma-separated, or name-only rows are accepted.
               </p>
             </div>
-            <button onClick={resetBulk} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg transition-colors">
-              <X className="h-4 w-4" />
+            <button onClick={resetBulk} aria-label="Close bulk import" className="ui-icon-button shrink-0">
+              <X className="size-4" aria-hidden="true" />
             </button>
           </div>
 
-          <div className="p-6 space-y-4">
-            {/* Format hint */}
-            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-4 text-xs text-amber-800 dark:text-amber-400 space-y-1">
-              <div className="font-black uppercase tracking-wider mb-2">Accepted Formats (one student per line):</div>
-              <div className="font-mono space-y-1 text-amber-700 dark:text-amber-500">
-                <div><span className="opacity-50">▸</span> <strong>123456789012</strong>&emsp;DELA CRUZ, JUAN&emsp;Male</div>
-                <div><span className="opacity-50">▸</span> <strong>123456789012</strong>&emsp;GARCIA, MARIA&emsp;Female</div>
-                <div><span className="opacity-50">▸</span> SANTOS, PEDRO <em>(LRN auto-assigned as placeholder)</em></div>
+          <div className="space-y-4 p-5">
+            <div className="ui-notice flex-col items-stretch gap-2 border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+              <p className="text-sm font-medium">Accepted formats — one student per line</p>
+              <div className="space-y-1 font-mono text-xs">
+                <p><strong>123456789012</strong>&emsp;DELA CRUZ, JUAN&emsp;Male</p>
+                <p><strong>123456789012</strong>&emsp;GARCIA, MARIA&emsp;Female</p>
+                <p>SANTOS, PEDRO <em>(LRN auto-assigned as placeholder)</em></p>
               </div>
-              <div className="mt-1 opacity-70">Sex defaults to Male if not specified. Paste from Excel works with tab-separated columns.</div>
+              <p className="text-xs text-amber-800/80 dark:text-amber-400/80">
+                Sex defaults to Male when omitted. Excel pastes work because columns are tab-separated.
+              </p>
             </div>
 
-            {/* Paste area */}
             <div className="space-y-1.5">
-              <label className="text-xs font-black uppercase text-slate-500 tracking-wider">Paste Student List Here</label>
+              <label htmlFor="bulk-student-list" className="ui-label">Student list</label>
               <textarea
+                id="bulk-student-list"
                 value={bulkText}
                 onChange={e => { setBulkText(e.target.value); setBulkImported(false); }}
                 placeholder={`123456789012\tDELA CRUZ, JUAN\tMale\n123456789013\tGARCIA, MARIA\tFemale\n123456789014\tSANTOS, PEDRO\tMale`}
                 rows={8}
-                className="w-full px-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 resize-y"
+                className="ui-field font-mono text-xs resize-y"
               />
             </div>
 
-            {/* Preview Table */}
             {parsedRows.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-600 dark:text-slate-400">
-                    Preview: <span className="text-emerald-600">{validRows.length} will be added</span>
-                    {duplicateCount > 0 && <span className="text-red-500 ml-2">{duplicateCount} already exist (skipped)</span>}
-                  </span>
-                </div>
-                <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-                  <table className="w-full text-xs border-collapse">
+              <div className="space-y-3">
+                <p className="text-sm tabular-nums text-slate-600 dark:text-slate-400">
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400">{validRows.length} to add</span>
+                  {duplicateCount > 0 && <span className="ml-2 text-red-600 dark:text-red-400">{duplicateCount} already on the masterlist (skipped)</span>}
+                </p>
+                <div role="region" aria-label="Import preview" tabIndex={0} className="max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                  <table className="w-full text-sm border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
-                        <th className="px-3 py-2 text-left font-bold text-slate-500 w-8">#</th>
-                        <th className="px-3 py-2 text-left font-bold text-slate-500">LRN</th>
-                        <th className="px-3 py-2 text-left font-bold text-slate-500">Name</th>
-                        <th className="px-3 py-2 text-left font-bold text-slate-500 w-16">Sex</th>
-                        <th className="px-3 py-2 text-left font-bold text-slate-500 w-20">Status</th>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                        <th scope="col" className="px-3 py-2 w-10">#</th>
+                        <th scope="col" className="px-3 py-2">LRN</th>
+                        <th scope="col" className="px-3 py-2">Name</th>
+                        <th scope="col" className="px-3 py-2 w-20">Sex</th>
+                        <th scope="col" className="px-3 py-2 w-24">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {parsedRows.map((row, i) => (
-                        <tr key={i} className={row.duplicate ? 'opacity-40 bg-red-50/50 dark:bg-red-950/10' : ''}>
-                          <td className="px-3 py-2 text-slate-400 font-mono">{i + 1}</td>
-                          <td className="px-3 py-2 font-mono text-slate-600 dark:text-slate-400">
+                        <tr key={i} className={row.duplicate ? 'text-slate-400 dark:text-slate-500' : ''}>
+                          <td className="px-3 py-2 font-mono tabular-nums">{i + 1}</td>
+                          <td className="px-3 py-2 font-mono tabular-nums">
                             {row.lrn}
                             {row.lrnGenerated && (
-                              <span className="ml-1 text-[9px] text-amber-500 font-bold uppercase">auto</span>
+                              <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">auto</span>
                             )}
                           </td>
-                          <td className="px-3 py-2 font-bold text-slate-700 dark:text-slate-200">{row.name}</td>
-                          <td className="px-3 py-2 text-slate-500">{row.sex}</td>
+                          <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">{row.name}</td>
+                          <td className="px-3 py-2">{row.sex}</td>
                           <td className="px-3 py-2">
                             {row.duplicate
-                              ? <span className="text-red-500 font-bold text-[9px] uppercase">Duplicate</span>
-                              : <span className="text-emerald-600 font-bold text-[9px] uppercase">New</span>}
+                              ? <span className="text-red-600 dark:text-red-400">Duplicate</span>
+                              : <span className="text-emerald-700 dark:text-emerald-400">New</span>}
                           </td>
                         </tr>
                       ))}
@@ -316,23 +313,23 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
                   </table>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-2">
-                  <button onClick={resetBulk} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-xl transition-colors cursor-pointer">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button onClick={resetBulk} className="ui-button">
                     Cancel
                   </button>
                   {bulkImported ? (
-                    <div className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 text-white text-xs font-black rounded-xl">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Imported!
-                    </div>
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-700 dark:border-emerald-900 dark:text-emerald-400">
+                      <CheckCircle2 className="size-4" aria-hidden="true" />
+                      Imported
+                    </span>
                   ) : (
                     <button
                       onClick={handleBulkSave}
                       disabled={validRows.length === 0}
-                      className="flex items-center gap-1.5 px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl transition-colors cursor-pointer shadow-sm"
+                      className="adviser-button adviser-button-primary"
                     >
-                      <Upload className="h-4 w-4" />
-                      Import {validRows.length} Students
+                      <Upload className="size-4" aria-hidden="true" />
+                      Import {validRows.length} students
                     </button>
                   )}
                 </div>
@@ -344,82 +341,95 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
 
       {/* ── Single Add / Edit Form ── */}
       {(showAdd || editingLrn) && (
-        <div className="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 p-6 rounded-2xl animate-in fade-in zoom-in-95 duration-200 space-y-4">
+        <div className="adviser-panel space-y-5 p-4 sm:p-6">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-amber-800 dark:text-amber-400 text-sm">
+            <h3 className="text-balance text-base font-semibold text-slate-900 dark:text-slate-100">
               {editingLrn ? 'Edit Student' : 'Add New Student'}
             </h3>
-            <button onClick={resetForm}><X className="h-4 w-4 text-slate-400 hover:text-slate-600" /></button>
+            <button onClick={resetForm} className="adviser-button" aria-label="Cancel student changes"><X className="size-4" aria-hidden="true" /></button>
           </div>
           {errorMsg && (
             <div className="text-xs font-bold text-red-600 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" /> {errorMsg}
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-500">LRN (12 Digits)</label>
+              <label htmlFor="learner-lrn" className="text-xs font-medium text-slate-600 dark:text-slate-400">LRN (12 digits)</label>
               <input
+                id="learner-lrn"
                 type="text"
                 value={lrn}
                 onChange={e => setLrn(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-lg dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                className="adviser-field"
               />
             </div>
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-[10px] font-bold uppercase text-slate-500">Full Name</label>
+            <div className="space-y-1 sm:col-span-2">
+              <label htmlFor="learner-name" className="text-xs font-medium text-slate-600 dark:text-slate-400">Full name</label>
               <input
+                id="learner-name"
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-lg dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                className="adviser-field"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-500">Sex</label>
+              <label htmlFor="learner-sex" className="text-xs font-medium text-slate-600 dark:text-slate-400">Sex</label>
               <select
+                id="learner-sex"
                 value={sex}
                 onChange={e => setSex(e.target.value as any)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-lg dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                className="adviser-field"
               >
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-500">Age</label>
+              <label htmlFor="learner-age" className="text-xs font-medium text-slate-600 dark:text-slate-400">Age</label>
               <input
+                id="learner-age"
                 type="number"
                 value={age}
                 onChange={e => setAge(e.target.value)}
                 placeholder="Auto"
-                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-lg dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                className="adviser-field"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-500">Birthdate (SF10)</label>
+              <label htmlFor="learner-birthdate" className="text-xs font-medium text-slate-600 dark:text-slate-400">Birthdate (SF10)</label>
               <input
+                id="learner-birthdate"
                 type="date"
                 value={birthdate}
-                onChange={e => setBirthdate(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-lg dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                onChange={e => {
+                  const value = e.target.value;
+                  setBirthdate(value);
+                  // Auto-fill the age, but keep the field editable for manual overrides.
+                  const computed = calculateAge(value);
+                  if (computed !== undefined) setAge(String(computed));
+                }}
+                className="adviser-field"
               />
+              <p className="text-pretty text-xs text-slate-500 dark:text-slate-400">Age fills in automatically; you can still edit it.</p>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div className="space-y-1 md:col-span-3">
-              <label className="text-[10px] font-bold uppercase text-slate-500">Override Reason</label>
+              <label htmlFor="learner-reason" className="text-xs font-medium text-slate-600 dark:text-slate-400">Reason for change</label>
               <select
+                id="learner-reason"
                 value={reason}
                 onChange={e => setReason(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-lg dark:bg-slate-900 text-amber-700 font-semibold bg-amber-50 dark:bg-amber-900/30 focus:outline-none"
+                className="adviser-field"
               >
                 {reasonOptions.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <button
               onClick={() => editingLrn ? handleEditSubmit(editingLrn) : handleAddSubmit()}
-              className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              className="adviser-button-primary w-full"
             >
               <Check className="h-4 w-4" /> Save
             </button>
@@ -428,8 +438,9 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
       )}
 
       {/* ── Masterlist Table ── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse text-sm">
+      <div className="adviser-panel">
+        <div className="overflow-x-auto" role="region" aria-label="Student masterlist table" tabIndex={0}>
+        <table className="w-full min-w-3xl text-left border-collapse text-sm">
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
               <th className="px-6 py-3 font-bold text-slate-500 w-16 text-center">No.</th>
@@ -444,27 +455,37 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {adviserClass.students.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-16 text-slate-400">
-                  <Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                  <div className="font-semibold">No students yet.</div>
-                  <div className="text-xs mt-1">Use <strong>Add Student</strong> or <strong>Bulk Paste</strong> to get started.</div>
+                <td colSpan={7} className="text-center py-16 text-slate-500 dark:text-slate-400">
+                  <Users className="mx-auto mb-2 size-8 text-slate-300 dark:text-slate-600" aria-hidden="true" />
+                  <p className="font-medium text-slate-700 dark:text-slate-300">No students on the masterlist yet.</p>
+                  <p className="mt-1 text-sm">Add each learner, or paste the class list from Excel.</p>
+                  <button
+                    onClick={() => { resetBulk(); setShowBulk(false); setShowAdd(true); }}
+                    className="adviser-button adviser-button-primary mx-auto mt-4"
+                  >
+                    <Plus className="size-4" aria-hidden="true" /> Add student
+                  </button>
                 </td>
               </tr>
             ) : null}
-            {adviserClass.students.map((s, i) => (
+            {adviserClass.students.map((s, i) => {
+              const displayAge = s.age !== undefined ? s.age : calculateAge(s.birthdate);
+              return (
               <tr key={s.lrn} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                 <td className="px-6 py-3 text-center text-slate-400 font-mono">{i + 1}</td>
                 <td className="px-6 py-3 font-mono text-slate-500 dark:text-slate-400 text-xs">{s.lrn}</td>
-                <td className="px-6 py-3 font-bold text-slate-700 dark:text-slate-200">{s.name}</td>
+                <td className="min-w-64 px-6 py-3 font-medium text-slate-900 dark:text-slate-200">{s.name}</td>
                 <td className="px-6 py-3 text-slate-600 dark:text-slate-400">{s.sex}</td>
                 <td className="px-6 py-3 text-center text-slate-500 dark:text-slate-400 font-mono text-xs">
                   {s.birthdate ? (
                     <div>
-                      <span>{s.age !== undefined ? s.age : '—'}</span>
-                      <div className="text-[10px] text-slate-400 font-normal">{s.birthdate}</div>
+                      <span title={s.age === undefined ? 'Auto-calculated from birthdate' : undefined}>
+                        {displayAge !== undefined ? displayAge : '—'}
+                      </span>
+                      <div className="mt-1 whitespace-nowrap text-xs font-normal text-slate-500 dark:text-slate-400">{s.birthdate}</div>
                     </div>
-                  ) : s.age !== undefined ? (
-                    s.age
+                  ) : displayAge !== undefined ? (
+                    displayAge
                   ) : (
                     <span className="text-slate-400 italic">Auto</span>
                   )}
@@ -473,17 +494,19 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
                   <div className="flex items-center justify-end gap-2">
                     <button
                       onClick={() => startEdit(s)}
-                      className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
+                      className="flex size-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                       title="Edit"
+                      aria-label={`Edit ${s.name}`}
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="size-4" aria-hidden="true" />
                     </button>
                     <button
                       onClick={() => handleDelete(s.lrn, s.name)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                      className="flex size-10 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-950/30 dark:hover:text-red-400"
                       title="Delete"
+                      aria-label={`Delete ${s.name}`}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="size-4" aria-hidden="true" />
                     </button>
                   </div>
                 </td>
@@ -491,8 +514,9 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
                   {gradeMatrix.find(r => r.lrn === s.lrn) ? (
                     <button
                       onClick={() => setViewingStudentLrn(s.lrn)}
-                      className="p-1.5 text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors cursor-pointer"
+                      className="inline-flex size-10 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30"
                       title={`View ${s.name}'s grades`}
+                      aria-label={`View ${s.name}'s grades`}
                     >
                       <Eye className="h-4 w-4" />
                     </button>
@@ -501,9 +525,11 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Student Grades Modal */}
@@ -521,45 +547,45 @@ export default function AdviserStudentManager({ adviserClass, gradeMatrix }: Pro
 
       {/* ── Inline Delete Confirm Modal (macOS Tauri-safe) ── */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-red-50 dark:bg-red-950/30 text-red-600 rounded-xl shrink-0">
-                <Trash2 className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="font-black text-slate-800 dark:text-white text-sm">Delete Student?</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Removing <strong>{deleteTarget.name}</strong> from the masterlist.</p>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Reason (required)</label>
-              <select
-                value={deleteReason}
-                onChange={e => { setDeleteReason(e.target.value); setDeleteReasonError(''); }}
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                <option value="">Select reason...</option>
-                <option value="Dropped">Dropped</option>
-                <option value="Transferred">Transferred</option>
-                <option value="Duplicate entry">Duplicate entry</option>
-                <option value="Added by mistake">Added by mistake</option>
-                <option value="Other">Other</option>
-              </select>
-              {deleteReasonError && <p className="text-[10px] text-red-500 font-semibold">{deleteReasonError}</p>}
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={confirmDelete}
-                className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer"
-              >
-                Confirm Delete
+        <div className="ui-dialog-overlay">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="delete-student-title" aria-describedby="delete-student-desc" className="ui-dialog max-w-sm">
+            <div className="ui-dialog-header">
+              <Trash2 className="size-5 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
+              <h3 id="delete-student-title" className="ui-section-title flex-1">Remove learner from masterlist?</h3>
+              <button type="button" onClick={() => setDeleteTarget(null)} aria-label="Close delete dialog" className="ui-icon-button">
+                <X className="size-5" aria-hidden="true" />
               </button>
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Cancel
+            </div>
+            <div className="ui-dialog-body space-y-4">
+              <p id="delete-student-desc" className="text-pretty text-sm text-slate-600 dark:text-slate-300">
+                <span className="font-medium text-slate-900 dark:text-slate-100">{deleteTarget.name}</span> will be removed from the masterlist. Recorded grades stay in the subject teachers&apos; gradebooks.
+              </p>
+              <div className="space-y-1.5">
+                <label htmlFor="delete-student-reason" className="ui-label">
+                  Reason <span className="text-red-600 dark:text-red-400">*</span>
+                </label>
+                <select
+                  id="delete-student-reason"
+                  value={deleteReason}
+                  onChange={e => { setDeleteReason(e.target.value); setDeleteReasonError(''); }}
+                  className="adviser-field"
+                >
+                  <option value="">Select a reason…</option>
+                  <option value="Dropped">Dropped</option>
+                  <option value="Transferred">Transferred</option>
+                  <option value="Duplicate entry">Duplicate entry</option>
+                  <option value="Added by mistake">Added by mistake</option>
+                  <option value="Other">Other</option>
+                </select>
+                {deleteReasonError && (
+                  <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">{deleteReasonError}</p>
+                )}
+              </div>
+            </div>
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setDeleteTarget(null)} className="ui-button">Cancel</button>
+              <button type="button" onClick={confirmDelete} className="ui-button ui-button-danger">
+                Remove learner
               </button>
             </div>
           </div>

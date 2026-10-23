@@ -1,17 +1,16 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { APP_VERSION } from '../types';
 import {
   LayoutDashboard,
-  Settings,
-  Info,
   Sun,
   Moon,
   FolderOpen,
   GraduationCap,
   Layers,
-  Library,
   ChevronLeft,
   ChevronRight,
+  ArrowLeftRight,
   LogOut,
   X
 } from 'lucide-react';
@@ -43,6 +42,7 @@ export default function Sidebar({ isMobileOpen, onCloseMobile }: SidebarProps = 
   };
 
   const activeProject = projects.find(p => p.id === activeProjectId);
+  const compact = sidebarCollapsed && !isMobileOpen;
 
   const menuItems = [
     { id: 'dashboard', label: 'Grading Hub', icon: LayoutDashboard }
@@ -50,306 +50,156 @@ export default function Sidebar({ isMobileOpen, onCloseMobile }: SidebarProps = 
 
   return (
     <>
-      {/* Mobile Drawer Backdrop */}
       {isMobileOpen && (
-        <div
-          onClick={onCloseMobile}
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-40 md:hidden transition-opacity"
-          aria-hidden="true"
-        />
+        <div onClick={onCloseMobile} className="fixed inset-0 z-40 bg-slate-950/50 md:hidden" aria-hidden="true" />
       )}
 
       <aside
         id="app-sidebar"
-        className={`bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex flex-col border-r border-slate-200 dark:border-slate-850 shrink-0 h-screen transition-all duration-300 ease-in-out overflow-visible print:hidden no-print
-          /* Desktop sticky sidebar */
-          md:sticky md:top-0 md:translate-x-0 ${sidebarCollapsed ? 'md:w-20' : 'md:w-64'}
-          /* Mobile slide-over drawer */
-          fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] ${isMobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}
-        `}
+        aria-label="Grading workspace sidebar"
+        className={`no-print fixed inset-y-0 left-0 z-50 h-dvh w-72 max-w-[85vw] shrink-0 flex-col overflow-y-auto border-r border-slate-300 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 md:sticky md:top-0 print:hidden ${compact ? 'md:w-20' : 'md:w-64'} ${isMobileOpen ? 'flex' : 'hidden md:flex'}`}
+        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)', paddingLeft: 'env(safe-area-inset-left)' }}
       >
-        {/* Brand Header */}
-        <div className={`p-4 border-b border-slate-100 dark:border-slate-850 flex flex-col items-center shrink-0 ${sidebarCollapsed ? 'justify-center' : 'p-6'}`}>
-          <div className="flex items-center gap-3 w-full justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-sm shrink-0">
-                SR
-              </div>
-              {(!sidebarCollapsed || isMobileOpen) && (
-                <div>
-                  <h1 className="font-sans font-black tracking-tight text-xs text-slate-900 dark:text-white leading-tight">SRPHS GRADE APP</h1>
-                  <p className="text-[9px] text-slate-450 font-sans font-bold uppercase tracking-wider">Offline App</p>
+        <header className="shrink-0 border-b border-slate-200 p-4 dark:border-slate-800">
+          <div className={`flex gap-2 ${compact ? 'flex-col items-center' : 'items-center justify-between'}`}>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-base font-semibold text-white" aria-hidden="true">SR</div>
+              {!compact && (
+                <div className="min-w-0">
+                  <p className="text-pretty text-sm font-semibold">SRPHS Grader</p>
+                  <p className="text-pretty text-xs text-slate-500 dark:text-slate-400">Offline workspace</p>
                 </div>
               )}
             </div>
-
-            <div className="flex items-center gap-1">
-              {/* Close Button on Mobile Drawer */}
+            <div className="flex shrink-0 items-center">
               {onCloseMobile && (
-                <button
-                  onClick={onCloseMobile}
-                  className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                  title="Close Menu"
-                >
-                  <X className="h-5 w-5" />
+                <button type="button" onClick={onCloseMobile} className="ui-icon-button md:hidden" title="Close Menu" aria-label="Close navigation menu">
+                  <X className="size-5" aria-hidden="true" />
                 </button>
               )}
-
-              {/* Desktop Sidebar Collapse Toggle */}
               <button
+                type="button"
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="hidden md:inline-flex p-1.5 rounded-lg text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                className="ui-icon-button hidden md:inline-flex"
+                title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                aria-expanded={!sidebarCollapsed}
+                aria-controls="app-sidebar"
               >
-                {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                {sidebarCollapsed ? <ChevronRight className="size-4" aria-hidden="true" /> : <ChevronLeft className="size-4" aria-hidden="true" />}
               </button>
             </div>
           </div>
-        {!sidebarCollapsed && (
-          <div className="mt-4 text-[10px] w-full text-slate-450 dark:text-slate-500 font-sans font-extrabold uppercase tracking-wide overflow-hidden text-ellipsis whitespace-nowrap">
-            {globalSettings.schoolName}
-          </div>
-        )}
-      </div>
+          {!compact && <p className="mt-4 line-clamp-2 break-words text-pretty text-xs leading-relaxed text-slate-500 dark:text-slate-400" title={globalSettings.schoolName}>{globalSettings.schoolName}</p>}
+        </header>
 
-      {/* Gradebook Hierarchy Workspace Selector */}
-      <div className={`border-b border-slate-100 dark:border-slate-850 bg-slate-50/20 dark:bg-slate-950/10 shrink-0 ${sidebarCollapsed ? 'p-3 flex flex-col items-center gap-2' : 'px-6 py-4'}`}>
-        {!sidebarCollapsed ? (
-          <>
-            <div className="flex items-center justify-between text-[10px] font-sans font-black text-slate-450 dark:text-slate-500 tracking-widest uppercase mb-3">
-              <div className="flex items-center gap-1.5">
-                <Library className="h-3.5 w-3.5 text-slate-400" />
-                <span>Curriculum Workspace</span>
-              </div>
+        <section className={`shrink-0 border-b border-slate-200 dark:border-slate-800 ${compact ? 'flex flex-col items-center gap-2 p-3' : 'space-y-2 p-4'}`} aria-label="Curriculum workspace">
+          {!compact && <h2 className="ui-label text-balance">Curriculum workspace</h2>}
+          <button
+            type="button"
+            onClick={() => {
+              setWorkspaceMode(workspaceMode === 'JHS' ? 'JHS' : 'SHS');
+              setActiveRoute('dashboard');
+            }}
+            className={`ui-tab ${compact ? 'size-10 p-0' : 'w-full justify-start whitespace-normal text-left'}`}
+            aria-pressed="true"
+            aria-label={workspaceMode === 'JHS' ? 'Junior High School workspace' : 'Senior High School workspace'}
+            title={workspaceMode === 'JHS' ? 'Junior High School (JHS)' : 'Senior High School (SHS)'}
+          >
+            {workspaceMode === 'JHS' ? <GraduationCap className="size-4 shrink-0" aria-hidden="true" /> : <Layers className="size-4 shrink-0" aria-hidden="true" />}
+            {!compact && <span>{workspaceMode === 'JHS' ? 'Junior High School' : 'Senior High School'}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const nextMode = workspaceMode === 'JHS' ? 'SHS' : 'JHS';
+              setWorkspaceMode(nextMode);
+              setActiveRoute('dashboard');
+            }}
+            className={compact ? 'ui-icon-button' : 'ui-tab w-full justify-start whitespace-normal text-left'}
+            aria-label={`Switch to ${workspaceMode === 'JHS' ? 'Senior High School' : 'Junior High School'}`}
+            title={`Switch to ${workspaceMode === 'JHS' ? 'Senior High School' : 'Junior High School'}`}
+          >
+            <ArrowLeftRight className="size-4 shrink-0" aria-hidden="true" />
+            {!compact && <span>Switch to {workspaceMode === 'JHS' ? 'Senior High' : 'Junior High'}</span>}
+          </button>
+        </section>
+
+        <nav className={`flex-1 space-y-2 ${compact ? 'flex flex-col items-center p-3' : 'p-4'}`} aria-label="Main navigation">
+          {!compact && <h2 className="ui-label text-balance">Class records</h2>}
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
               <button
-                onClick={() => {
-                  const nextMode = workspaceMode === 'JHS' ? 'SHS' : 'JHS';
-                  setWorkspaceMode(nextMode);
-                  setActiveRoute('dashboard');
-                }}
-                className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer lowercase"
-                title={`Switch to ${workspaceMode === 'JHS' ? 'Senior High School' : 'Junior High School'}`}
-              >
-                switch
-              </button>
-            </div>
-
-            <div className="pl-1.5 relative">
-              {/* Only show the selected workspace */}
-              {workspaceMode === 'JHS' ? (
-                <div className="flex items-center">
-                  <button
-                    onClick={() => {
-                      setWorkspaceMode('JHS');
-                      setActiveRoute('dashboard');
-                    }}
-                    className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-between bg-emerald-600 text-white shadow-xs cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <GraduationCap className="h-4 w-4 text-white" />
-                      <span>Junior High School</span>
-                    </div>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-700/60 text-emerald-100 uppercase">
-                      Active
-                    </span>
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center">
-                  <button
-                    onClick={() => {
-                      setWorkspaceMode('SHS');
-                      setActiveRoute('dashboard');
-                    }}
-                    className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-between bg-emerald-600 text-white shadow-xs cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Layers className="h-4 w-4 text-white" />
-                      <span>Senior High School</span>
-                    </div>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-700/60 text-emerald-100 uppercase">
-                      Active
-                    </span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="space-y-3">
-            {/* Collapsed view: only show active workspace button */}
-            {workspaceMode === 'JHS' ? (
-              <div className="relative group">
-                <button
-                  onClick={() => {
-                    setWorkspaceMode('JHS');
-                    setActiveRoute('dashboard');
-                  }}
-                  className="p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer border bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                >
-                  <GraduationCap className="h-4.5 w-4.5" />
-                </button>
-                <div className="absolute left-14 top-1/2 -translate-y-1/2 bg-slate-950 dark:bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 whitespace-nowrap border border-slate-800 dark:border-slate-700 pointer-events-none">
-                  Junior High School (JHS)
-                </div>
-              </div>
-            ) : (
-              <div className="relative group">
-                <button
-                  onClick={() => {
-                    setWorkspaceMode('SHS');
-                    setActiveRoute('dashboard');
-                  }}
-                  className="p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer border bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                >
-                  <Layers className="h-4.5 w-4.5" />
-                </button>
-                <div className="absolute left-14 top-1/2 -translate-y-1/2 bg-slate-950 dark:bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 whitespace-nowrap border border-slate-800 dark:border-slate-700 pointer-events-none">
-                  Senior High School (SHS)
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-
-
-      {/* Navigation */}
-      <nav className={`flex-1 space-y-1.5 ${sidebarCollapsed ? 'p-2 flex flex-col items-center' : 'p-4'}`}>
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeRoute === item.id;
-          const activeBg = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40';
-          const activeIconColor = 'text-emerald-600 dark:text-emerald-400';
-          return (
-            <div key={item.id} className="relative group w-full flex justify-center">
-              <button
+                key={item.id}
                 id={`sidebar-link-${item.id}`}
+                type="button"
                 onClick={() => handleNav(item.id)}
-                className={`flex items-center rounded-xl text-xs font-bold transition-all cursor-pointer ${sidebarCollapsed
-                  ? `p-3 justify-center ${isActive ? activeBg : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850/40 hover:text-slate-900 dark:hover:text-slate-100'}`
-                  : `w-full justify-between px-3 py-2.5 ${isActive ? activeBg : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850/40 hover:text-slate-900 dark:hover:text-slate-100'}`
-                  }`}
+                className={`ui-tab ${compact ? 'size-10 p-0' : 'w-full justify-start'}`}
+                aria-current={activeRoute === item.id ? 'page' : undefined}
+                aria-label={item.label}
+                title={item.label}
               >
-                <div className="flex items-center gap-2.5">
-                  <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? activeIconColor : 'text-slate-400'}`} />
-                  {!sidebarCollapsed && <span>{item.label}</span>}
-                </div>
-                {!sidebarCollapsed && (item.id as string) === 'class-manager' && activeProject && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" title="Project Loaded" />
-                )}
+                <Icon className="size-4 shrink-0" aria-hidden="true" />
+                {!compact && <span>{item.label}</span>}
               </button>
+            );
+          })}
+        </nav>
 
-              {/* Hover tooltip when collapsed */}
-              {sidebarCollapsed && (
-                <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-slate-950 dark:bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 whitespace-nowrap border border-slate-800 dark:border-slate-700 pointer-events-none">
-                  {item.label}
-                  {(item.id as string) === 'class-manager' && activeProject && " (Active Project Loaded)"}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </nav>
-
-      {/* Loaded Project Stats in Sidebar */}
-      {activeProject ? (
-        !sidebarCollapsed ? (
-          <div className="m-4 p-4 rounded-xl border border-dashed border-emerald-200 dark:border-emerald-950 bg-emerald-50/20 dark:bg-emerald-950/5 space-y-2 shrink-0">
-            <div className="flex items-center gap-1.5 text-[10px] font-sans font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-              <FolderOpen className="h-3.5 w-3.5" />
-              {activeProject.workspace === 'SHS' ? 'SHS Active Project' : 'JHS Active Project'}
-            </div>
-            <div>
-              <div className="text-[11px] font-black text-slate-800 dark:text-slate-200 truncate" title={activeProject.subject}>
-                {activeProject.subject} - {activeProject.section}
-              </div>
-              <div className="text-[9px] font-sans text-slate-400 dark:text-slate-500">
-                {activeProject.gradeLevel} | {activeProject.lastActiveQuarter}
+        {activeProject ? (
+          compact ? (
+            <div className="flex shrink-0 justify-center px-3 py-4">
+              <div
+                className="flex size-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                title={`${activeProject.subject} (${activeProject.section}) · ${activeProject.gradeLevel} | ${activeProject.lastActiveQuarter}`}
+              >
+                <FolderOpen className="size-4" aria-hidden="true" />
+                <span className="sr-only">Active class: {activeProject.subject}, {activeProject.section}, {activeProject.gradeLevel}, {activeProject.lastActiveQuarter}</span>
               </div>
             </div>
+          ) : (
+            <section className="mx-4 mb-4 shrink-0 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40" aria-label="Active class">
+              <h2 className="flex items-center gap-2 text-balance text-xs font-medium text-slate-500 dark:text-slate-400">
+                <FolderOpen className="size-4 shrink-0" aria-hidden="true" />
+                {activeProject.workspace === 'SHS' ? 'SHS active class' : 'JHS active class'}
+              </h2>
+              <p className="truncate text-sm font-medium" title={`${activeProject.subject} - ${activeProject.section}`}>{activeProject.subject} - {activeProject.section}</p>
+              <p className="text-pretty text-xs tabular-nums text-slate-500 dark:text-slate-400">{activeProject.gradeLevel} | {activeProject.lastActiveQuarter}</p>
+            </section>
+          )
+        ) : !compact ? (
+          <div className="mx-4 mb-4 shrink-0 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+            <p className="text-pretty text-xs leading-relaxed text-slate-500 dark:text-slate-400">No class is open. Select a class from the Grading Hub to begin.</p>
+            <button type="button" onClick={() => handleNav('dashboard')} className="ui-button mt-3 w-full">Choose a class</button>
           </div>
-        ) : (
-          <div className="relative group w-full flex justify-center py-2 shrink-0">
-            <div className="w-9 h-9 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20 flex items-center justify-center text-emerald-650 dark:text-emerald-400 shadow-3xs animate-pulse">
-              <FolderOpen className="h-4.5 w-4.5" />
-            </div>
-            <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-slate-950 dark:bg-slate-800 text-white text-[11px] font-bold p-3 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 border border-slate-800 dark:border-slate-700 pointer-events-none space-y-1">
-              <div className="text-[10px] font-black uppercase text-emerald-400">GradeBook Loaded</div>
-              <div className="text-xs font-extrabold">{activeProject.subject} ({activeProject.section})</div>
-              <div className="text-[9px] text-slate-300">{activeProject.gradeLevel} | {activeProject.lastActiveQuarter}</div>
-            </div>
+        ) : null}
+
+        <footer className={`shrink-0 border-t border-slate-200 dark:border-slate-800 ${compact ? 'space-y-2 p-3' : 'space-y-3 p-4'}`}>
+          <div className={`flex gap-2 ${compact ? 'flex-col items-center' : 'items-center justify-between'}`}>
+            <button
+              type="button"
+              onClick={toggleDarkMode}
+              className={compact ? 'ui-icon-button' : 'ui-tab justify-start'}
+              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-pressed={darkMode}
+            >
+              {darkMode ? <Sun className="size-4" aria-hidden="true" /> : <Moon className="size-4" aria-hidden="true" />}
+              {!compact && <span>{darkMode ? 'Light mode' : 'Dark mode'}</span>}
+            </button>
+            <button type="button" onClick={logout} className="ui-icon-button" title="Log Out Securely" aria-label="Log out securely">
+              <LogOut className="size-4" aria-hidden="true" />
+            </button>
           </div>
-        )
-      ) : (
-        !sidebarCollapsed ? (
-          <div className="m-4 p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/20 text-center shrink-0">
-            <span className="text-[10px] font-sans font-semibold text-slate-400 dark:text-slate-500">
-              No active project open. Select one from Hub.
-            </span>
-          </div>
-        ) : null
-      )}
-
-      {/* Footer Settings, Theme & Log Out */}
-      <div className={`border-t border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900 flex shrink-0 ${sidebarCollapsed ? 'p-3 flex-col items-center gap-2.5' : 'p-4 items-center justify-between'}`}>
-        {!sidebarCollapsed ? (
-          <>
-            <div className="flex flex-col">
-              <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-sans font-bold">V1.0.2 Stable</span>
-              <span className="text-[8px] text-slate-700 dark:text-slate-300 font-black">richmondjabla|AR-Tech Solutions 2025</span>
+          {!compact && (
+            <div className="space-y-1 border-t border-slate-200 pt-3 text-xs leading-relaxed text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              <p className="tabular-nums">V{APP_VERSION} Stable</p>
+              <p className="text-pretty">richmondjabla | AR-Tech Solutions 2025</p>
             </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                onClick={toggleDarkMode}
-                className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
-                title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-              >
-                {darkMode ? <Sun className="h-4 w-4 text-amber-500" /> : <Moon className="h-4 w-4" />}
-              </button>
-
-              <button
-                onClick={logout}
-                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all cursor-pointer"
-                title="Log Out Securely"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            {/* Theme Toggle Button with Tooltip */}
-            <div className="relative group">
-              <button
-                onClick={toggleDarkMode}
-                className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
-              >
-                {darkMode ? <Sun className="h-4.5 w-4.5 text-amber-500" /> : <Moon className="h-4.5 w-4.5" />}
-              </button>
-              <div className="absolute left-14 top-1/2 -translate-y-1/2 bg-slate-950 dark:bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 whitespace-nowrap border border-slate-800 dark:border-slate-700 pointer-events-none">
-                {darkMode ? "Light Mode" : "Dark Mode"}
-              </div>
-            </div>
-
-            {/* Logout Button with Tooltip */}
-            <div className="relative group">
-              <button
-                onClick={logout}
-                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all cursor-pointer"
-              >
-                <LogOut className="h-4.5 w-4.5" />
-              </button>
-              <div className="absolute left-14 top-1/2 -translate-y-1/2 bg-slate-950 dark:bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 whitespace-nowrap border border-slate-800 dark:border-slate-700 pointer-events-none">
-                Log Out Securely
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </aside>
+          )}
+        </footer>
+      </aside>
     </>
   );
 }

@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Project, GlobalSettings, Student, Assessment, SubjectType, QuarterData, AdviserClass, OverrideLogEntry, ImportedSubjectGrades, LearnerObservedValues, StudentAttendance, ObservedValueRating, ArchiveFile, ArchiveValidationResult, ARCHIVE_VERSION, APP_VERSION } from '../types';
 import { DEFAULT_GLOBAL_SETTINGS, SEED_PROJECTS } from '../data/seedData';
-import { SHS_PROFILES } from '../utils';
+import { SHS_PROFILES, getDefaultDepedPolicy } from '../utils';
 import { getCalendar, getProjectPeriods, getFirstPeriod } from '../calendar/academicCalendar';
 import { persistLoad, persistSave, bootstrapAppDataBackup } from '../utils/tauriPersistence';
+import { safeSetItem, safeRemoveItem } from '../utils/safeStorage';
 import { autoSaver } from '../utils/autoSave';
 import { globalToast } from './ToastContext';
 
@@ -44,7 +45,7 @@ interface AppContextType {
   addStudentToActive: (student: Omit<Student, 'id'>) => void;
   updateStudentInActive: (student: Student) => void;
   deleteStudentFromActive: (studentId: string) => void;
-  importRosterToActive: (students: Omit<Student, 'id'>[], replaceExisting?: boolean) => void;
+  importRosterToActive: (students: Omit<Student, 'id'>[], replaceExisting?: boolean) => { added: number; skipped: number };
   syncRosterToSectionGroup: (schoolYear: string, gradeLevel: string, section: string, sourceStudents: Student[]) => void;
   
   // Assessment operations within active project
@@ -265,19 +266,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } else {
       document.documentElement.classList.remove('dark');
     }
-    localStorage.setItem('srphs_dark_mode', JSON.stringify(darkMode));
+    safeSetItem('srphs_dark_mode', JSON.stringify(darkMode));
   }, [darkMode]);
 
   const setSidebarCollapsed = (collapsed: boolean) => {
     setSidebarCollapsedState(collapsed);
-    localStorage.setItem('srphs_sidebar_collapsed', JSON.stringify(collapsed));
+    safeSetItem('srphs_sidebar_collapsed', JSON.stringify(collapsed));
   };
 
   const login = (username: string, password: string): boolean => {
     if (username.trim().toLowerCase() === authUsername.toLowerCase() && password === authPassword) {
       setIsLoggedIn(true);
       setActiveRoute('portal-select');
-      localStorage.setItem('srphs_logged_in', 'true');
+      safeSetItem('srphs_logged_in', 'true');
       return true;
     }
     return false;
@@ -287,7 +288,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (superuserPassword === 'SRPHS_SUPER_BYPASS_2026') {
       setIsLoggedIn(true);
       setActiveRoute('portal-select');
-      localStorage.setItem('srphs_logged_in', 'true');
+      safeSetItem('srphs_logged_in', 'true');
       return true;
     }
     return false;
@@ -296,28 +297,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setIsLoggedIn(false);
     setActiveRoute('portal-select');
-    localStorage.removeItem('srphs_logged_in');
+    safeRemoveItem('srphs_logged_in');
   };
 
   const updateCredentials = (username: string, password: string) => {
     setAuthUsername(username);
     setAuthPassword(password);
-    localStorage.setItem('srphs_auth_username', username);
-    localStorage.setItem('srphs_auth_password', password);
+    safeSetItem('srphs_auth_username', username);
+    safeSetItem('srphs_auth_password', password);
   };
 
   const setWorkspaceMode = (mode: 'JHS' | 'SHS') => {
     setWorkspaceModeState(mode);
-    localStorage.setItem('srphs_workspace_mode', mode);
+    safeSetItem('srphs_workspace_mode', mode);
     // Switch workspace and clear active project to avoid cross-contamination
     setActiveProjectId(null);
-    localStorage.removeItem('srphs_active_id_p2');
+    safeRemoveItem('srphs_active_id_p2');
   };
 
   const saveProjectsToStorage = (updatedProjects: Project[]) => {
     setProjects(updatedProjects);
     const serialized = JSON.stringify(updatedProjects);
-    localStorage.setItem('srphs_projects_p2', serialized);
+    safeSetItem('srphs_projects_p2', serialized);
     // Fire-and-forget: also backup to AppData so reinstalls can't lose data
     persistSave('srphs_projects_p2', serialized);
   };
@@ -419,16 +420,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = [newProject, ...projects];
     saveProjectsToStorage(updated);
     setActiveProjectId(newId);
-    localStorage.setItem('srphs_active_id_p2', newId);
+    safeSetItem('srphs_active_id_p2', newId);
     return newId;
   };
 
   const openProject = (id: string | null) => {
     setActiveProjectId(id);
     if (id) {
-      localStorage.setItem('srphs_active_id_p2', id);
+      safeSetItem('srphs_active_id_p2', id);
     } else {
-      localStorage.removeItem('srphs_active_id_p2');
+      safeRemoveItem('srphs_active_id_p2');
     }
   };
 
@@ -535,28 +536,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const importRosterToActive = (newStudents: Omit<Student, 'id'>[], replaceExisting: boolean = false) => {
     const active = getActiveProject();
-    if (!active) return;
-    const formatted = newStudents.map((s, idx) => ({
-      ...s,
-      id: `student-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`
-    }));
+    if (!active) return { added: 0, skipped: newStudents.length };
 
-    let finalStudentsList: Student[] = [];
+    const normalizeLrn = (raw?: string) => {
+      const digits = (raw || '').replace(/\D/g, '');
+      if (digits.length === 12) return digits;
+      // Excel often strips a leading zero from 12-digit LRNs stored as numbers.
+      if (digits.length === 11) return `0${digits}`;
+      return '';
+    };
+    const normalizeName = (raw?: string) => (raw || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    const isPlaceholderLrn = (lrn: string) => !lrn || lrn === '123456789123';
+    const rosterKey = (s: { lrn?: string; name: string }) => {
+      const lrn = normalizeLrn(s.lrn);
+      if (lrn && !isPlaceholderLrn(lrn)) return `LRN:${lrn}`;
+      return `NAME:${normalizeName(s.name)}`;
+    };
 
-    // Check if existing list has only placeholder default student(s) like DELA CRUZ, JOHN REYES with 123456789123
-    const isOnlyPlaceholder = active.students.length <= 2 && active.students.some(s => 
-      s.lrn === '123456789123' || s.name.toUpperCase().includes('DELA CRUZ, JOHN REYES')
+    // The seed roster only contains a demo placeholder learner; replace it rather than keep it.
+    const isOnlyPlaceholder = active.students.length <= 2 && active.students.some(s =>
+      isPlaceholderLrn(normalizeLrn(s.lrn)) || normalizeName(s.name).includes('DELA CRUZ, JOHN REYES')
     );
 
-    if (replaceExisting || active.students.length === 0 || isOnlyPlaceholder) {
-      finalStudentsList = formatted;
-    } else {
-      const existingKeys = new Set(active.students.map(s => (s.lrn && s.lrn !== '123456789123' ? s.lrn.trim() : s.name.toUpperCase().trim())));
-      const filteredNew = formatted.filter(s => {
-        const key = s.lrn && s.lrn !== '123456789123' ? s.lrn.trim() : s.name.toUpperCase().trim();
-        return !existingKeys.has(key);
+    const keptStudents = (replaceExisting || isOnlyPlaceholder) ? [] : [...active.students];
+    const seenKeys = new Set(keptStudents.map(rosterKey));
+    const addedStudents: Student[] = [];
+    let skipped = 0;
+    const stamp = Date.now();
+
+    newStudents.forEach((s, idx) => {
+      const lrn = normalizeLrn(s.lrn);
+      const name = normalizeName(s.name);
+      // Never invent an LRN: an official learner record without one cannot be reported safely.
+      if (!lrn || !name || name.length < 2) {
+        skipped++;
+        return;
+      }
+      const key = `LRN:${lrn}`;
+      if (seenKeys.has(key)) {
+        skipped++;
+        return;
+      }
+      seenKeys.add(key);
+      addedStudents.push({
+        ...s,
+        lrn,
+        name,
+        id: `student-${stamp}-${idx}-${Math.random().toString(36).substring(2, 6)}`
       });
-      finalStudentsList = [...active.students, ...filteredNew];
+    });
+
+    const finalStudentsList = [...keptStudents, ...addedStudents];
+    // Refuse an import that produced no valid learners so an empty paste can never clear a roster.
+    if (addedStudents.length === 0) {
+      return { added: 0, skipped };
     }
 
     const updatedProj: Project = {
@@ -568,6 +601,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Auto sync to all projects belonging to the same Grade Level and Section
     syncRosterToSectionGroup(active.schoolYear, active.gradeLevel, active.section, finalStudentsList);
+
+    return { added: addedStudents.length, skipped };
   };
 
   // Assessment Builder functions
@@ -575,11 +610,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const active = getActiveProject();
     if (!active || !active.quarters[quarterId]) return;
     const qData = active.quarters[quarterId];
-    const maxOrder = qData.assessments.reduce((max, a) => a.order > max ? a.order : max, -1);
+    // Insert within the assessment's own category so the gradebook and exports
+    // always list WOW -> PPT -> QSTE without interleaving newly added columns.
+    const categoryRank: Record<Assessment['category'], number> = { WOW: 0, PPT: 1, QSTE: 2 };
+    const sameCategory = qData.assessments.filter(a => a.category === assessmentData.category);
+    let newOrder: number;
+    if (sameCategory.length > 0) {
+      newOrder = Math.max(...sameCategory.map(a => a.order)) + 1;
+    } else {
+      const laterOrders = qData.assessments
+        .filter(a => categoryRank[a.category] > categoryRank[assessmentData.category])
+        .map(a => a.order);
+      newOrder = laterOrders.length > 0 ? Math.min(...laterOrders) : qData.assessments.length;
+    }
+    const shiftedAssessments = qData.assessments.map(a =>
+      a.order >= newOrder ? { ...a, order: a.order + 1 } : a
+    );
     const newAssessment: Assessment = {
       ...assessmentData,
-      id: `assess-${Date.now()}`,
-      order: maxOrder + 1
+      id: `assess-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      order: newOrder
     };
     const updatedProj: Project = {
       ...active,
@@ -587,7 +637,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...active.quarters,
         [quarterId]: {
           ...qData,
-          assessments: [...qData.assessments, newAssessment]
+          assessments: [...shiftedAssessments, newAssessment].sort((a, b) => a.order - b.order)
         }
       }
     };
@@ -893,7 +943,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return p;
       });
       const serialized = JSON.stringify(updated);
-      localStorage.setItem('srphs_projects_p2', serialized);
+      safeSetItem('srphs_projects_p2', serialized);
       persistSave('srphs_projects_p2', serialized);
       return updated;
     });
@@ -907,7 +957,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...(info!.schoolName ? { schoolName: info!.schoolName } : {})
         };
         const serialized = JSON.stringify(next);
-        localStorage.setItem('srphs_settings_p2', serialized);
+        safeSetItem('srphs_settings_p2', serialized);
         persistSave('srphs_settings_p2', serialized);
         return next;
       });
@@ -953,7 +1003,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...globalSettings, ...settings } as GlobalSettings;
     setGlobalSettings(updated);
     const serialized = JSON.stringify(updated);
-    localStorage.setItem('srphs_settings_p2', serialized);
+    safeSetItem('srphs_settings_p2', serialized);
     persistSave('srphs_settings_p2', serialized);
   };
 
@@ -967,11 +1017,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setActiveProjectId(null);
     const projSerialized = JSON.stringify(SEED_PROJECTS);
     const setSerialized = JSON.stringify(DEFAULT_GLOBAL_SETTINGS);
-    localStorage.setItem('srphs_projects_p2', projSerialized);
-    localStorage.setItem('srphs_settings_p2', setSerialized);
+    safeSetItem('srphs_projects_p2', projSerialized);
+    safeSetItem('srphs_settings_p2', setSerialized);
     persistSave('srphs_projects_p2', projSerialized);
     persistSave('srphs_settings_p2', setSerialized);
-    localStorage.removeItem('srphs_active_id_p2');
+    safeRemoveItem('srphs_active_id_p2');
     globalToast.success("Offline Database successfully reset to system defaults.", 'Database Reset');
   };
 
@@ -983,12 +1033,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const performYearlyReset = (nextSchoolYear: string) => {
     // 1. Clear projects
     setProjects([]);
-    localStorage.setItem('srphs_projects_p2', JSON.stringify([]));
+    safeSetItem('srphs_projects_p2', JSON.stringify([]));
     persistSave('srphs_projects_p2', JSON.stringify([]));
 
     // 2. Clear adviser classes
     setAdviserClasses([]);
-    localStorage.setItem('srphs_adviser_classes', JSON.stringify([]));
+    safeSetItem('srphs_adviser_classes', JSON.stringify([]));
     persistSave('srphs_adviser_classes', JSON.stringify([]));
 
     // 3. Reset settings to defaults but keep school name, teacher name, logos & advance school year
@@ -1000,22 +1050,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...DEFAULT_GLOBAL_SETTINGS,
       schoolName: oldSettings.schoolName ?? DEFAULT_GLOBAL_SETTINGS.schoolName,
       teacherName: oldSettings.teacherName ?? DEFAULT_GLOBAL_SETTINGS.teacherName,
+      principalName: oldSettings.principalName,
       depedLogoBase64: oldSettings.depedLogoBase64,
       schoolLogoBase64: oldSettings.schoolLogoBase64,
+      schoolId: oldSettings.schoolId,
+      division: oldSettings.division,
+      region: oldSettings.region,
+      district: oldSettings.district,
       theme: oldSettings.theme ?? DEFAULT_GLOBAL_SETTINGS.theme,
       activeSchoolYear: nextSchoolYear,
+      depedPolicy: getDefaultDepedPolicy(nextSchoolYear),
     };
     setGlobalSettings(freshSettings);
     const setSerialized = JSON.stringify(freshSettings);
-    localStorage.setItem('srphs_settings_p2', setSerialized);
+    safeSetItem('srphs_settings_p2', setSerialized);
     persistSave('srphs_settings_p2', setSerialized);
 
     // 4. Clear active selections
     setActiveProjectId(null);
-    localStorage.removeItem('srphs_active_id_p2');
+    safeRemoveItem('srphs_active_id_p2');
 
     // 5. Mark reset as done for the completed school year so the modal won't reappear until next April
-    localStorage.setItem('srphs_yearly_reset_sy', oldSchoolYear);
+    safeSetItem('srphs_yearly_reset_sy', oldSchoolYear);
     setYearlyResetDue(false);
   };
 
@@ -1059,7 +1115,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         saveProjectsToStorage(parsed.projects);
         if (parsed.globalSettings) {
           setGlobalSettings(parsed.globalSettings);
-          localStorage.setItem('srphs_settings_p2', JSON.stringify(parsed.globalSettings));
+          safeSetItem('srphs_settings_p2', JSON.stringify(parsed.globalSettings));
         }
         return true;
       }
@@ -1083,7 +1139,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const adviser = Array.isArray(archive.adviserClasses) ? archive.adviserClasses : [];
       setAdviserClasses(adviser);
       const advSerialized = JSON.stringify(adviser);
-      localStorage.setItem('srphs_adviser_classes', advSerialized);
+      safeSetItem('srphs_adviser_classes', advSerialized);
       persistSave('srphs_adviser_classes', advSerialized);
 
       // Restore global settings (strip transient active-selection fields)
@@ -1093,12 +1149,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       setGlobalSettings(settings);
       const setSerialized = JSON.stringify(settings);
-      localStorage.setItem('srphs_settings_p2', setSerialized);
+      safeSetItem('srphs_settings_p2', setSerialized);
       persistSave('srphs_settings_p2', setSerialized);
 
       // Clear active project selection
       setActiveProjectId(null);
-      localStorage.removeItem('srphs_active_id_p2');
+      safeRemoveItem('srphs_active_id_p2');
 
       return true;
     } catch (e) {
@@ -1111,23 +1167,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       // Clear Projects
       setProjects([]);
-      localStorage.setItem('srphs_projects_p2', JSON.stringify([]));
+      safeSetItem('srphs_projects_p2', JSON.stringify([]));
       persistSave('srphs_projects_p2', JSON.stringify([]));
       
       // Clear Adviser Classes
       setAdviserClasses([]);
-      localStorage.setItem('srphs_adviser_classes', JSON.stringify([]));
+      safeSetItem('srphs_adviser_classes', JSON.stringify([]));
       persistSave('srphs_adviser_classes', JSON.stringify([]));
 
       // Reset active selections
       setActiveProjectId(null);
-      localStorage.removeItem('srphs_active_id_p2');
+      safeRemoveItem('srphs_active_id_p2');
       
-      // Update Settings
-      const newSettings = { ...globalSettings, activeSchoolYear: newYear, calendarType, activeAdviserClassId: undefined };
+      // Update Settings (MATATAG policy automatically activates from SY 2027-2028)
+      const newSettings = {
+        ...globalSettings,
+        activeSchoolYear: newYear,
+        calendarType,
+        depedPolicy: getDefaultDepedPolicy(newYear),
+        activeAdviserClassId: undefined
+      };
       setGlobalSettings(newSettings);
       const setSerialized = JSON.stringify(newSettings);
-      localStorage.setItem('srphs_settings_p2', setSerialized);
+      safeSetItem('srphs_settings_p2', setSerialized);
       persistSave('srphs_settings_p2', setSerialized);
       
       return true;
@@ -1155,7 +1217,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const persistAdviserClasses = (cls: AdviserClass[]) => {
     setAdviserClasses(cls);
     const serialized = JSON.stringify(cls);
-    localStorage.setItem('srphs_adviser_classes', serialized);
+    safeSetItem('srphs_adviser_classes', serialized);
     persistSave('srphs_adviser_classes', serialized);
   };
 
@@ -1164,7 +1226,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAdviserClasses(prev => {
       const updated = prev.map(c => c.id === classId ? updater(c) : c);
       const serialized = JSON.stringify(updated);
-      localStorage.setItem('srphs_adviser_classes', serialized);
+      safeSetItem('srphs_adviser_classes', serialized);
       persistSave('srphs_adviser_classes', serialized);
       return updated;
     });

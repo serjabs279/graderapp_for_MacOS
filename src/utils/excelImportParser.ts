@@ -15,6 +15,8 @@ export interface ParsedExcelGradebook {
   section?: string;
   teacherName?: string;
   schoolName?: string;
+  quarter?: string;
+  skippedRows?: number; // learner rows that lacked a valid 12-digit LRN or name
 }
 
 /**
@@ -49,6 +51,105 @@ export async function parseTeacherExcelRecords(file: File): Promise<ParsedExcelG
 
         if (rows.length < 2) {
           return reject(new Error('The worksheet does not contain sufficient rows.'));
+        }
+
+        // Step 0: Read class metadata printed above the grade table.
+        const meta: {
+          subject?: string;
+          gradeLevel?: string;
+          section?: string;
+          teacherName?: string;
+          schoolName?: string;
+          quarter?: string;
+        } = {};
+
+        const readCell = (r: number, c: number) =>
+          String(rows[r]?.[c] ?? '').replace(/\s+/g, ' ').trim();
+
+        const normalizeQuarter = (text: string): string | undefined => {
+          const q = String(text || '').match(/\b(1st|2nd|3rd|4th)\s+quarter\b/i);
+          if (q) return `${q[1].charAt(0)}${q[1].slice(1).toLowerCase()} Quarter`;
+          const sem = String(text || '').match(/\bsemester\s*([12])\b/i);
+          if (sem) return `Semester ${sem[1]}`;
+          return undefined;
+        };
+
+        // Usually row 0 holds the school name; ignore short labels like "School Year".
+        outerSchool: for (let r = 0; r < Math.min(rows.length, 10); r++) {
+          const row = rows[r] || [];
+          for (let c = 0; c < Math.min(row.length, 4); c++) {
+            const text = readCell(r, c);
+            if (!text || text.length < 8) continue;
+            if (!/(SCHOOL|ACADEMY|COLLEGE|UNIVERSITY)/i.test(text)) continue;
+            if (/^(SCHOOL|SCHOOL NAME|SCHOOL YEAR)$/i.test(text)) continue;
+            if (/^SCHOOL\s+(YEAR|ID|ADDRESS|DIVISION)/i.test(text)) continue;
+            if (text.split(/\s+/).length < 3 && !text.includes(',')) continue;
+            meta.schoolName = text;
+            break outerSchool;
+          }
+        }
+
+        // Label/value metadata pairs, either "Label: Value" or adjacent cells.
+        for (let r = 0; r < Math.min(rows.length, 25); r++) {
+          const row = rows[r] || [];
+          for (let c = 0; c < row.length; c++) {
+            const text = readCell(r, c);
+            if (!text || text.length > 80) continue;
+
+            let label = clean(text).replace(/[:\-]+$/, '').trim();
+            let value = '';
+            const colonMatch = text.match(/^([^:]{2,40}):\s*(.+)$/);
+            if (colonMatch) {
+              label = clean(colonMatch[1]).replace(/[:\-]+$/, '').trim();
+              value = colonMatch[2].trim();
+            } else {
+              const isKnownLabel =
+                /^(SUBJECT|SUBJECT NAME|TEACHER|TEACHER NAME|ADVISER|CLASS ADVISER|SCHOOL|SCHOOL NAME|GRADE|GRADE LEVEL|SECTION|QUARTER)$/.test(label) ||
+                (label.includes('GRADE') && label.includes('SECTION'));
+              if (!isKnownLabel) continue;
+              for (let cc = c + 1; cc < Math.min(row.length, c + 4); cc++) {
+                const candidate = readCell(r, cc);
+                if (candidate) {
+                  value = candidate;
+                  break;
+                }
+              }
+            }
+            if (!value) continue;
+
+            if (/^(SUBJECT|SUBJECT NAME)$/.test(label)) {
+              meta.subject = value;
+            } else if (/^(TEACHER|TEACHER NAME|ADVISER|CLASS ADVISER)$/.test(label)) {
+              meta.teacherName = value;
+            } else if (/^(SCHOOL|SCHOOL NAME)$/.test(label)) {
+              meta.schoolName = value;
+            } else if (/^(GRADE|GRADE LEVEL)$/.test(label)) {
+              meta.gradeLevel = value;
+            } else if (/^SECTION$/.test(label)) {
+              meta.section = value;
+            } else if (label.includes('GRADE') && label.includes('SECTION')) {
+              const parts = value.split(/\s*[-–—|]\s*/);
+              if (parts.length >= 2) {
+                meta.gradeLevel = parts[0].trim();
+                meta.section = parts.slice(1).join(' - ').trim();
+              } else {
+                meta.gradeLevel = value;
+              }
+            } else if (/^QUARTER$/.test(label)) {
+              meta.quarter = normalizeQuarter(value);
+            }
+          }
+        }
+
+        // The worksheet name (or title row) tells us which quarter the scores belong to.
+        if (!meta.quarter) {
+          meta.quarter = normalizeQuarter(workbook.SheetNames[0] || '');
+        }
+        if (!meta.quarter) {
+          for (let r = 0; r < Math.min(rows.length, 12) && !meta.quarter; r++) {
+            const rowText = (rows[r] || []).map((cell: any) => String(cell || '')).join(' ');
+            meta.quarter = normalizeQuarter(rowText);
+          }
         }
 
         // Step 1: Find LRN and Student Name column headers or student rows
@@ -134,7 +235,7 @@ export async function parseTeacherExcelRecords(file: File): Promise<ParsedExcelG
           }
           const combined = colTexts.join(' ');
 
-          // Check if column belongs to summary/total columns (skip them)
+          // Check if column belongs to summary/total or learner-info columns (skip them)
           if (
             combined.includes('TOTAL') ||
             combined.includes('PERCENTAGE') ||
@@ -142,7 +243,15 @@ export async function parseTeacherExcelRecords(file: File): Promise<ParsedExcelG
             combined.includes('INITIAL') ||
             combined.includes('QUARTERLY GRADE') ||
             combined.includes('TRANSMUTED') ||
-            combined.includes('REMARKS')
+            combined.includes('REMARKS') ||
+            combined.includes('STUDENT NO') ||
+            combined.includes('STUDENT NUMBER') ||
+            combined.includes('BIRTHDATE') ||
+            combined.includes('BIRTHDAY') ||
+            combined.includes('ADDRESS') ||
+            combined.includes('CONTACT') ||
+            combined === 'NO.' ||
+            combined === 'AGE'
           ) {
             continue;
           }
@@ -162,31 +271,42 @@ export async function parseTeacherExcelRecords(file: File): Promise<ParsedExcelG
           }
 
           // Search for Highest Possible Score (HPS) in the column
-          let perfectScore = 20; // fallback
+          let perfectScore = currentCategory === 'QSTE' ? 50 : 20; // DepEd defaults
           for (let r = 0; r < Math.min(rows.length, maxScanRow + 2); r++) {
             const val = rows[r][c];
             const prevLabel = clean(rows[r][0] || rows[r][1] || rows[r][nameCol]);
+            const numericVal = typeof val === 'number'
+              ? val
+              : Number(String(val ?? '').replace(/[^\d.]/g, ''));
             if (
               (prevLabel.includes('HPS') || prevLabel.includes('HIGHEST') || prevLabel.includes('PERFECT') || prevLabel.includes('MAX')) &&
-              typeof val === 'number' &&
-              val > 0
+              !isNaN(numericVal) &&
+              numericVal > 0
             ) {
-              perfectScore = val;
+              perfectScore = numericVal;
               break;
+            }
+          }
+
+          // Prefer the printed column header (e.g. "Quiz 1") over a generated name.
+          let headerLabel = '';
+          for (let r = 0; r <= Math.max(headerRowIdx, 0); r++) {
+            const text = clean(rows[r]?.[c]);
+            if (text && !/^(HPS|HIGHEST|PERFECT|MAX)/.test(text) && !/^\d+(\.\d+)?$/.test(text)) {
+              headerLabel = text;
             }
           }
 
           let assName = '';
           if (currentCategory === 'WOW') {
             wwCount++;
-            assName = `WW${wwCount}: Written Work ${wwCount}`;
+            assName = headerLabel || `WW${wwCount}: Written Work ${wwCount}`;
           } else if (currentCategory === 'PPT') {
             ptCount++;
-            assName = `PT${ptCount}: Performance Task ${ptCount}`;
+            assName = headerLabel || `PT${ptCount}: Performance Task ${ptCount}`;
           } else {
             qeCount++;
-            assName = `Quarterly Examination`;
-            if (perfectScore === 20) perfectScore = 50;
+            assName = headerLabel || `Quarterly Examination`;
           }
 
           // Verify that this column contains at least one numeric score in student rows
@@ -212,7 +332,8 @@ export async function parseTeacherExcelRecords(file: File): Promise<ParsedExcelG
         // Step 3: Extract Students and Scores
         const parsedStudents: Omit<Student, 'id'>[] = [];
         const studentScores: Record<string, Record<string, number>> = {};
-        let generatedLrn = 100000000000;
+        const seenLrns = new Set<string>();
+        let skippedRows = 0;
 
         let currentSectionSex: 'Male' | 'Female' = 'Male';
 
@@ -223,13 +344,14 @@ export async function parseTeacherExcelRecords(file: File): Promise<ParsedExcelG
 
           const rawName = String(row[nameCol] || '').trim();
           const cleanName = clean(rawName);
+          const sectionLabel = cleanName.replace(/^[^A-Z]+/, '');
 
-          // Check for Male/Female Section Headers
-          if (cleanName.startsWith('MALE') || cleanName === 'BOYS') {
+          // Check for Male/Female Section Headers (e.g. "-- MALE LEARNERS --")
+          if (/^MALE\b/.test(sectionLabel) || sectionLabel === 'BOYS') {
             currentSectionSex = 'Male';
             continue;
           }
-          if (cleanName.startsWith('FEMALE') || cleanName === 'GIRLS') {
+          if (/^FEMALE\b/.test(sectionLabel) || sectionLabel === 'GIRLS') {
             currentSectionSex = 'Female';
             continue;
           }
@@ -248,12 +370,15 @@ export async function parseTeacherExcelRecords(file: File): Promise<ParsedExcelG
             continue;
           }
 
-          // Extract LRN
-          let lrnStr = String(row[lrnCol] || '').replace(/\D/g, '').trim();
-          if (lrnStr.length < 10) {
-            generatedLrn++;
-            lrnStr = String(generatedLrn);
+          // Extract LRN. Never invent one: official reports need the real 12-digit LRN.
+          let lrnStr = String(row[lrnCol] ?? '').replace(/\D/g, '').trim();
+          // Excel sometimes strips a leading zero when storing the LRN as a number.
+          if (lrnStr.length === 11) lrnStr = `0${lrnStr}`;
+          if (lrnStr.length !== 12 || seenLrns.has(lrnStr)) {
+            skippedRows++;
+            continue;
           }
+          seenLrns.add(lrnStr);
 
           // Extract Sex
           let studentSex = currentSectionSex;
@@ -265,7 +390,7 @@ export async function parseTeacherExcelRecords(file: File): Promise<ParsedExcelG
 
           parsedStudents.push({
             lrn: lrnStr,
-            name: rawName.toUpperCase(),
+            name: rawName.replace(/\s+/g, ' ').toUpperCase(),
             sex: studentSex,
             status: 'Active'
           });
@@ -283,13 +408,19 @@ export async function parseTeacherExcelRecords(file: File): Promise<ParsedExcelG
         }
 
         if (parsedStudents.length === 0) {
-          return reject(new Error('Could not identify any student records in the Excel file. Please ensure student names are present.'));
+          return reject(new Error(
+            skippedRows > 0
+              ? `No learners could be imported. ${skippedRows} row(s) had a missing or invalid 12-digit LRN.`
+              : 'Could not identify any student records in the Excel file. Please ensure student names are present.'
+          ));
         }
 
         resolve({
           students: parsedStudents,
           assessments: detectedAssessments,
-          scores: studentScores
+          scores: studentScores,
+          skippedRows,
+          ...meta
         });
       } catch (err: any) {
         console.error('Excel parse error:', err);

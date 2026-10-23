@@ -3,8 +3,8 @@ import { getCalendar, getFirstPeriod } from '../calendar/academicCalendar';
 import { Project, Student } from '../types';
 import { computeProjectStudentGrade } from '../utils';
 import { globalToast } from '../context/ToastContext';
-import { AlignRight } from 'lucide-react';
 import { exportFile } from './fileExportAdapter';
+import { isAndroid } from './platform';
 
 // Brand & Layout Colors for pdf-lib
 const COLOR_PRIMARY = rgb(15 / 255, 23 / 255, 42 / 255);    // Slate 900
@@ -66,9 +66,9 @@ function fitText(text: string, font: PDFFont, fontSize: number, maxWidth: number
 /**
  * Initiates a browser file download from an encoded Uint8Array PDF byte array.
  */
-async function downloadPdfBuffer(pdfBytes: Uint8Array, filename: string) {
+async function downloadPdfBuffer(pdfBytes: Uint8Array, filename: string): Promise<boolean> {
   const finalName = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
-  await exportFile({
+  return exportFile({
     filename: finalName,
     content: pdfBytes,
     mimeType: 'application/pdf',
@@ -542,13 +542,13 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
       { name: '#', width: 22 },
       { name: 'LRN', width: 75 },
       { name: 'Student Name', width: 160 },
-      { name: 'Sex', width: 100 },
+      { name: 'Sex', width: 40 },
       { name: 'Written Wk (%)', width: 85 },
       { name: 'Perf. Tasks (%)', width: 85 },
       { name: 'Exam (%)', width: 70 },
       { name: 'Initial', width: 50 },
       { name: 'Quarterly', width: 55 },
-      { name: 'Remarks', width: usableWidth - (22 + 75 + 160 + 35 + 85 + 85 + 70 + 50 + 55) },
+      { name: 'Remarks', width: usableWidth - (22 + 75 + 160 + 40 + 85 + 85 + 70 + 50 + 55) },
     ];
 
     const tableResult = drawClassRecordTable(
@@ -579,14 +579,21 @@ export async function exportClassRecordPDF(project: Project, customFilename?: st
     const safeSubjectName = (project.subject || 'Subject').replace(/[^a-zA-Z0-9_-]/g, '_');
     const safeSection = (project.section || 'Section').replace(/[^a-zA-Z0-9_-]/g, '_');
     const finalFilename = customFilename || `ClassRecord_${safeSubjectName}_${project.gradeLevel}_${safeSection}_${(project.lastActiveQuarter || getFirstPeriod()).replace(/\s/g, '')}.pdf`;
-    downloadPdfBuffer(pdfBytes, finalFilename);
-    globalToast.success(`Class Record PDF generated and saved as "${finalFilename}".`, 'PDF Export Successful');
+    const saved = await downloadPdfBuffer(pdfBytes, finalFilename);
+    if (!saved) return false; // Save dialog was cancelled — don't claim success.
+
+    globalToast.success(`Class Record PDF saved as "${finalFilename}".`, 'PDF Export Successful');
 
     return true;
   } catch (err) {
     console.error('Vector PDF generation error:', err);
-    globalToast.error('An error occurred while generating the vector PDF. Opening print dialog fallback.', 'PDF Export Failed');
-    window.print();
+    globalToast.error(
+      isAndroid()
+        ? 'An error occurred while generating the PDF.'
+        : 'An error occurred while generating the vector PDF. Opening print dialog fallback.',
+      'PDF Export Failed'
+    );
+    if (!isAndroid()) window.print();
     return false;
   }
 }
@@ -612,8 +619,14 @@ function drawConsolidatedHeader(
     page.drawImage(depedImg, { x: pageWidth - margin - 32, y: y - 26, width: 28, height: 28 });
   }
 
-  page.drawText('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', {
-    x: pageWidth / 2 - fontBold.widthOfTextAtSize('SAN ROQUE PARISH HIGH SCHOOL, INCORPORATED', 8) / 2,
+  const schoolName = (
+    groupData?.schoolName ||
+    groupData?.projects?.[0]?.schoolName ||
+    'DEPARTMENT OF EDUCATION'
+  ).toUpperCase();
+  const fittedSchoolName = fitText(schoolName, fontBold, 8, usableWidth - 80);
+  page.drawText(fittedSchoolName, {
+    x: pageWidth / 2 - fontBold.widthOfTextAtSize(fittedSchoolName, 8) / 2,
     y,
     size: 8,
     font: fontBold,
@@ -997,14 +1010,21 @@ export async function exportConsolidatedGradesPDF(groupData: any, customFilename
     const pdfBytes = await pdfDoc.save();
     const defaultFilename = `Consolidated_Grades_${groupData?.gradeLevel || 'Class'}_${groupData?.section || 'Section'}.pdf`.replace(/\s+/g, '_');
     const finalFilename = customFilename || defaultFilename;
-    downloadPdfBuffer(pdfBytes, finalFilename);
-    globalToast.success(`Consolidated Report PDF generated and saved as "${finalFilename}".`, 'PDF Export Successful');
+    const saved = await downloadPdfBuffer(pdfBytes, finalFilename);
+    if (!saved) return false; // Save dialog was cancelled — don't claim success.
+
+    globalToast.success(`Consolidated Report PDF saved as "${finalFilename}".`, 'PDF Export Successful');
 
     return true;
   } catch (err) {
     console.error('Consolidated vector PDF export error:', err);
-    globalToast.error('An error occurred while generating the consolidated vector PDF. Fallback print triggered.', 'PDF Export Failed');
-    window.print();
+    globalToast.error(
+      isAndroid()
+        ? 'An error occurred while generating the PDF.'
+        : 'An error occurred while generating the consolidated vector PDF. Fallback print triggered.',
+      'PDF Export Failed'
+    );
+    if (!isAndroid()) window.print();
     return false;
   }
 }
@@ -1097,11 +1117,10 @@ export async function exportElementToPDF(
     }
 
     const pdfBytes = await pdfDoc.save();
-    downloadPdfBuffer(pdfBytes, filename);
-    return true;
+    return downloadPdfBuffer(pdfBytes, filename);
   } catch (err) {
     console.error('DOM-to-Vector PDF generation error:', err);
-    window.print();
+    if (!isAndroid()) window.print();
     return false;
   }
 }

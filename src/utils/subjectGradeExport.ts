@@ -75,14 +75,18 @@ export function generateSubjectGradeJSON(
   selectedQuarters: string[],
   customWeights?: Record<string, { wow: number; ppt: number; qste: number }>
 ): SubjectGradeExportJSON {
-  const allStudents = project.students;
+  // Dropped/Transferred learners are not part of the adviser's active masterlist,
+  // so exporting them produces orphan grades and false data-health alerts.
+  const activeStudents = project.students.filter(
+    student => student.status !== 'Dropped' && student.status !== 'Transferred'
+  );
 
   const quartersData = selectedQuarters.map(qKey => {
     const gradesList: { lrn: string; studentName: string; grade: number; status?: 'Active' | 'Transferred' | 'Dropped' }[] = [];
 
     const qData = project.quarters?.[qKey];
 
-    allStudents.forEach(student => {
+    activeStudents.forEach(student => {
       // A student should be included if they have any raw scores OR a manual grade adjustment
       const hasRawScores = qData
         ? Object.keys(qData.scores[student.id] ?? {}).length > 0
@@ -101,15 +105,6 @@ export function generateSubjectGradeJSON(
             status: student.status || 'Active',
           });
         }
-      } else if (student.status && student.status !== 'Active') {
-        // Non-active students with no recorded grades: include with grade 0 so adviser
-        // can see them on the roster and verify enrollment status.
-        gradesList.push({
-          lrn: student.lrn,
-          studentName: student.name,
-          grade: 0,
-          status: student.status,
-        });
       }
     });
 
@@ -119,10 +114,12 @@ export function generateSubjectGradeJSON(
     };
   });
 
+  const exportedAt = new Date().toISOString();
+
   return {
     version: '1.0',
     exportType: 'SRPHS_SUBJECT_GRADES',
-    exportTimestamp: new Date().toISOString(),
+    exportTimestamp: exportedAt,
     subjectUID: project.subjectUID || 'N/A',
     subjectName: project.subject,
     schoolYear: project.schoolYear,
@@ -131,6 +128,13 @@ export function generateSubjectGradeJSON(
     teacherName: project.teacherName || '',
     workspace: project.workspace || 'JHS',
     quarters: quartersData,
+    // The snapshot always covers every quarter of this project, regardless of
+    // which quarters were selected for the adviser, so the file can restore it.
+    gradebookSnapshot: {
+      schemaVersion: 1,
+      exportedAt,
+      project,
+    },
   };
 }
 

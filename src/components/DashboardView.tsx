@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { SubjectType, Project, Student } from '../types';
-import { computeProjectStudentGrade, transmuteGrade, getSubjectWeightsLabel, SHS_PROFILES, SHS_OLD_PROFILES } from '../utils';
+import { computeProjectStudentGrade, transmuteGrade, getSubjectWeightsLabel, getDefaultDepedPolicy, SHS_PROFILES, SHS_OLD_PROFILES } from '../utils';
 import { exportConsolidatedGradesPDF } from '../utils/pdfExport';
+import { isAndroid } from '../utils/platform';
 import {
   Users,
   GraduationCap,
@@ -28,6 +29,7 @@ import {
   Search
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import DangerConfirmModal from './DangerConfirmModal';
 
 export default function DashboardView() {
   const {
@@ -65,10 +67,12 @@ export default function DashboardView() {
   const [subject, setSubject] = useState<string>(workspaceMode === 'SHS' ? '' : 'English');
   const [section, setSection] = useState('');
   const [gradeLevel, setGradeLevel] = useState(workspaceMode === 'SHS' ? 'Grade 11' : 'Grade 10');
-  const [schoolYear, setSchoolYear] = useState('2026-2027');
+  const [schoolYear, setSchoolYear] = useState(globalSettings.activeSchoolYear || '2026-2027');
   const [quarter, setQuarter] = useState('1st Quarter');
   const [passingGrade, setPassingGrade] = useState(globalSettings.defaultPassingGrade);
-  const [depedPolicy, setDepedPolicy] = useState<'2015' | '2027'>(globalSettings.depedPolicy);
+  const [depedPolicy, setDepedPolicy] = useState<'2015' | '2027'>(
+    getDefaultDepedPolicy(globalSettings.activeSchoolYear)
+  );
 
   // SHS specific states
   const [shsProfileId, setShsProfileId] = useState('old-core');
@@ -79,6 +83,11 @@ export default function DashboardView() {
   const [customPT, setCustomPT] = useState(50);
   const [customQA, setCustomQA] = useState(20);
   const customTotal = customWW + customPT + customQA;
+
+  // MATATAG transmutation starts in SY 2027-2028; earlier years use the 0-based table.
+  React.useEffect(() => {
+    setDepedPolicy(getDefaultDepedPolicy(schoolYear));
+  }, [schoolYear]);
 
   // Reactively sync defaults when workspace changes
   React.useEffect(() => {
@@ -118,11 +127,12 @@ export default function DashboardView() {
     type?: 'success' | 'error' | 'info';
   } | null>(null);
 
-  const [customConfirm, setCustomConfirm] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
+  const [projectPendingDelete, setProjectPendingDelete] = useState<{
+    id: string;
+    subject: string;
+    gradeLevel: string;
+    section: string;
+    learnerCount: number;
   } | null>(null);
 
   const showCustomAlert = (message: string, title = "System Notification", type: 'success' | 'error' | 'info' = 'info') => {
@@ -131,15 +141,6 @@ export default function DashboardView() {
       title,
       message,
       type
-    });
-  };
-
-  const showCustomConfirm = (message: string, onConfirm: () => void, title = "Action Confirmation") => {
-    setCustomConfirm({
-      isOpen: true,
-      title,
-      message,
-      onConfirm
     });
   };
 
@@ -235,7 +236,7 @@ export default function DashboardView() {
   // PROJECT OPEN ANALYTICS (Phase 7)
   // --------------------------------------------------------
   if (activeProject) {
-    const activeStudents = activeProject.students.filter(s => s.status === 'Active');
+    const activeStudents = activeProject.students.filter(s => s.status !== 'Dropped' && s.status !== 'Transferred');
     const totalStudents = activeStudents.length;
 
     // Grades computation
@@ -300,11 +301,11 @@ export default function DashboardView() {
 
     // Distribution Data for Recharts
     const distributionData = [
-      { name: '90-100 (Outstanding)', value: outstanding, color: '#4f46e5' },
-      { name: '85-89 (Very Sat.)', value: verySatisfactory, color: '#6366f1' },
-      { name: '80-84 (Satisfactory)', value: satisfactory, color: '#818cf8' },
-      { name: '75-79 (Fairly Sat.)', value: fairlySatisfactory, color: '#a5b4fc' },
-      { name: 'Below 75 (Need Interv)', value: didNotMeet, color: '#ef4444' }
+      { name: '90-100 (Outstanding)', value: outstanding, color: '#047857' },
+      { name: '85-89 (Very Sat.)', value: verySatisfactory, color: '#059669' },
+      { name: '80-84 (Satisfactory)', value: satisfactory, color: '#64748b' },
+      { name: '75-79 (Fairly Sat.)', value: fairlySatisfactory, color: '#94a3b8' },
+      { name: 'Below 75 (Need Interv)', value: didNotMeet, color: '#e11d48' }
     ];
 
     // Calculate individual assessment statistics
@@ -329,20 +330,20 @@ export default function DashboardView() {
     });
 
     return (
-      <div className="space-y-6 animate-fade-in pb-12">
+      <div className="ui-page pb-12">
         {/* Active Project Banner */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 p-6 md:p-8 rounded-2xl shadow-3xs flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div className="ui-panel min-w-0 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-mono font-bold px-2.5 py-1 rounded-md border border-emerald-100 dark:border-emerald-900/30">
-                ACTIVE WORKSPACE
+              <span className="text-sm bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 tabular-nums font-medium px-2.5 py-1 rounded-md border border-emerald-100 dark:border-emerald-900/30">
+                Active workspace
               </span>
-              <span className="text-xs text-slate-400 font-mono">ID: {activeProject.id}</span>
+              <span className="text-sm text-slate-600 tabular-nums">ID: {activeProject.id}</span>
             </div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+            <h2 className="ui-heading text-balance">
               {activeProject.subject} • {activeProject.gradeLevel} - {activeProject.section}
             </h2>
-            <p className="text-xs text-slate-450 dark:text-slate-400 font-semibold flex items-center gap-2.5">
+            <p className="text-pretty text-sm text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-2.5">
               <span>Teacher: {activeProject.teacherName}</span>
               <span>•</span>
               <span>Quarter: {activeQuarterId}</span>
@@ -354,20 +355,20 @@ export default function DashboardView() {
           <div className="flex flex-wrap gap-2.5 w-full md:w-auto">
             <button
               onClick={() => setActiveRoute('portal-select')}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200 text-xs font-black rounded-xl transition-all cursor-pointer border border-slate-200 dark:border-slate-700"
+              className="ui-button flex-1 md:flex-none"
               title="Return to Main Portal Selection Hub"
             >
               <LayoutGrid className="h-4 w-4 text-emerald-500" /> Main Hub
             </button>
             <button
               onClick={() => setActiveRoute('class-manager')}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-xs cursor-pointer"
+              className="ui-button-primary flex-1 md:flex-none"
             >
               <BookOpen className="h-4 w-4" /> Open Gradebook
             </button>
             <button
               onClick={() => openProject(null)}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-black rounded-xl transition-all cursor-pointer border border-slate-150 dark:border-slate-800"
+              className="ui-button flex-1 md:flex-none"
             >
               <X className="h-4 w-4" /> Close Project
             </button>
@@ -376,74 +377,74 @@ export default function DashboardView() {
 
         {/* Phase 7 Statistics Dashboard Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="bg-white dark:bg-slate-900 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-850 shadow-3xs space-y-1.5">
-            <div className="flex justify-between items-center text-slate-450">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Learners</span>
-              <Users className="h-4 w-4 text-indigo-500" />
+          <div className="ui-panel min-w-0 p-4 space-y-1.5">
+            <div className="flex justify-between items-center text-slate-500">
+              <span className="text-sm tabular-nums font-medium">Learners</span>
+              <Users className="h-4 w-4 text-slate-500" />
             </div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white">{totalStudents}</div>
-            <div className="text-[10px] text-slate-400 font-medium">Active roster</div>
+            <div className="text-2xl font-semibold text-slate-900 dark:text-white">{totalStudents}</div>
+            <div className="text-sm text-slate-600 font-medium">Active roster</div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-850 shadow-3xs space-y-1.5">
-            <div className="flex justify-between items-center text-slate-450">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Average Grade</span>
+          <div className="ui-panel min-w-0 p-4 space-y-1.5">
+            <div className="flex justify-between items-center text-slate-500">
+              <span className="text-sm tabular-nums font-medium">Average Grade</span>
               <Award className="h-4 w-4 text-emerald-500" />
             </div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white">{averageGrade}%</div>
-            <div className="text-[10px] text-slate-400 font-medium">Class mean card score</div>
+            <div className="text-2xl font-semibold text-slate-900 dark:text-white">{averageGrade}%</div>
+            <div className="text-sm text-slate-600 font-medium">Class mean card score</div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-850 shadow-3xs space-y-1.5">
-            <div className="flex justify-between items-center text-slate-450">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Passing Rate</span>
-              <TrendingUp className="h-4 w-4 text-indigo-500 animate-pulse" />
+          <div className="ui-panel min-w-0 p-4 space-y-1.5">
+            <div className="flex justify-between items-center text-slate-500">
+              <span className="text-sm tabular-nums font-medium">Passing Rate</span>
+              <TrendingUp className="h-4 w-4 text-slate-500" />
             </div>
-            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{passingRate}%</div>
-            <div className="text-[10px] text-slate-450 font-bold">Failing: <span className="text-rose-500">{failingRate}%</span></div>
+            <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{passingRate}%</div>
+            <div className="text-sm text-slate-500 font-medium">Failing: <span className="text-rose-500">{failingRate}%</span></div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-850 shadow-3xs space-y-1.5">
-            <div className="flex justify-between items-center text-slate-450">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider">High / Low</span>
-              <Award className="h-4 w-4 text-indigo-500" />
+          <div className="ui-panel min-w-0 p-4 space-y-1.5">
+            <div className="flex justify-between items-center text-slate-500">
+              <span className="text-sm tabular-nums font-medium">High / Low</span>
+              <Award className="h-4 w-4 text-slate-500" />
             </div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white">
-              {highestGrade} <span className="text-xs text-slate-400 font-medium">/ {lowestGrade}</span>
+            <div className="text-2xl font-semibold text-slate-900 dark:text-white">
+              {highestGrade} <span className="text-sm text-slate-600 font-medium">/ {lowestGrade}</span>
             </div>
-            <div className="text-[10px] text-slate-400 font-medium">Extreme score bounds</div>
+            <div className="text-sm text-slate-600 font-medium">Extreme score bounds</div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-850 shadow-3xs space-y-1.5">
-            <div className="flex justify-between items-center text-slate-450">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Completion</span>
+          <div className="ui-panel min-w-0 p-4 space-y-1.5">
+            <div className="flex justify-between items-center text-slate-500">
+              <span className="text-sm tabular-nums font-medium">Completion</span>
               <Sparkles className="h-4 w-4 text-amber-500" />
             </div>
-            <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{completionRate}%</div>
-            <div className="text-[10px] text-slate-400 font-medium">Grade cell coverage</div>
+            <div className="text-2xl font-semibold text-slate-600 dark:text-slate-400">{completionRate}%</div>
+            <div className="text-sm text-slate-600 font-medium">Grade cell coverage</div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-850 shadow-3xs space-y-1.5">
-            <div className="flex justify-between items-center text-slate-450">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Missing Marks</span>
+          <div className="ui-panel min-w-0 p-4 space-y-1.5">
+            <div className="flex justify-between items-center text-slate-500">
+              <span className="text-sm tabular-nums font-medium">Missing Marks</span>
               <AlertCircle className="h-4 w-4 text-rose-500" />
             </div>
-            <div className={`text-2xl font-black ${missingScoresCount > 0 ? 'text-rose-600 dark:text-rose-450' : 'text-emerald-600'}`}>
+            <div className={`text-2xl font-semibold ${missingScoresCount > 0 ? "text-rose-600 dark:text-rose-500" : 'text-emerald-600'}`}>
               {missingScoresCount}
             </div>
-            <div className="text-[10px] text-slate-400 font-medium">Blank grade records</div>
+            <div className="text-sm text-slate-600 font-medium">Blank grade records</div>
           </div>
         </div>
 
         {/* Bento Row: Chart & Assessment performances */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Chart Card */}
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
+          <div className="ui-panel min-w-0 lg:col-span-2 p-6 md:p-8 space-y-4">
             <div className="space-y-1">
-              <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+              <h3 className="ui-section-title text-balance">
                 Learner Grade Distribution
               </h3>
-              <p className="text-[10px] text-slate-400 font-medium">Frequency distribution based on official DepEd descriptors.</p>
+              <p className="text-pretty text-sm text-slate-600 font-medium">Frequency distribution based on official DepEd descriptors.</p>
             </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -466,41 +467,41 @@ export default function DashboardView() {
           </div>
 
           {/* Assessment Overview Card */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-5">
-            <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+          <div className="ui-panel min-w-0 p-6 md:p-8 space-y-5">
+            <h3 className="ui-section-title text-balance">
               Assessment Ratios & Means
             </h3>
 
             {totalAssessments === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-xs font-medium">
+              <div className="text-center py-12 text-slate-600 text-sm font-medium">
                 No assessments created yet. Add some in Workspace.
               </div>
             ) : (
               <div className="space-y-4 max-h-64 overflow-y-auto pr-1">
                 {assessmentStats.map(ass => (
-                  <div key={ass.id} className="space-y-1 pb-3 border-b border-slate-50 dark:border-slate-855 last:border-0 last:pb-0">
+                  <div key={ass.id} className="space-y-1 pb-3 border-b border-slate-50 dark:border-slate-900 last:border-0 last:pb-0">
                     <div className="flex justify-between items-start">
                       <div className="max-w-[70%]">
-                        <div className="text-xs font-black text-slate-800 dark:text-slate-200 truncate" title={ass.name}>
+                        <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate" title={ass.name}>
                           {ass.name}
                         </div>
-                        <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500">
-                          Category: <span className="font-bold text-indigo-650">{ass.category}</span> | Perfect: {ass.perfectScore}
+                        <div className="text-sm tabular-nums text-slate-600 dark:text-slate-500">
+                          Category: <span className="font-medium text-slate-700">{ass.category}</span> | Perfect: {ass.perfectScore}
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">
+                        <div className="text-sm tabular-nums font-medium text-slate-900 dark:text-slate-100">
                           Mean: {ass.averageScore}
                         </div>
-                        <div className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                        <div className="text-sm tabular-nums text-emerald-600 dark:text-emerald-400 font-medium">
                           {ass.averagePercentage}% score
                         </div>
                       </div>
                     </div>
                     {/* Tiny Progress bar */}
-                    <div className="h-1 w-full bg-slate-55 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-1 w-full bg-slate-50 dark:bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${ass.category === 'WOW' ? 'bg-emerald-600' : ass.category === 'PPT' ? 'bg-emerald-400' : 'bg-teal-500'
+                        className={`h-full rounded-full ${ass.category === 'WOW' ? 'bg-emerald-600' : ass.category === 'PPT' ? 'bg-emerald-400' : "bg-slate-500"
                           }`}
                         style={{ width: `${ass.averagePercentage}%` }}
                       />
@@ -513,20 +514,19 @@ export default function DashboardView() {
         </div>
 
         {/* System Settings Shortcut Banner */}
-        <div className="bg-gradient-to-r from-emerald-900 to-teal-950 border border-emerald-950 rounded-2xl p-6 md:p-8 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm">
-          <div className="space-y-1.5 max-w-2xl">
-            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-300">Shortcut Matrix</span>
-            <h3 className="text-base md:text-lg font-black tracking-tight leading-tight">Need to adjust subject categories or passing scores?</h3>
-            <p className="text-xs text-emerald-200/80 leading-relaxed font-medium">
-              Change school-wide default parameters, teacher identity fields, and custom assessment weight matrices easily inside system settings.
+        <div className="ui-panel flex flex-col items-start justify-between gap-4 p-4 sm:p-6 lg:flex-row lg:items-center">
+          <div className="min-w-0 max-w-2xl">
+            <h3 className="ui-section-title text-balance">School and grading defaults</h3>
+            <p className="ui-description text-pretty">
+              Manage school details, teacher information, subject categories, and default passing scores in Settings.
             </p>
           </div>
           <button
             onClick={() => setActiveRoute('settings')}
-            className="flex items-center justify-between gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm shrink-0 w-full sm:w-auto self-stretch sm:self-auto"
+            className="ui-button w-full shrink-0 sm:w-auto"
           >
-            <span>Configure System Setup</span>
-            <ChevronRight className="h-4 w-4" />
+            <span>Open Settings</span>
+            <ChevronRight className="size-4" />
           </button>
         </div>
       </div>
@@ -664,7 +664,7 @@ export default function DashboardView() {
             <button
               type="button"
               onClick={() => { setSelectedConsolidatedClass(null); setPrintFriendly(false); }}
-              className="flex items-center gap-1.5 text-xs font-black text-slate-600 hover:text-slate-900 cursor-pointer transition-colors"
+              className="ui-button"
             >
               <ChevronLeft className="h-4.5 w-4.5" />
               <span>Back to Directory</span>
@@ -673,13 +673,13 @@ export default function DashboardView() {
             <div className="flex flex-wrap items-center gap-3">
               {/* Search Field */}
               <div className="relative w-full sm:w-48">
-                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                <input
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-600" />
+                <input aria-label="Search learners by name or LRN"
                   type="text"
                   placeholder="Search student..."
                   value={consolidatedSearch}
                   onChange={(e) => setConsolidatedSearch(e.target.value)}
-                  className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-xl py-1.5 pl-9 pr-3 text-xs focus:outline-hidden font-bold"
+                  className="ui-field pl-9 pr-3"
                 />
               </div>
 
@@ -698,7 +698,7 @@ export default function DashboardView() {
                     setIsExportingPDF(false);
                   }
                 }}
-                className="flex items-center justify-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm disabled:opacity-50"
+                className="ui-button"
               >
                 <FileDown className="h-4 w-4" />
                 <span>{isExportingPDF ? 'Generating PDF...' : 'Download PDF (All Pages)'}</span>
@@ -707,18 +707,26 @@ export default function DashboardView() {
               {/* Direct Print Button */}
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm"
+                onClick={() => {
+                  if (isAndroid()) {
+                    const filename = `Consolidated_Grades_${activeGroup.gradeLevel}_${activeGroup.section}_${activeGroup.subject}.pdf`.replace(/\s+/g, '_');
+                    exportConsolidatedGradesPDF(activeGroup, filename)
+                      .catch(err => console.error('Export error:', err));
+                    return;
+                  }
+                  window.print();
+                }}
+                className="ui-button"
               >
                 <Printer className="h-4 w-4" />
-                <span>Print Document</span>
+                <span>{isAndroid() ? 'Print (PDF)' : 'Print Document'}</span>
               </button>
 
               {/* Exit Print Mode Toggle */}
               <button
                 type="button"
                 onClick={() => setPrintFriendly(false)}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-black transition-all cursor-pointer"
+                className="ui-button"
               >
                 Exit Print Mode
               </button>
@@ -901,19 +909,19 @@ export default function DashboardView() {
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                 <h4 className="text-[9px] font-sans font-black text-slate-400 tracking-wider uppercase">Class Performance Summary</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-2.5 bg-white border border-slate-100 rounded-lg">
+                  <div className="p-2.5 bg-white border border-slate-300 rounded-lg">
                     <span className="text-[8px] font-mono font-bold text-slate-400 uppercase block">Graded Population</span>
                     <strong className="text-sm font-black text-slate-850">{gradedCount} <span className="text-[9px] text-slate-450 font-semibold font-sans">/ {fullRoster.all.length} total</span></strong>
                   </div>
-                  <div className="p-2.5 bg-white border border-slate-100 rounded-lg">
+                  <div className="p-2.5 bg-white border border-slate-300 rounded-lg">
                     <span className="text-[8px] font-mono font-bold text-slate-400 uppercase block">Class General Mean</span>
                     <strong className="text-sm font-black text-indigo-650 font-mono">{meanFinalGrade}</strong>
                   </div>
-                  <div className="p-2.5 bg-white border border-slate-100 rounded-lg">
+                  <div className="p-2.5 bg-white border border-slate-300 rounded-lg">
                     <span className="text-[8px] font-mono font-bold text-slate-400 uppercase block">Passing Rate</span>
                     <strong className="text-sm font-black text-emerald-650 font-mono">{passingRate}%</strong>
                   </div>
-                  <div className="p-2.5 bg-white border border-slate-100 rounded-lg">
+                  <div className="p-2.5 bg-white border border-slate-300 rounded-lg">
                     <span className="text-[8px] font-mono font-bold text-slate-400 uppercase block">Roster Sex Breakdown</span>
                     <span className="text-[11px] font-bold text-slate-650">{fullRoster.males.length} M • {fullRoster.females.length} F</span>
                   </div>
@@ -980,20 +988,20 @@ export default function DashboardView() {
   const archivedCount = workspaceProjects.filter(p => p.isArchived).length;
 
   return (
-    <div className="space-y-8 animate-fade-in pb-12">
+    <div className="ui-page pb-12">
       {/* Welcome Banner */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 p-6 md:p-8 rounded-2xl shadow-3xs flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      <div className="ui-panel min-w-0 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-mono font-bold px-2.5 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900/30">
-              DESKTOP HUB
+            <span className="text-sm bg-slate-50 dark:bg-slate-950/40 text-slate-700 dark:text-slate-400 tabular-nums font-medium px-2.5 py-0.5 rounded-md border border-slate-300 dark:border-slate-900/30">
+              Grading hub
             </span>
-            <span className="text-xs text-slate-400 font-mono">Offline-First</span>
+            <span className="text-sm text-slate-600 tabular-nums">Offline-First</span>
           </div>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+          <h2 className="ui-heading text-balance">
             {workspaceMode === 'SHS' ? 'Senior High School (SHS) Gradebook' : 'Junior High School (JHS) Gradebook'}
           </h2>
-          <p className="text-xs text-slate-450 dark:text-slate-400 font-semibold">
+          <p className="text-pretty text-sm text-slate-500 dark:text-slate-400 font-semibold">
             {workspaceMode === 'SHS'
               ? 'Manually configure subjects, choose specific assessment profiles (1-6) with defined DepEd weights, and group by Semester or Whole Year.'
               : 'Create JHS grading projects, import class lists, build assessment rubrics, and run computations offline.'}
@@ -1003,7 +1011,7 @@ export default function DashboardView() {
         <div className="flex items-center gap-3 shrink-0 flex-wrap">
           <button
             onClick={() => setActiveRoute('portal-select')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-black transition cursor-pointer border border-slate-750 dark:border-slate-700 shadow-sm"
+            className="ui-button"
             title="Return to Main Portal Selection Hub"
           >
             <LayoutGrid className="h-4 w-4 text-emerald-400" />
@@ -1011,13 +1019,13 @@ export default function DashboardView() {
           </button>
 
           <div className="flex gap-3 text-center">
-            <div className="px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl min-w-[80px]">
-              <div className="text-[9px] text-slate-400 font-mono font-bold uppercase tracking-wider">Active</div>
-              <div className="text-lg font-black text-indigo-600 dark:text-indigo-400">{activeCount}</div>
+            <div className="px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl min-w-[80px]">
+              <div className="text-sm text-slate-600 tabular-nums font-medium">Active</div>
+              <div className="text-lg font-semibold text-slate-600 dark:text-slate-400">{activeCount}</div>
             </div>
-            <div className="px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl min-w-[80px]">
-              <div className="text-[9px] text-slate-400 font-mono font-bold uppercase tracking-wider">Archived</div>
-              <div className="text-lg font-black text-slate-500">{archivedCount}</div>
+            <div className="px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl min-w-[80px]">
+              <div className="text-sm text-slate-600 tabular-nums font-medium">Archived</div>
+              <div className="text-lg font-semibold text-slate-500">{archivedCount}</div>
             </div>
           </div>
         </div>
@@ -1026,23 +1034,23 @@ export default function DashboardView() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Projects List (Col 1 & 2) */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
+          <div className="ui-panel min-w-0 p-6 md:p-8 space-y-4">
             {/* Directory Header with Tab Switcher */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-850 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-900 pb-4">
               <div className="flex items-center gap-2">
-                <LayoutGrid className="h-5 w-5 text-indigo-600 shrink-0" />
-                <h3 className="font-sans font-black text-xs text-slate-450 dark:text-slate-400 uppercase tracking-widest">
+                <LayoutGrid className="h-5 w-5 text-slate-600 shrink-0" />
+                <h3 className="ui-section-title text-balance">
                   {selectedConsolidatedClass ? 'Annual Report Card View' : dashboardTab === 'quarters' ? 'Grading Projects Directory' : 'Consolidated Annual Directory'}
                 </h3>
               </div>
 
               {!selectedConsolidatedClass && (
-                <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-150 dark:border-slate-800/80 shrink-0">
+                <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800/80 shrink-0">
                   <button
                     type="button"
                     onClick={() => { setDashboardTab('quarters'); }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${dashboardTab === 'quarters'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer ${dashboardTab === 'quarters'
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white "
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
                       }`}
                   >
@@ -1051,8 +1059,8 @@ export default function DashboardView() {
                   <button
                     type="button"
                     onClick={() => { setDashboardTab('consolidation'); }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${dashboardTab === 'consolidation'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-3xs'
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer ${dashboardTab === 'consolidation'
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white "
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
                       }`}
                   >
@@ -1065,11 +1073,11 @@ export default function DashboardView() {
             {selectedConsolidatedClass ? (
               <div className="space-y-6">
                 {/* Header controls */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100 dark:border-slate-805">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => { setSelectedConsolidatedClass(null); setPrintFriendly(false); }}
-                    className="flex items-center gap-1.5 text-xs font-black text-slate-600 dark:text-slate-450 hover:text-slate-900 dark:hover:text-slate-100 cursor-pointer transition-colors self-start"
+                    className="ui-button self-start"
                   >
                     <ChevronLeft className="h-4.5 w-4.5" />
                     <span>Back to Directory</span>
@@ -1078,13 +1086,13 @@ export default function DashboardView() {
                   <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     {/* Search Field */}
                     <div className="relative w-full sm:w-48">
-                      <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                      <input
+                      <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-600" />
+                      <input aria-label="Search learners by name or LRN"
                         type="text"
                         placeholder="Search student..."
                         value={consolidatedSearch}
                         onChange={(e) => setConsolidatedSearch(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-1.5 pl-9 pr-3 text-xs focus:outline-hidden font-bold"
+                        className="ui-field pl-9 pr-3"
                       />
                     </div>
 
@@ -1092,9 +1100,9 @@ export default function DashboardView() {
                     <button
                       type="button"
                       onClick={() => setPrintFriendly(!printFriendly)}
-                      className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border w-full sm:w-auto ${printFriendly
-                          ? 'bg-amber-550 text-white border-amber-550'
-                          : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800'
+                      className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold cursor-pointer border w-full sm:w-auto ${printFriendly
+                          ? "bg-amber-600 text-white border-amber-600"
+                          : "bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800"
                         }`}
                     >
                       <Printer className="h-4 w-4" />
@@ -1105,7 +1113,7 @@ export default function DashboardView() {
 
                 {/* Print Banner notification */}
                 {printFriendly && (
-                  <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs rounded-xl flex items-center gap-2.5 font-bold">
+                  <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-sm rounded-xl flex items-center gap-2.5 font-medium">
                     <AlertCircle className="h-4.5 w-4.5 text-amber-500 shrink-0" />
                     <span>Print Sheet mode is ACTIVE. All background panels, sidebar, and buttons are hidden. Use your browser's Print option (Ctrl+P or Cmd+P) to print this sheet directly.</span>
                   </div>
@@ -1400,19 +1408,19 @@ export default function DashboardView() {
                         <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3">
                           <h4 className="text-[9px] font-sans font-black text-slate-400 tracking-wider uppercase">Class Performance Summary</h4>
                           <div className="grid grid-cols-2 gap-3">
-                            <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-lg">
+                            <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-850 rounded-lg">
                               <span className="text-[8px] font-mono font-bold text-slate-400 uppercase block">Graded Population</span>
                               <strong className="text-sm font-black text-slate-850 dark:text-slate-100">{gradedCount} <span className="text-[9px] text-slate-450 font-semibold font-sans">/ {fullRoster.all.length} total</span></strong>
                             </div>
-                            <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-lg">
+                            <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-850 rounded-lg">
                               <span className="text-[8px] font-mono font-bold text-slate-400 uppercase block">Class General Mean</span>
                               <strong className="text-sm font-black text-indigo-650 dark:text-indigo-400 font-mono">{meanFinalGrade}</strong>
                             </div>
-                            <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-lg">
+                            <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-850 rounded-lg">
                               <span className="text-[8px] font-mono font-bold text-slate-400 uppercase block">Passing Rate</span>
                               <strong className="text-sm font-black text-emerald-655 dark:text-emerald-400 font-mono">{passingRate}%</strong>
                             </div>
-                            <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-lg">
+                            <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-850 rounded-lg">
                               <span className="text-[8px] font-mono font-bold text-slate-400 uppercase block">Roster Sex Breakdown</span>
                               <span className="text-[11px] font-bold text-slate-650 dark:text-slate-350">{fullRoster.males.length} M • {fullRoster.females.length} F{fullRoster.unspec.length > 0 ? ` • ${fullRoster.unspec.length} Other` : ''}</span>
                             </div>
@@ -1460,7 +1468,9 @@ export default function DashboardView() {
                               <div className="text-[7.5px] text-slate-400 font-bold uppercase tracking-wider">Subject Teacher</div>
                             </div>
                             <div className="space-y-1">
-                              <div className="border-b border-slate-900/40 dark:border-slate-100/40 pb-1 font-bold text-slate-400 italic">_______________________</div>
+                              <div className={`border-b border-slate-900/40 dark:border-slate-100/40 pb-1 font-bold uppercase font-serif tracking-wide ${globalSettings.principalName ? 'text-slate-900 dark:text-white' : 'text-slate-400 italic'}`}>
+                                {globalSettings.principalName?.trim() || '_______________________'}
+                              </div>
                               <div className="text-[7.5px] text-slate-400 font-bold uppercase tracking-wider">School Principal / Registrar</div>
                             </div>
                           </div>
@@ -1471,16 +1481,22 @@ export default function DashboardView() {
                 })()}
               </div>
             ) : dashboardTab === 'consolidation' ? (
-              <div className="divide-y divide-slate-100 dark:divide-slate-850">
+              <div className="divide-y divide-slate-100 dark:divide-slate-900">
                 {groupedClasses.length === 0 ? (
-                  <div className="text-center py-12 text-slate-400 text-xs font-semibold">
+                  <div className="text-center py-12 text-slate-600 text-sm font-semibold">
                     No active school year folders compiled yet. Create quarterly grading projects to see them auto-consolidated here.
                   </div>
                 ) : (
                   groupedClasses.map((group) => {
                     const uniqueStudents = (() => {
-                      const sMap = new Map();
-                      group.projects.forEach(p => p.students.forEach(st => sMap.set(st.lrn || st.name, true)));
+                      const sMap = new Set<string>();
+                      group.projects.forEach(p => p.students
+                        .filter(st => st.status !== 'Dropped' && st.status !== 'Transferred')
+                        .forEach(st => {
+                          const lrn = (st.lrn || '').trim();
+                          const validLrn = lrn.length === 12 && lrn !== '123456789123';
+                          sMap.add(validLrn ? `LRN:${lrn}` : `NAME:${st.name.trim().toUpperCase()}`);
+                        }));
                       return sMap.size;
                     })();
 
@@ -1490,29 +1506,29 @@ export default function DashboardView() {
                     const q4 = group.projects.some(p => p.quarters?.['4th Quarter'] !== undefined);
 
                     return (
-                      <div key={group.key} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/30 dark:hover:bg-slate-850/20 px-2 rounded-xl transition-colors">
+                      <div key={group.key} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/30 dark:hover:bg-slate-900/20 px-2 rounded-xl transition-colors">
                         <div className="space-y-1 max-w-[70%]">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                               {group.subject} • {group.gradeLevel} - {group.section}
                             </span>
-                            <span className="text-[8px] bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-sm font-mono font-bold uppercase">
+                            <span className="text-sm bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-sm tabular-nums font-medium">
                               S.Y. {group.schoolYear}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-3 text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
-                            <span>Compiled Learners: <strong className="text-slate-600 dark:text-slate-300 font-black">{uniqueStudents}</strong></span>
+                          <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-500 font-semibold">
+                            <span>Compiled Learners: <strong className="text-slate-600 dark:text-slate-300 font-semibold">{uniqueStudents}</strong></span>
                             <span>|</span>
-                            <span>Portals: <strong className="text-slate-600 dark:text-slate-300 font-black">{group.projects.length}</strong></span>
+                            <span>Portals: <strong className="text-slate-600 dark:text-slate-300 font-semibold">{group.projects.length}</strong></span>
                           </div>
 
                           {/* Quarters Pills row */}
                           <div className="flex gap-1.5 pt-1">
-                            <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-xs uppercase tracking-wide border ${q1 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-450' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-850 text-slate-350 dark:text-slate-600'}`}>Q1</span>
-                            <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-xs uppercase tracking-wide border ${q2 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-450' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-850 text-slate-350 dark:text-slate-600'}`}>Q2</span>
-                            <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-xs uppercase tracking-wide border ${q3 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-450' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-850 text-slate-350 dark:text-slate-600'}`}>Q3</span>
-                            <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-xs uppercase tracking-wide border ${q4 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-450' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-850 text-slate-350 dark:text-slate-600'}`}>Q4</span>
+                            <span className={`text-sm tabular-nums font-medium px-1.5 py-0.5 rounded-xs border ${q1 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-500" : "bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-900 text-slate-600 dark:text-slate-600"}`}>Q1</span>
+                            <span className={`text-sm tabular-nums font-medium px-1.5 py-0.5 rounded-xs border ${q2 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-500" : "bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-900 text-slate-600 dark:text-slate-600"}`}>Q2</span>
+                            <span className={`text-sm tabular-nums font-medium px-1.5 py-0.5 rounded-xs border ${q3 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-500" : "bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-900 text-slate-600 dark:text-slate-600"}`}>Q3</span>
+                            <span className={`text-sm tabular-nums font-medium px-1.5 py-0.5 rounded-xs border ${q4 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-500" : "bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-900 text-slate-600 dark:text-slate-600"}`}>Q4</span>
                           </div>
                         </div>
 
@@ -1520,7 +1536,7 @@ export default function DashboardView() {
                           <button
                             type="button"
                             onClick={() => setSelectedConsolidatedClass(group.key)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg transition-all cursor-pointer shadow-3xs"
+                            className="ui-button"
                           >
                             <span>Open Consolidated Report</span>
                             <ChevronRight className="h-4 w-4" />
@@ -1532,46 +1548,46 @@ export default function DashboardView() {
                 )}
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-850">
+              <div className="divide-y divide-slate-100 dark:divide-slate-900">
                 {workspaceProjects.map((proj) => (
-                  <div key={proj.id} className="py-4 flex justify-between items-center hover:bg-slate-50/30 dark:hover:bg-slate-850/20 px-2 rounded-xl transition-colors">
+                  <div key={proj.id} className="py-4 flex justify-between items-center hover:bg-slate-50/30 dark:hover:bg-slate-900/20 px-2 rounded-xl transition-colors">
                     <div className="space-y-1 max-w-[65%]">
                       <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="text-xs font-black text-slate-800 dark:text-slate-200 truncate">
+                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
                           {proj.subject} • {proj.gradeLevel} - {proj.section}
                         </span>
                         {proj.isCompleted && (
-                          <span className="text-[8px] bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-sm font-mono font-black uppercase border border-emerald-100/40 dark:border-emerald-900/15">
+                          <span className="text-sm bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-sm tabular-nums font-semibold border border-emerald-100/40 dark:border-emerald-900/15">
                             Completed
                           </span>
                         )}
                         {proj.isArchived && (
-                          <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-sm font-mono font-bold uppercase">
+                          <span className="text-sm bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-sm tabular-nums font-medium">
                             Archived
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400 dark:text-slate-555 leading-relaxed font-semibold">
+                      <div className="text-sm text-slate-600 dark:text-slate-600 leading-relaxed font-semibold">
                         Quarter: {proj.lastActiveQuarter || '1st Quarter'} | S.Y. {proj.schoolYear} | Learners: {proj.students.length}
                       </div>
-                      <div className="text-[9px] font-mono text-slate-400 flex items-center gap-1.5">
+                      <div className="text-sm tabular-nums text-slate-600 flex items-center gap-1.5">
                         <Clock className="h-3 w-3" /> Updated {new Date(proj.updatedAt).toLocaleDateString()}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <button
+                      <button aria-label="Open Workspace"
                         type="button"
                         onClick={() => openProject(proj.id)}
-                        className="p-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-950/50 cursor-pointer transition-colors"
+                        className="ui-icon-button"
                         title="Open Workspace"
                       >
                         <ExternalLink className="h-4 w-4" />
                       </button>
-                      <button
+                      <button aria-label="Duplicate Project"
                         type="button"
                         onClick={() => duplicateProject(proj.id)}
-                        className="p-2 bg-slate-50 dark:bg-slate-850 text-slate-650 dark:text-slate-400 rounded-lg hover:bg-slate-105 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                        className="ui-icon-button"
                         title="Duplicate Project"
                       >
                         <Copy className="h-4 w-4" />
@@ -1581,22 +1597,22 @@ export default function DashboardView() {
                         onClick={() => archiveProject(proj.id, !proj.isArchived)}
                         className={`p-2 rounded-lg cursor-pointer transition-colors ${proj.isArchived
                             ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/20'
-                            : 'bg-slate-50 dark:bg-slate-850 text-slate-650'
+                            : "bg-slate-50 dark:bg-slate-900 text-slate-700"
                           }`}
                         title={proj.isArchived ? "Restore Project" : "Archive Project"}
                       >
                         <Archive className="h-4 w-4" />
                       </button>
-                      <button
+                      <button aria-label="Delete Project"
                         type="button"
-                        onClick={() => {
-                          showCustomConfirm(
-                            `Are you sure you want to permanently delete the grading project [${proj.subject} - ${proj.section}]? All student roster profiles and registered grade cards will be completely deleted. This action cannot be undone.`,
-                            () => deleteProject(proj.id),
-                            "Permanently Delete Project"
-                          );
-                        }}
-                        className="p-2 bg-rose-50 dark:bg-rose-950/25 text-rose-600 dark:text-rose-450 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-950/50 cursor-pointer transition-colors"
+                        onClick={() => setProjectPendingDelete({
+                          id: proj.id,
+                          subject: proj.subject,
+                          gradeLevel: proj.gradeLevel,
+                          section: proj.section,
+                          learnerCount: proj.students.length
+                        })}
+                        className="ui-icon-button"
                         title="Delete Project"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1611,31 +1627,31 @@ export default function DashboardView() {
 
         {/* Create Project Wizard (Col 3) */}
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-2xl p-6 md:p-8 shadow-3xs space-y-4">
-            <h3 className="font-sans font-black text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <FolderPlus className="h-5 w-5 text-indigo-600" />
-              Create GradeBook
+          <div className="ui-panel min-w-0 p-6 md:p-8 space-y-4">
+            <h3 className="ui-section-title text-balance flex items-center gap-2">
+              <FolderPlus className="h-5 w-5 text-slate-600" />
+              Create gradebook
             </h3>
 
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                <label className="ui-label tabular-nums text-slate-600 dark:text-slate-500">
                   {workspaceMode === 'SHS' ? 'Subject Name (Manual Entry)' : 'Subject'}
                 </label>
                 {workspaceMode === 'SHS' ? (
-                  <input
+                  <input aria-label="Subject"
                     type="text"
                     required
                     placeholder="e.g. Pre-Calculus, General Chemistry"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-semibold"
+                    className="ui-field mt-1.5"
                   />
                 ) : (
-                  <select
+                  <select aria-label="Subject"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value as SubjectType)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5"
                   >
                     <option value="English">English</option>
                     <option value="Filipino">Filipino</option>
@@ -1653,11 +1669,11 @@ export default function DashboardView() {
               {/* Assessment Profile (Only for SHS) */}
               {workspaceMode === 'SHS' && (
                 <div className="space-y-2">
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Assessment Profile</label>
-                  <select
+                  <label className="ui-label tabular-nums text-slate-600 dark:text-slate-500">Assessment Profile</label>
+                  <select aria-label="Assessment profile"
                     value={shsProfileId}
                     onChange={(e) => setShsProfileId(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5"
                   >
                     <optgroup label="—— DepEd Order No. 8, s. 2015 (Old Curriculum) ——">
                       {SHS_OLD_PROFILES.map(p => (
@@ -1676,32 +1692,32 @@ export default function DashboardView() {
 
                   {/* Custom weight inputs (visible only when 'custom' is selected) */}
                   {shsProfileId === 'custom' && (
-                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-3 space-y-2 animate-fade-in">
-                      <div className="text-[9px] font-mono font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">Manual Weight Entry (must total 100%)</div>
+                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-3 space-y-2">
+                      <div className="text-sm tabular-nums font-semibold text-amber-700 dark:text-amber-400">Manual Weight Entry (must total 100%)</div>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="text-[8px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">WW %</label>
-                          <input type="number" min={0} max={100} value={customWW}
+                          <label className="ui-label tabular-nums text-slate-500 dark:text-slate-400 block mb-1">WW %</label>
+                          <input aria-label="Written works weight (%)" type="number" min={0} max={100} value={customWW}
                             onChange={e => setCustomWW(parseInt(e.target.value) || 0)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2 text-xs font-mono font-bold text-center focus:outline-hidden focus:ring-1.5 focus:ring-amber-400"
+                            className="ui-field text-center"
                           />
                         </div>
                         <div>
-                          <label className="text-[8px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">PT %</label>
-                          <input type="number" min={0} max={100} value={customPT}
+                          <label className="ui-label tabular-nums text-slate-500 dark:text-slate-400 block mb-1">PT %</label>
+                          <input aria-label="Performance tasks weight (%)" type="number" min={0} max={100} value={customPT}
                             onChange={e => setCustomPT(parseInt(e.target.value) || 0)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2 text-xs font-mono font-bold text-center focus:outline-hidden focus:ring-1.5 focus:ring-amber-400"
+                            className="ui-field text-center"
                           />
                         </div>
                         <div>
-                          <label className="text-[8px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">QA %</label>
-                          <input type="number" min={0} max={100} value={customQA}
+                          <label className="ui-label tabular-nums text-slate-500 dark:text-slate-400 block mb-1">QA %</label>
+                          <input aria-label="Quarterly assessment weight (%)" type="number" min={0} max={100} value={customQA}
                             onChange={e => setCustomQA(parseInt(e.target.value) || 0)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2 text-xs font-mono font-bold text-center focus:outline-hidden focus:ring-1.5 focus:ring-amber-400"
+                            className="ui-field text-center"
                           />
                         </div>
                       </div>
-                      <div className={`text-[10px] font-mono font-black text-center py-1 rounded-lg ${customTotal === 100 ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20' : 'text-rose-600 bg-rose-50 dark:bg-rose-950/20'}`}>
+                      <div className={`text-sm tabular-nums font-semibold text-center py-1 rounded-lg ${customTotal === 100 ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20' : 'text-rose-600 bg-rose-50 dark:bg-rose-950/20'}`}>
                         Total: {customTotal}% {customTotal === 100 ? '✓ Valid' : `— Need ${100 - customTotal > 0 ? '+' : ''}${100 - customTotal}% to reach 100%`}
                       </div>
                     </div>
@@ -1713,11 +1729,11 @@ export default function DashboardView() {
               {workspaceMode === 'SHS' && (
                 <div className="grid grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Duration</label>
-                    <select
+                    <label className="ui-label tabular-nums text-slate-600 dark:text-slate-500">Duration</label>
+                    <select aria-label="Project duration"
                       value={shsDuration}
                       onChange={(e) => setShsDuration(e.target.value as 'Whole Year' | 'One Semester')}
-                      className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-bold"
+                      className="ui-field mt-1.5"
                     >
                       <option value="Whole Year">Whole Year</option>
                       <option value="One Semester">One Semester</option>
@@ -1725,11 +1741,11 @@ export default function DashboardView() {
                   </div>
                   {shsDuration === 'One Semester' ? (
                     <div>
-                      <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Semester</label>
-                      <select
+                      <label className="ui-label tabular-nums text-slate-600 dark:text-slate-500">Semester</label>
+                      <select aria-label="Semester"
                         value={shsSemester}
                         onChange={(e) => setShsSemester(e.target.value as 'Semester 1' | 'Semester 2')}
-                        className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-bold"
+                        className="ui-field mt-1.5"
                       >
                         <option value="Semester 1">Semester 1</option>
                         <option value="Semester 2">Semester 2</option>
@@ -1737,31 +1753,31 @@ export default function DashboardView() {
                     </div>
                   ) : (
                     <div className="flex items-center pt-5">
-                      <span className="text-[10px] text-slate-400 font-bold">All Q1-Q4 active</span>
+                      <span className="text-sm text-slate-600 font-medium">All Q1-Q4 active</span>
                     </div>
                   )}
                 </div>
               )}
 
               <div>
-                <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Section Name</label>
-                <input
+                <label className="ui-label tabular-nums text-slate-600 dark:text-slate-500">Section Name</label>
+                <input aria-label="Section name"
                   type="text"
                   required
                   placeholder="e.g. St. Peter"
                   value={section}
                   onChange={(e) => setSection(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-semibold"
+                  className="ui-field mt-1.5"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Grade Level</label>
-                  <select
+                  <label className="ui-label tabular-nums text-slate-600 dark:text-slate-500">Grade Level</label>
+                  <select aria-label="Grade level"
                     value={gradeLevel}
                     onChange={(e) => setGradeLevel(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-bold"
+                    className="ui-field mt-1.5"
                   >
                     {workspaceMode === 'SHS' ? (
                       <>
@@ -1779,35 +1795,35 @@ export default function DashboardView() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">School Year</label>
-                  <input
+                  <label className="ui-label tabular-nums text-slate-600 dark:text-slate-500">School Year</label>
+                  <input aria-label="School year"
                     type="text"
                     required
                     value={schoolYear}
                     onChange={(e) => setSchoolYear(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-mono font-bold"
+                    className="ui-field mt-1.5"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Passing Score</label>
-                <input
+                <label className="ui-label tabular-nums text-slate-600 dark:text-slate-500">Passing Score</label>
+                <input aria-label="Passing grade"
                   type="number"
                   min={60}
                   max={100}
                   value={passingGrade}
                   onChange={(e) => setPassingGrade(parseInt(e.target.value) || 75)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-hidden mt-1.5 font-mono font-bold"
+                  className="ui-field mt-1.5"
                 />
               </div>
 
               <div>
-                <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Transmutation / Grading Policy</label>
-                <select
+                <label className="ui-label tabular-nums text-slate-600 dark:text-slate-500">Transmutation / Grading Policy</label>
+                <select aria-label="Grading policy"
                   value={depedPolicy}
                   onChange={(e) => setDepedPolicy(e.target.value as '2015' | '2027')}
-                  className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-150 dark:border-slate-800 rounded-xl py-2.5 px-3 text-xs focus:outline-hidden mt-1.5 font-bold"
+                  className="ui-field mt-1.5"
                 >
                   <option value="2015">0-Based Grading (0=0, 70=70, 100=100)</option>
                   <option value="2027">MATATAG Adjusted Transmutation (SY 2027-2028 onwards)</option>
@@ -1816,7 +1832,7 @@ export default function DashboardView() {
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-colors cursor-pointer"
+                className="ui-button-primary w-full"
               >
                 Create Project Workspace
               </button>
@@ -1829,27 +1845,27 @@ export default function DashboardView() {
           CUSTOM ALERT DIALOG OVERLAY (IFrame-Safe)
           -------------------------------------------------------- */}
       {customAlert && customAlert.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-850">
+        <div className="ui-dialog-overlay">
+          <div role="dialog" aria-modal="true" aria-label="Notification" className="ui-dialog max-w-sm block overflow-y-auto p-4 sm:p-6 space-y-4">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-900">
               {customAlert.type === 'success' ? (
-                <Sparkles className="h-6 w-6 text-emerald-500 animate-pulse" />
+                <Sparkles className="h-6 w-6 text-emerald-500" />
               ) : customAlert.type === 'error' ? (
-                <AlertCircle className="h-6 w-6 text-rose-500 animate-bounce" />
+                <AlertCircle className="h-6 w-6 text-rose-500" />
               ) : (
-                <HelpCircle className="h-6 w-6 text-indigo-500" />
+                <HelpCircle className="h-6 w-6 text-slate-500" />
               )}
             </div>
 
             <div className="space-y-1.5">
-              <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest">{customAlert.title}</h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-relaxed whitespace-pre-line">{customAlert.message}</p>
+              <h3 className="ui-section-title text-balance">{customAlert.title}</h3>
+              <p className="text-pretty text-sm text-slate-500 dark:text-slate-400 font-semibold leading-relaxed whitespace-pre-line">{customAlert.message}</p>
             </div>
 
             <button
               type="button"
               onClick={() => setCustomAlert(null)}
-              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-4xs"
+              className="ui-button w-full"
             >
               Okay, Understood
             </button>
@@ -1858,42 +1874,29 @@ export default function DashboardView() {
       )}
 
       {/* --------------------------------------------------------
-          CUSTOM CONFIRM DIALOG OVERLAY (IFrame-Safe)
+          TYPED CONFIRMATION FOR PERMANENT PROJECT DELETION
           -------------------------------------------------------- */}
-      {customConfirm && customConfirm.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-850">
-              <AlertCircle className="h-6 w-6 text-indigo-500 animate-pulse" />
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest">{customConfirm.title}</h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">{customConfirm.message}</p>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  customConfirm.onConfirm();
-                  setCustomConfirm(null);
-                }}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-4xs"
-              >
-                Yes, Execute
-              </button>
-              <button
-                type="button"
-                onClick={() => setCustomConfirm(null)}
-                className="py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200 text-xs font-black rounded-xl cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DangerConfirmModal
+        isOpen={projectPendingDelete !== null}
+        title="Permanently Delete Project"
+        confirmLabel="Delete Project"
+        onClose={() => setProjectPendingDelete(null)}
+        onConfirm={() => {
+          if (!projectPendingDelete) return;
+          deleteProject(projectPendingDelete.id);
+          setProjectPendingDelete(null);
+        }}
+      >
+        {projectPendingDelete && (
+          <>
+            You are about to permanently delete the grading project{' '}
+            <span className="font-semibold text-slate-700 dark:text-slate-200">
+              {projectPendingDelete.subject} • {projectPendingDelete.gradeLevel} - {projectPendingDelete.section}
+            </span>
+            . All {projectPendingDelete.learnerCount} student roster profile(s), attendance records, and registered grade cards in this project will be erased. Other projects are not affected.
+          </>
+        )}
+      </DangerConfirmModal>
     </div>
   );
 }
