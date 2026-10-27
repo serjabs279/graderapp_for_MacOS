@@ -166,6 +166,12 @@ export interface Assessment {
   description?: string;
   order: number;
   reassessmentEnabled?: boolean; // mastery-based reassessment trigger
+  externalSource?: {
+    app: 'tsek';
+    examCode: string;
+    exportTimestamp: string;
+    importedAt: string;
+  };
 }
 
 export interface Student {
@@ -271,7 +277,7 @@ export interface GlobalSettings {
 // ─── Archive System ──────────────────────────────────────────────────────────
 
 export const ARCHIVE_VERSION = '1.0';
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.0.1';
 // Keep older versions listed here whenever ARCHIVE_VERSION is bumped, so old
 // archives stay readable. Shape changes need a normalizer in archiveValidation.
 export const SUPPORTED_ARCHIVE_VERSIONS: readonly string[] = ['1.0'];

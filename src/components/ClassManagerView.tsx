@@ -7,6 +7,7 @@ import { exportClassRecordPDF } from '../utils/pdfExport';
 import { globalToast } from '../context/ToastContext';
 import TeacherExcelExportModal from './TeacherExcelExportModal';
 import GradebookRestoreModal from './GradebookRestoreModal';
+import TsekScoresImportModal from './TsekScoresImportModal';
 import DangerConfirmModal, { TypeToConfirmField } from './DangerConfirmModal';
 import { parseTeacherExcelRecords } from '../utils/excelImportParser';
 import { exportFile } from '../utils/fileExportAdapter';
@@ -42,6 +43,7 @@ import {
   ArrowRightLeft,
   RefreshCw,
   ShieldCheck,
+  ScanLine,
   X,
   ChevronLeft,
   RotateCcw,
@@ -127,6 +129,7 @@ export default function ClassManagerView() {
 
   // Smart Excel Class Record Import Modal State
   const [showExcelImportModal, setShowExcelImportModal] = useState(false);
+  const [showTsekImportModal, setShowTsekImportModal] = useState(false);
   const [parsedExcelData, setParsedExcelData] = useState<import('../utils/excelImportParser').ParsedExcelGradebook | null>(null);
   const [excelImportFile, setExcelImportFile] = useState<File | null>(null);
   const [isParsingExcel, setIsParsingExcel] = useState(false);
@@ -1360,6 +1363,14 @@ export default function ClassManagerView() {
                 >
                   <FileUp className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                   <span>Import Excel record</span>
+                </button>
+                <button
+                  onClick={() => setShowTsekImportModal(true)}
+                  className="ui-button whitespace-nowrap"
+                  title="Import raw exam scores exported from TSEK"
+                >
+                  <ScanLine className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  <span>Import TSEK scores</span>
                 </button>
                 <button
                   onClick={() => setIsRestoreModalOpen(true)}
@@ -3650,6 +3661,17 @@ export default function ClassManagerView() {
           project={activeProject}
           onClose={() => setIsRestoreModalOpen(false)}
           onRestored={() => {
+            setUndoStack([]);
+            setRedoStack([]);
+          }}
+        />
+      )}
+
+      {showTsekImportModal && activeProject && (
+        <TsekScoresImportModal
+          project={activeProject}
+          onClose={() => setShowTsekImportModal(false)}
+          onImported={() => {
             setUndoStack([]);
             setRedoStack([]);
           }}

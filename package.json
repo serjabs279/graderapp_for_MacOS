@@ -3,7 +3,7 @@
   "description": "Offline desktop build of the SRPHS grading app",
   "author": "SRPHS",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit",
-    "test": "node --import tsx --test src/utils/__tests__/adviser.test.ts src/utils/__tests__/archiveValidation.test.ts src/utils/__tests__/grading.test.ts src/utils/__tests__/safeStorage.test.ts",
+    "test": "node --import tsx --test src/utils/__tests__/adviser.test.ts src/utils/__tests__/archiveValidation.test.ts src/utils/__tests__/grading.test.ts src/utils/__tests__/safeStorage.test.ts src/utils/__tests__/tsekScoresImport.test.ts",
     "tauri": "tauri",
     "desktop": "tauri dev",
     "desktop:build": "tauri build",
